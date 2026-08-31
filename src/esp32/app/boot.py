@@ -1,7 +1,13 @@
-"""Safe MicroPython boot hook.
+"""MicroPython boot hook for the development network.
 
-The development baseline intentionally performs no network setup and initializes
-no motion-related peripherals at boot. Wi-Fi bootstrap and device drivers will
-be added only after the connected board and its existing filesystem are backed
-up and verified.
+Network setup is isolated from the chassis application: a failed Wi-Fi or
+WebREPL connection must not prevent ``main.py`` from starting.  This hook does
+not initialize any motion-related peripheral.
 """
+
+try:
+    from network_boot import start
+
+    start()
+except Exception as exc:
+    print("network bootstrap failed:", type(exc).__name__, exc)

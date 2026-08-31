@@ -2,3 +2,4 @@
 
 WIFI_SSID = "replace-with-local-hotspot-name"
 WIFI_PASSWORD = "replace-with-local-hotspot-password"
+WEBREPL_PASSWORD = "4-to-9-characters"

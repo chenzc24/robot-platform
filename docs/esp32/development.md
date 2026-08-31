@@ -1,6 +1,6 @@
 # ESP32 MicroPython开发环境
 
-- 状态：USB运行时已确认并完成只读备份，手机热点和WebREPL尚未配置
+- 状态：USB恢复通道、手机热点自动接入和WebREPL已完成L2验证
 - 运行方式：MicroPython
 - IDE：VS Code + Python + Pylance
 - 不需要：ESP-IDF SDK、ESP-IDF VS Code扩展、C/C++迁移
@@ -12,7 +12,7 @@
 | VS Code / Pylance | 编辑和检查Python源码 | 否 |
 | `mpremote` | USB枚举、文件、REPL、运行和软复位 | 视具体命令而定 |
 | `esptool` | 芯片信息、固件检查、固件烧录 | 读取命令不写；烧录命令会写 |
-| `webrepl_cli.py` | Wi-Fi终端和单文件传输 | 上传时写设备文件系统 |
+| `webrepl.html` | Windows上的官方WebREPL终端和单文件传输 | 上传时写设备文件系统 |
 | MicroPython | ESP32上的固件和Python运行时 | 运行于设备 |
 
 ESP-IDF位于MicroPython固件底层。只有编译自定义MicroPython固件或增加C/C++原生模块时才安装ESP-IDF；日常Python开发不需要它。
@@ -44,6 +44,8 @@ Runtime: MicroPython / GIL
 ```
 
 设备文件系统已只读备份到本机忽略目录 `device-backups/esp32/20260831-111429/`：22个文件，共125684字节。根目录和 `SmartHybridChasisDemo/` 各有一套相同的11个程序文件，逐文件SHA-256一致。根目录 `robot_config.py` 当前为 `RUN_MODE="ps2"`；根目录 `main.py` 会初始化CAN和电机并进入PS2控制循环，因此任何后续复位仍须保持底盘安全。
+
+开发网络已通过2.4 GHz手机热点验证。ESP32能在重启后自动取得DHCP地址并启动WebREPL；本轮地址为 `10.114.1.97`，该地址不是固定配置，热点重新分配后应以手机客户端列表或串口 `WLAN.ifconfig()` 为准。电脑与ESP32之间的ICMP和TCP 8266均已验证。
 
 WebREPL客户端来自官方仓库：
 
@@ -86,10 +88,11 @@ git -C .tools\webrepl checkout 1e09d9a1d90fe52aba11d1e659afbc95a50cf088
 
 ### Wi-Fi任务
 
-- `ESP32: WebREPL terminal`
-- `ESP32: WebREPL upload one file`
+- `ESP32: Open WebREPL browser client`
 
-WebREPL任务不会把密码写入任务或命令行；官方客户端运行后在终端中交互式询问密码。它只允许一个活动连接，上传文件前应关闭其他WebREPL终端或浏览器连接。
+该任务打开固定版本的官方 `webrepl.html`。在页面中输入当前设备地址，例如 `ws://10.114.1.97:8266/`，再手动输入本机保存的WebREPL密码。页面同时提供交互终端和单文件上传；它只允许一个活动连接，上传前应关闭其他WebREPL连接。
+
+固定版本的 `webrepl_cli.py` 在Windows交互模式下依赖Unix `termios`，而且会在状态行回显已输入的密码，因此不作为VS Code任务暴露。脚本仍保留在本机官方工具目录，后续只有在上游修复或增加不泄密的薄封装后才用于日常命令行部署。
 
 ## 4. 为什么没有“一键刷固件”任务
 
@@ -104,20 +107,15 @@ WebREPL任务不会把密码写入任务或命令行；官方客户端运行后�
 
 已使用 `esptool image-info` 对本地 `ESP32/MicroPython1.27.bin` 进行只读检查：首个镜像头识别为ESP32-S3、8 MB Flash、DIO、80 MHz，校验和与哈希有效，构建信息为ESP-IDF `v5.4.2-dirty`。该结果尚不能单独证明完整合并镜像的目标烧录地址，因此仍不创建写Flash任务。
 
-## 5. 首次真机接入流程（下一目标）
+## 5. 已完成的首次真机接入
 
-1. 用户连接ESP32 USB，保持底盘电机和机械臂处于不会运动的安全状态。
-2. 运行 `ESP32: List USB devices`，确认实际COM端口。
-3. 运行芯片信息读取，不写Flash。
-4. 使用 `mpremote`读取版本并备份设备文件系统。
-5. 检查本地固件镜像格式和来源。
-6. 只有在当前环境不能正常使用时，才决定是否重新烧录固件。
-7. 通过USB创建本地 `secrets.py`，配置2.4 GHz手机热点。
-8. 通过串口执行 `import webrepl_setup`，由用户在本地输入WebREPL密码。
-9. 重启后从手机热点客户端列表确认ESP32地址。
-10. 先上传不会初始化运动硬件的安全最小 `main.py`，验证无线链路。
+1. COM7已确认是目标ESP32-S3，USB芯片信息和MicroPython运行时已读取。
+2. 原设备文件系统已完成只读备份，本地固件镜像只做了格式检查，没有刷写或擦除Flash。
+3. `network_boot.py`、本机忽略的 `secrets.py` 和新的 `boot.py` 已按可恢复顺序上传。
+4. ESP32硬复位后自动连接热点、恢复WebREPL，并通过局域网登录和只读REPL探针。
+5. 验证结束后再次硬复位，让设备重新进入原有PS2启动流程；复位后的网络引导和WebREPL端口正常。本轮没有发送运动命令，也没有替换或进入设备上的 `main.py` 再做运行态检查。
 
-第1至第10步属于L2设备联调。任何可能触发底盘动作的程序必须另行进入L3目标，并执行人工运动安全门。
+以上属于L2设备联调。WebREPL进入交互REPL时可能中断正在运行的 `main.py`，完成调试后必须复位并确认应用恢复。任何可能触发底盘动作的程序必须另行进入L3目标，并执行人工运动安全门。
 
 ## 6. 源码和秘密配置
 
@@ -126,6 +124,7 @@ src/esp32/
 ├── README.md
 └── app/
     ├── boot.py
+    ├── network_boot.py
     ├── main.py
     ├── device_config.example.py
     └── secrets.example.py
@@ -139,6 +138,18 @@ secrets.example.py       → secrets.py
 ```
 
 `device_config.py` 和 `secrets.py` 被Git忽略。热点名称、密码和WebREPL密码不得写入示例、VS Code任务、日志或提交。
+
+设备启动顺序为：
+
+```text
+boot.py → network_boot.start()
+        → 读取本地secrets.py
+        → 限时连接Wi-Fi
+        → 启动WebREPL
+        → 无论网络成功或失败都继续进入设备原有main.py
+```
+
+网络模块不初始化CAN、电机、UART或舵机。Wi-Fi失败会在约20秒后超时，不会阻止底盘应用继续启动。设备上的原始 `boot.py` 可从忽略目录中的完整备份恢复。
 
 ## 7. 正式控制与WebREPL分离
 

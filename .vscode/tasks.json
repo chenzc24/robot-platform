@@ -88,24 +88,19 @@
       "problemMatcher": []
     },
     {
-      "label": "ESP32: WebREPL terminal",
+      "label": "ESP32: Open WebREPL browser client",
       "type": "process",
-      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
-      "args": ["${workspaceFolder}\\.tools\\webrepl\\webrepl_cli.py", "${input:esp32Host}"],
-      "problemMatcher": [],
-      "presentation": {"reveal": "always", "panel": "dedicated", "focus": true}
-    },
-    {
-      "label": "ESP32: WebREPL upload one file",
-      "type": "process",
-      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
-      "args": ["${workspaceFolder}\\.tools\\webrepl\\webrepl_cli.py", "${input:localEsp32File}", "${input:esp32Host}:${input:remoteEsp32File}"],
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-Command",
+        "Start-Process -FilePath '${workspaceFolder}\\.tools\\webrepl\\webrepl.html'"
+      ],
       "problemMatcher": []
     }
   ],
   "inputs": [
     {"id": "esp32Port", "type": "promptString", "description": "ESP32 serial port", "default": "COM3"},
-    {"id": "esp32Host", "type": "promptString", "description": "ESP32 IP address or resolvable host name", "default": "chassis-esp32.local"},
     {"id": "localEsp32File", "type": "promptString", "description": "Local file to upload", "default": "src\\esp32\\app\\main.py"},
     {"id": "remoteEsp32File", "type": "promptString", "description": "Remote MicroPython file path", "default": "main.py"},
     {"id": "localDownloadPath", "type": "promptString", "description": "Local destination for a downloaded device file", "default": "device-backups\\main.py"},

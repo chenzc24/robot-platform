@@ -1,6 +1,6 @@
 # ESP32 MicroPython开发环境
 
-- 状态：本地工具基线已建立，真机尚未连接
+- 状态：USB运行时已确认并完成只读备份，手机热点和WebREPL尚未配置
 - 运行方式：MicroPython
 - IDE：VS Code + Python + Pylance
 - 不需要：ESP-IDF SDK、ESP-IDF VS Code扩展、C/C++迁移
@@ -33,7 +33,17 @@ mpremote 1.29.0
 esptool 5.3.1
 ```
 
-当前电脑的COM3至COM6均为蓝牙虚拟串口，尚未识别到已连接的ESP32设备。
+基线建立时COM3至COM6均为蓝牙虚拟串口；首次真机联调新增了目标设备COM7。
+
+首次真机联调后，目标设备固定识别为COM7上的WCH CH340串口桥。MicroPython运行时信息：
+
+```text
+MicroPython 1.27.0（2026-05-11）
+Board: ESP32_GENERIC_S3-SPIRAM_OCT
+Runtime: MicroPython / GIL
+```
+
+设备文件系统已只读备份到本机忽略目录 `device-backups/esp32/20260831-111429/`：22个文件，共125684字节。根目录和 `SmartHybridChasisDemo/` 各有一套相同的11个程序文件，逐文件SHA-256一致。根目录 `robot_config.py` 当前为 `RUN_MODE="ps2"`；根目录 `main.py` 会初始化CAN和电机并进入PS2控制循环，因此任何后续复位仍须保持底盘安全。
 
 WebREPL客户端来自官方仓库：
 
@@ -65,7 +75,7 @@ git -C .tools\webrepl checkout 1e09d9a1d90fe52aba11d1e659afbc95a50cf088
 
 - `ESP32: List USB devices`
 - `ESP32: Read chip info (USB, no write)`
-- `ESP32: USB file tree`
+- `ESP32: USB file tree`（使用 `mpremote fs tree -vh`）
 - `ESP32: USB download one file`
 
 ### USB写入或运行任务

@@ -63,7 +63,7 @@
       "label": "ESP32: USB file tree",
       "type": "process",
       "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
-      "args": ["-m", "mpremote", "connect", "${input:esp32Port}", "fs", "tree", "-vsh", ":"],
+      "args": ["-m", "mpremote", "connect", "${input:esp32Port}", "fs", "tree", "-vh", ":"],
       "problemMatcher": []
     },
     {

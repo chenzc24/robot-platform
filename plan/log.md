@@ -59,3 +59,12 @@
 - 硬件：连接COM7；识别stub仅上传到RAM，未擦除或烧录Flash，结束时设备通过RTS硬复位。
 - 提交状态：本条记录随目标提交推送到 `main`。
 - 后续：通过MicroPython REPL读取运行时版本并备份设备文件系统，然后配置手机热点和WebREPL。
+
+## 2026-08-31 - 识别并备份ESP32 MicroPython运行时
+
+- 目标：通过COM7读取MicroPython版本和文件树，并在不修改设备的情况下备份现有文件系统。
+- 修改区域：ESP32开发文档、VS Code文件树任务、运行时备份目标计划和维护日志；本地备份位于Git忽略目录。
+- 验证：L2；确认MicroPython 1.27.0与 `ESP32_GENERIC_S3-SPIRAM_OCT`，备份22个文件共125684字节，并确认根目录与 `SmartHybridChasisDemo/` 的11对文件SHA-256完全一致。
+- 硬件：通过COM7读取运行时和文件系统；`mpremote`停止当前程序并软复位进入维护操作，没有上传、删除或执行运动代码。
+- 提交状态：本条记录随目标提交推送到 `main`。
+- 后续：保持复位安全条件，通过USB写入本地热点配置并运行 `webrepl_setup`，再验证手机热点上的WebREPL。

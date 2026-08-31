@@ -100,9 +100,9 @@ src/esp32/ src/maixcam/ src/console/ tests/ tools/
 
 ### 4.3 MaixCam
 
-- 优先评估 VS Code 的 MaixCode 扩展，实现设备发现、运行、图像预览、SSH 和 SFTP。
-- MaixCode 属于第三方扩展，上线前检查其行为；标准 SSH/SCP 脚本始终作为保底通道。
-- MaixVision 保留用于固件恢复、专项标定及 VS Code 尚未覆盖的能力，不作为日常主开发环境。
+- 日常源码编辑、部署和日志统一使用VS Code与标准SSH/SCP，不依赖MaixCode或MaixVision。
+- MaixCam使用官方RTSP/H.264提供视频；电脑使用标准媒体工具验证，并由FFmpeg无转码兼容桥和MediaMTX转发为后续控制台可用的RTSP、HLS和WebRTC端点。
+- 设备屏幕和USB虚拟网卡用于网络恢复；系统损坏时使用官方镜像工具恢复存储介质，不把厂商IDE作为唯一恢复路径。
 - MaixCam 软件拆分为视觉服务、视频服务、ESP32 链路和机械臂网关。
 
 ### 4.4 机械臂

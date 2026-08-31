@@ -161,6 +161,117 @@
       "args": ["robot-maixcam"],
       "problemMatcher": [],
       "presentation": {"reveal": "always", "panel": "dedicated", "focus": true}
+    },
+    {
+      "label": "MaixCam Video: Prepare directory",
+      "type": "process",
+      "command": "ssh",
+      "args": ["robot-maixcam", "mkdir -p /root/robot-platform/video"],
+      "hide": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "MaixCam Video: Upload",
+      "type": "process",
+      "command": "scp",
+      "args": [
+        "-p",
+        "${workspaceFolder}\\src\\maixcam\\video\\rtsp_server.py",
+        "${workspaceFolder}\\src\\maixcam\\video\\start.sh",
+        "${workspaceFolder}\\src\\maixcam\\video\\stop.sh",
+        "robot-maixcam:/root/robot-platform/video/"
+      ],
+      "dependsOrder": "sequence",
+      "dependsOn": ["MaixCam Video: Prepare directory"],
+      "problemMatcher": []
+    },
+    {
+      "label": "MaixCam Video: Start RTSP",
+      "type": "process",
+      "command": "ssh",
+      "args": [
+        "robot-maixcam",
+        "chmod 755 /root/robot-platform/video/start.sh /root/robot-platform/video/stop.sh && /root/robot-platform/video/start.sh"
+      ],
+      "dependsOrder": "sequence",
+      "dependsOn": ["MaixCam Video: Upload"],
+      "problemMatcher": []
+    },
+    {
+      "label": "MaixCam Video: Stop RTSP",
+      "type": "process",
+      "command": "ssh",
+      "args": ["robot-maixcam", "/root/robot-platform/video/stop.sh"],
+      "problemMatcher": []
+    },
+    {
+      "label": "MaixCam Video: Probe direct",
+      "type": "process",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": [
+        "${workspaceFolder}\\tools\\maixcam\\rtsp_probe.py",
+        "--seconds",
+        "10",
+        "--output",
+        "${workspaceFolder}\\tmp\\maixcam-frame.png"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "MaixCam Video: Start PC relay",
+      "type": "process",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\tools\\maixcam\\mediamtx.ps1",
+        "-Action",
+        "start"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "MaixCam Video: Stop PC relay",
+      "type": "process",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\tools\\maixcam\\mediamtx.ps1",
+        "-Action",
+        "stop"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "MaixCam Video: Probe relay",
+      "type": "process",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": [
+        "${workspaceFolder}\\tools\\maixcam\\rtsp_probe.py",
+        "--url",
+        "rtsp://127.0.0.1:8555/maixcam",
+        "--seconds",
+        "10",
+        "--output",
+        "${workspaceFolder}\\tmp\\maixcam-frame-relay.png"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "MaixCam Video: Open WebRTC",
+      "type": "process",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-Command",
+        "Start-Process 'http://127.0.0.1:8889/maixcam/'"
+      ],
+      "problemMatcher": []
     }
   ],
   "inputs": [

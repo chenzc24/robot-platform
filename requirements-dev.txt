@@ -1,3 +1,5 @@
-# ESP32 MicroPython host tools. Runtime code is deployed to the device separately.
+# Host development and media-validation tools. Device runtime code is deployed separately.
 mpremote==1.29.0
 esptool==5.3.1
+av==18.1.0
+Pillow==12.3.0

@@ -23,12 +23,12 @@ MaixCam采用“VS Code本地编辑 + SSH/SCP远程运行”模式：
 
 不使用VS Code Remote-SSH打开远端工作区。MaixCam Pro是RISC-V 64位设备且内存约128 MB；微软Remote-SSH没有提供riscv64支持，远端资源也低于其建议值。尝试连接会要求安装无法运行的VS Code Server。
 
-MaixVision 1.2.2继续用于实时图像预览、色彩阈值、设备发现、文件浏览和系统恢复，但源码编辑、Git版本和常规部署统一在VS Code。
+项目不依赖MaixVision或第三方MaixCode扩展。视频由MaixCam原生RTSP服务输出，电脑使用PyAV直接验证，并通过FFmpeg无转码兼容桥与MediaMTX转发给后续控制台；设备发现、源码部署、启停与日志统一使用标准网络工具。
 
 参考：
 
 - [MaixCAM快速开始](https://wiki.sipeed.com/maixpy/doc/zh/README_MaixCAM.html)
-- [MaixVision开发与文件传输](https://wiki.sipeed.com/maixpy/doc/en/basic/maixvision.html)
+- [MaixCAM RTSP视频流](https://wiki.sipeed.com/maixpy/doc/zh/video/rtsp_streaming.html)
 - [VS Code Remote-SSH系统要求](https://code.visualstudio.com/docs/remote/ssh)
 
 ## 2. SSH入口
@@ -84,12 +84,12 @@ device-backups/maixcam/2026-08-31-maixcam-6c7d-preconfig/
 
 1. SSH可用时，从备份选择性恢复单个应用或配置。
 2. Wi-Fi不可用时，通过设备屏幕重新配置。
-3. 无线不可用时，使用USB虚拟网卡连接MaixVision或SSH。
+3. 无线不可用时，使用USB虚拟网卡连接SSH。
 4. 只有系统损坏且前述路径均失败时，才使用只读资料库中的固件镜像重刷TF卡。
 
 ## 6. 尚未接入
 
-- 摄像头采集与实时预览程序。
+- 视觉识别、标定与画面叠加程序；基础RTSP视频链路见 [`video.md`](video.md)。
 - MaixCam到ESP32的UART链路。
 - MaixCam到TCP232/机械臂LAN1的UART链路。
 - 统一控制台状态和视频接口。

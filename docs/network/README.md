@@ -197,10 +197,11 @@ MaixCam ↔ UART ↔ ESP32
 
 ### 7.2 MaixCam
 
-- 主通道：MaixCode提供的设备运行、预览和文件操作能力（通过验收后使用）。
-- 保底通道：标准SSH和SFTP/SCP。
+- 开发通道：VS Code调用标准SSH和SFTP/SCP完成部署、启停与日志读取。
+- 视频通道：MaixCam原生RTSP/H.264；电脑可直接接收，也可经FFmpeg无转码重封装和MediaMTX转发为本机RTSP、HLS和WebRTC端点。
 - SSH默认端口为 `22`，最终以设备配置为准。
 - 推荐使用SSH密钥；密码和私钥不得提交Git。
+- MaixVision和第三方MaixCode扩展不属于项目运行或开发依赖。
 
 ### 7.3 机械臂
 

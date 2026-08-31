@@ -122,3 +122,12 @@
 - 硬件：连接真实MaixCam与热点；没有启动摄像头采集，没有连接或发送ESP32、TCP232、机械臂及底盘控制命令。
 - 提交状态：本条记录随目标提交推送到 `main`。
 - 后续：人工确认MaixVision实时画面；另建目标设计视觉服务和两路UART所有权，并在任何运动验证前执行相应L3/L4安全门。
+
+## 2026-08-31 - 建立MaixCam到电脑的视频链路
+
+- 目标：不依赖MaixVision，建立MaixCam原生RTSP/H.264输出、电脑直接探测和面向后续控制台的本机RTSP/HLS/WebRTC转发层。
+- 修改区域：`src/maixcam/video/`、`tools/maixcam/`、`config/`、`tests/maixcam/`、VS Code任务、开发依赖、MaixCam/网络/总体文档和目标计划。
+- 验证：L2；原生RTSP解码和抓帧通过，FFmpeg `-c:v copy` 重封装推流后本机RTSP重启并连续30秒解码592帧，1280×720、20 fps；MediaMTX真实字节、HLS解码和WebRTC页面可达检查通过。
+- 硬件：连接真实MaixCam并开启摄像头采集；没有连接、配置或驱动ESP32、TCP232、机械臂或底盘。
+- 提交状态：本条记录随目标提交推送到 `main`。
+- 后续：人工确认WebRTC画面方向与延迟；另建目标处理摄像头方向/标定、视觉识别和控制台集成。

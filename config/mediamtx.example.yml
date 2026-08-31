@@ -1,0 +1,24 @@
+logLevel: info
+
+rtmp: false
+srt: false
+moq: false
+
+api: true
+apiAddress: 127.0.0.1:9997
+
+rtsp: true
+rtspTransports: [tcp]
+rtspAddress: 127.0.0.1:8555
+
+hls: true
+hlsAddress: 127.0.0.1:8888
+
+webrtc: true
+webrtcAddress: 127.0.0.1:8889
+webrtcLocalUDPAddress: 127.0.0.1:8189
+webrtcAdditionalHosts: [127.0.0.1]
+
+paths:
+  maixcam:
+    source: publisher

@@ -159,3 +159,9 @@ boot.py → network_boot.start()
 ```
 
 WebREPL不是底盘正式控制协议。发布模式应关闭或限制WebREPL，关闭后不能影响底盘心跳、停车、状态和控制服务。
+
+## 8. 现有底盘程序的版本化状态
+
+设备备份中的11个底盘Python文件已原样保存到 `src/esp32/legacy/chassis_2026_08_31/`，并逐文件验证SHA-256。该目录只用于追溯和选择性迁移，不能直接部署。
+
+静态审计见 [`legacy-chassis-audit.md`](legacy-chassis-audit.md)。其中未知运行模式自动执行运动示例、失能后仍允许写入非零速度、导入即初始化硬件和循迹失联不停车属于后续迁移前的阻断项。

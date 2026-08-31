@@ -1,5 +1,6 @@
 """Non-secret ESP32 device configuration template."""
 
+RUN_MODE = "safe_idle"
 DEVICE_NAME = "chassis-esp32"
 CONTROL_PORT = 8765
 HEARTBEAT_TIMEOUT_MS = 500

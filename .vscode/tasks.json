@@ -9,6 +9,22 @@
       "problemMatcher": []
     },
     {
+      "label": "ESP32: Run safety tests",
+      "type": "process",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "${workspaceFolder}\\tests\\esp32",
+        "-p",
+        "test_*.py",
+        "-v"
+      ],
+      "problemMatcher": []
+    },
+    {
       "label": "ESP32: Tool versions",
       "dependsOrder": "sequence",
       "dependsOn": ["ESP32: mpremote version", "ESP32: esptool version"],

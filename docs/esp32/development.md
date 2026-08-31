@@ -70,6 +70,7 @@ git -C .tools\webrepl checkout 1e09d9a1d90fe52aba11d1e659afbc95a50cf088
 ### 无设备任务
 
 - `ESP32: Check Python sources`
+- `ESP32: Run safety tests`
 - `ESP32: Tool versions`
 - `ESP32: Inspect local firmware image`
 
@@ -165,3 +166,5 @@ WebREPL不是底盘正式控制协议。发布模式应关闭或限制WebREPL，
 设备备份中的11个底盘Python文件已原样保存到 `src/esp32/legacy/chassis_2026_08_31/`，并逐文件验证SHA-256。该目录只用于追溯和选择性迁移，不能直接部署。
 
 静态审计见 [`legacy-chassis-audit.md`](legacy-chassis-audit.md)。其中未知运行模式自动执行运动示例、失能后仍允许写入非零速度、导入即初始化硬件和循迹失联不停车属于后续迁移前的阻断项。
+
+第一批选择性迁移已建立默认 `SAFE_IDLE` 和硬件无关底盘状态机，设计及12项假MotorBus回归测试见 [`chassis-safety.md`](chassis-safety.md)。这部分尚未接入CAN或部署设备。

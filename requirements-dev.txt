@@ -1,0 +1,3 @@
+# ESP32 MicroPython host tools. Runtime code is deployed to the device separately.
+mpremote==1.29.0
+esptool==5.3.1

@@ -1,0 +1,140 @@
+# ESP32 MicroPython开发环境
+
+- 状态：本地工具基线已建立，真机尚未连接
+- 运行方式：MicroPython
+- IDE：VS Code + Python + Pylance
+- 不需要：ESP-IDF SDK、ESP-IDF VS Code扩展、C/C++迁移
+
+## 1. 工具边界
+
+| 工具 | 作用 | 是否写设备 |
+|---|---|---|
+| VS Code / Pylance | 编辑和检查Python源码 | 否 |
+| `mpremote` | USB枚举、文件、REPL、运行和软复位 | 视具体命令而定 |
+| `esptool` | 芯片信息、固件检查、固件烧录 | 读取命令不写；烧录命令会写 |
+| `webrepl_cli.py` | Wi-Fi终端和单文件传输 | 上传时写设备文件系统 |
+| MicroPython | ESP32上的固件和Python运行时 | 运行于设备 |
+
+ESP-IDF位于MicroPython固件底层。只有编译自定义MicroPython固件或增加C/C++原生模块时才安装ESP-IDF；日常Python开发不需要它。
+
+## 2. 本机环境
+
+项目固定使用Python 3.12虚拟环境：
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+```
+
+当前直接依赖：
+
+```text
+mpremote 1.29.0
+esptool 5.3.1
+```
+
+当前电脑的COM3至COM6均为蓝牙虚拟串口，尚未识别到已连接的ESP32设备。
+
+WebREPL客户端来自官方仓库：
+
+```text
+https://github.com/micropython/webrepl.git
+commit 1e09d9a1d90fe52aba11d1e659afbc95a50cf088
+```
+
+新电脑可以安装到本地忽略目录：
+
+```powershell
+git clone https://github.com/micropython/webrepl.git .tools\webrepl
+git -C .tools\webrepl checkout 1e09d9a1d90fe52aba11d1e659afbc95a50cf088
+```
+
+`.venv/` 和 `.tools/` 不进入Git。
+
+## 3. VS Code任务
+
+通过 `Terminal → Run Task` 使用任务。
+
+### 无设备任务
+
+- `ESP32: Check Python sources`
+- `ESP32: Tool versions`
+- `ESP32: Inspect local firmware image`
+
+### USB读取任务
+
+- `ESP32: List USB devices`
+- `ESP32: Read chip info (USB, no write)`
+- `ESP32: USB file tree`
+- `ESP32: USB download one file`
+
+### USB写入或运行任务
+
+- `ESP32: USB upload one file`
+- `ESP32: USB soft reset`
+- `ESP32: USB REPL`
+
+### Wi-Fi任务
+
+- `ESP32: WebREPL terminal`
+- `ESP32: WebREPL upload one file`
+
+WebREPL任务不会把密码写入任务或命令行；官方客户端运行后在终端中交互式询问密码。它只允许一个活动连接，上传文件前应关闭其他WebREPL终端或浏览器连接。
+
+## 4. 为什么没有“一键刷固件”任务
+
+本基线故意不提供擦除和写入Flash的VS Code任务。在第一次连接真实设备前，以下信息尚未确认：
+
+- 实际ESP32-S3板型、Flash容量和串口。
+- 当前设备文件系统内容和可恢复备份。
+- `MicroPython1.27.bin` 的准确镜像类型及烧录地址。
+- BOOT/RST进入下载模式的方法。
+
+完成备份和只读识别后，再根据验证结果增加一个参数明确、需要人工确认的烧录任务。禁止把 `erase-flash` 作为普通开发快捷操作。
+
+已使用 `esptool image-info` 对本地 `ESP32/MicroPython1.27.bin` 进行只读检查：首个镜像头识别为ESP32-S3、8 MB Flash、DIO、80 MHz，校验和与哈希有效，构建信息为ESP-IDF `v5.4.2-dirty`。该结果尚不能单独证明完整合并镜像的目标烧录地址，因此仍不创建写Flash任务。
+
+## 5. 首次真机接入流程（下一目标）
+
+1. 用户连接ESP32 USB，保持底盘电机和机械臂处于不会运动的安全状态。
+2. 运行 `ESP32: List USB devices`，确认实际COM端口。
+3. 运行芯片信息读取，不写Flash。
+4. 使用 `mpremote`读取版本并备份设备文件系统。
+5. 检查本地固件镜像格式和来源。
+6. 只有在当前环境不能正常使用时，才决定是否重新烧录固件。
+7. 通过USB创建本地 `secrets.py`，配置2.4 GHz手机热点。
+8. 通过串口执行 `import webrepl_setup`，由用户在本地输入WebREPL密码。
+9. 重启后从手机热点客户端列表确认ESP32地址。
+10. 先上传不会初始化运动硬件的安全最小 `main.py`，验证无线链路。
+
+第1至第10步属于L2设备联调。任何可能触发底盘动作的程序必须另行进入L3目标，并执行人工运动安全门。
+
+## 6. 源码和秘密配置
+
+```text
+src/esp32/
+├── README.md
+└── app/
+    ├── boot.py
+    ├── main.py
+    ├── device_config.example.py
+    └── secrets.example.py
+```
+
+使用时在本地复制：
+
+```text
+device_config.example.py → device_config.py
+secrets.example.py       → secrets.py
+```
+
+`device_config.py` 和 `secrets.py` 被Git忽略。热点名称、密码和WebREPL密码不得写入示例、VS Code任务、日志或提交。
+
+## 7. 正式控制与WebREPL分离
+
+```text
+开发部署：VS Code → WebREPL → ESP32文件系统/REPL
+正式控制：统一控制台 → 控制协议 → ESP32底盘服务
+```
+
+WebREPL不是底盘正式控制协议。发布模式应关闭或限制WebREPL，关闭后不能影响底盘心跳、停车、状态和控制服务。

@@ -1,0 +1,114 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "ESP32: Check Python sources",
+      "type": "process",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "compileall", "-q", "${workspaceFolder}\\src\\esp32\\app"],
+      "problemMatcher": []
+    },
+    {
+      "label": "ESP32: Tool versions",
+      "dependsOrder": "sequence",
+      "dependsOn": ["ESP32: mpremote version", "ESP32: esptool version"],
+      "problemMatcher": []
+    },
+    {
+      "label": "ESP32: mpremote version",
+      "type": "process",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "mpremote", "--version"],
+      "hide": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "ESP32: esptool version",
+      "type": "process",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "esptool", "version"],
+      "hide": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "ESP32: List USB devices",
+      "type": "process",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "mpremote", "connect", "list"],
+      "problemMatcher": []
+    },
+    {
+      "label": "ESP32: Read chip info (USB, no write)",
+      "type": "process",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "esptool", "--port", "${input:esp32Port}", "chip-id"],
+      "problemMatcher": []
+    },
+    {
+      "label": "ESP32: Inspect local firmware image",
+      "type": "process",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "esptool", "image-info", "${input:firmwarePath}"],
+      "problemMatcher": []
+    },
+    {
+      "label": "ESP32: USB REPL",
+      "type": "process",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "mpremote", "connect", "${input:esp32Port}", "repl"],
+      "problemMatcher": [],
+      "presentation": {"reveal": "always", "panel": "dedicated", "focus": true}
+    },
+    {
+      "label": "ESP32: USB file tree",
+      "type": "process",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "mpremote", "connect", "${input:esp32Port}", "fs", "tree", "-vsh", ":"],
+      "problemMatcher": []
+    },
+    {
+      "label": "ESP32: USB upload one file",
+      "type": "process",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "mpremote", "connect", "${input:esp32Port}", "fs", "cp", "${input:localEsp32File}", ":${input:remoteEsp32File}"],
+      "problemMatcher": []
+    },
+    {
+      "label": "ESP32: USB download one file",
+      "type": "process",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "mpremote", "connect", "${input:esp32Port}", "fs", "cp", ":${input:remoteEsp32File}", "${input:localDownloadPath}"],
+      "problemMatcher": []
+    },
+    {
+      "label": "ESP32: USB soft reset",
+      "type": "process",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "mpremote", "connect", "${input:esp32Port}", "soft-reset"],
+      "problemMatcher": []
+    },
+    {
+      "label": "ESP32: WebREPL terminal",
+      "type": "process",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": ["${workspaceFolder}\\.tools\\webrepl\\webrepl_cli.py", "${input:esp32Host}"],
+      "problemMatcher": [],
+      "presentation": {"reveal": "always", "panel": "dedicated", "focus": true}
+    },
+    {
+      "label": "ESP32: WebREPL upload one file",
+      "type": "process",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": ["${workspaceFolder}\\.tools\\webrepl\\webrepl_cli.py", "${input:localEsp32File}", "${input:esp32Host}:${input:remoteEsp32File}"],
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {"id": "esp32Port", "type": "promptString", "description": "ESP32 serial port", "default": "COM3"},
+    {"id": "esp32Host", "type": "promptString", "description": "ESP32 IP address or resolvable host name", "default": "chassis-esp32.local"},
+    {"id": "localEsp32File", "type": "promptString", "description": "Local file to upload", "default": "src\\esp32\\app\\main.py"},
+    {"id": "remoteEsp32File", "type": "promptString", "description": "Remote MicroPython file path", "default": "main.py"},
+    {"id": "localDownloadPath", "type": "promptString", "description": "Local destination for a downloaded device file", "default": "device-backups\\main.py"},
+    {"id": "firmwarePath", "type": "promptString", "description": "Local MicroPython firmware image (inspection only)", "default": "ESP32\\MicroPython1.27.bin"}
+  ]
+}

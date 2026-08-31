@@ -12,6 +12,8 @@
 
 完整方案见 [docs/overall-plan.md](docs/overall-plan.md)。
 
+ESP32 MicroPython开发环境见 [docs/esp32/development.md](docs/esp32/development.md)。
+
 ## 开发工作流
 
 本项目采用精简定制的计划—实施—验证—日志—提交闭环：
@@ -42,11 +44,12 @@
 robot-platform/
 ├── .vscode/       # VS Code 任务、调试与工作区配置
 ├── config/        # 可提交的配置模板
-├── console/       # 电脑统一控制台
 ├── docs/          # 架构、协议、部署与验收文档
-├── esp32/         # ESP32 底盘程序
-├── maixcam/       # 视觉和机械臂网关程序
 ├── protocol/      # 跨设备通信协议
+├── src/
+│   ├── console/   # 电脑统一控制台
+│   ├── esp32/     # ESP32 底盘程序
+│   └── maixcam/   # 视觉和机械臂网关程序
 ├── tests/         # 自动化和集成测试
 └── tools/         # 部署、诊断和设备模拟工具
 ```

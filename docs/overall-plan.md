@@ -84,11 +84,11 @@
 仓库以 `E:\Device Network` 为本地根目录。现有 `ESP32/`、`Camera/`、`Robot Arm_Claws/` 是本地资料库并被 Git 忽略。后续建立以下受版本管理的目录：
 
 ```text
-.vscode/   config/   console/   docs/   esp32/
-maixcam/   protocol/ tests/     tools/
+.vscode/   config/   docs/      protocol/
+src/esp32/ src/maixcam/ src/console/ tests/ tools/
 ```
 
-本地代码为唯一可信源，设备文件系统只作为部署目标。设备上的修改应同步回本地并提交，避免出现“只有设备上存在”的代码。
+本地代码为唯一可信源，设备文件系统只作为部署目标。设备上的修改应同步回本地并提交，避免出现“只有设备上存在”的代码。由于Windows下现有原始资料目录 `ESP32/` 与小写 `esp32/` 无法并存，正式设备源码统一放在 `src/esp32/`、`src/maixcam/` 和 `src/console/`。
 
 ### 4.2 ESP32
 

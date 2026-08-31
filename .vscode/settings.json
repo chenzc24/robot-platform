@@ -1,0 +1,17 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/src/esp32/app"
+  ],
+  "files.exclude": {
+    "**/__pycache__": true
+  },
+  "search.exclude": {
+    "ESP32": true,
+    "Camera": true,
+    "Robot Arm_Claws": true,
+    "tmp": true,
+    ".tools": true,
+    ".venv": true
+  }
+}

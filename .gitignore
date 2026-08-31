@@ -13,12 +13,16 @@
 *.local.yaml
 *.local.yml
 secrets.*
+!/src/esp32/app/secrets.example.py
+/src/esp32/app/secrets.py
+/src/esp32/app/device_config.py
 
 # Python
 __pycache__/
 *.py[cod]
 .venv/
 venv/
+.tools/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/

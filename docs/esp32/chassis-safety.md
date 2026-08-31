@@ -65,7 +65,7 @@ stop_all(motor_ids)
 disable_all(motor_ids)
 ```
 
-当前只有假MotorBus测试。下一目标迁移CAN适配器时必须补充ACK、驱动状态和部分失败回滚；在此之前，状态机只知道“调用没有抛出异常”，不能宣称真实驱动器已执行命令。
+正式 `MotorBus` 和假CAN帧测试已经在独立目标中实现，并验证使能前后清零、批量失败继续和初始化回滚；详见 [`motor-can.md`](motor-can.md)。目前仍未实现ACK与驱动状态读取，因此状态机只知道“调用没有抛出异常”，不能宣称真实驱动器已执行命令。
 
 ## 5. 自动化验证
 
@@ -98,7 +98,7 @@ ESP32: Run safety tests
 
 ## 6. 尚未覆盖
 
-- MicroPython CAN构造、真实MotorBus和驱动器反馈。
+- MicroPython CAN构造、真实CAN收发和驱动器反馈。
 - PS2接收、250毫秒失联停车和控制权管理。
 - Camera UART、网络控制、传感器、循迹和舵机。
 - 真实电机的使能、停车、失能与断链行为。

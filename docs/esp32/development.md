@@ -167,4 +167,4 @@ WebREPL不是底盘正式控制协议。发布模式应关闭或限制WebREPL，
 
 静态审计见 [`legacy-chassis-audit.md`](legacy-chassis-audit.md)。其中未知运行模式自动执行运动示例、失能后仍允许写入非零速度、导入即初始化硬件和循迹失联不停车属于后续迁移前的阻断项。
 
-第一批选择性迁移已建立默认 `SAFE_IDLE` 和硬件无关底盘状态机，设计及12项假MotorBus回归测试见 [`chassis-safety.md`](chassis-safety.md)。这部分尚未接入CAN或部署设备。
+第一批选择性迁移已建立默认 `SAFE_IDLE` 和硬件无关底盘状态机，设计及12项假MotorBus回归测试见 [`chassis-safety.md`](chassis-safety.md)。随后迁移的正式MotorBus通过10项假CAN帧和回滚测试，见 [`motor-can.md`](motor-can.md)。两部分合计22项测试，均尚未连接真实CAN或部署设备。

@@ -113,6 +113,54 @@
         "Start-Process -FilePath '${workspaceFolder}\\.tools\\webrepl\\webrepl.html'"
       ],
       "problemMatcher": []
+    },
+    {
+      "label": "MaixCam: Check SSH",
+      "type": "process",
+      "command": "ssh",
+      "args": [
+        "robot-maixcam",
+        "printf 'host='; hostname; printf ' machine='; uname -m; printf ' python='; python3 --version; printf ' library='; cat /maixapp/maixcam_lib.version"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "MaixCam: Prepare probe directory",
+      "type": "process",
+      "command": "ssh",
+      "args": ["robot-maixcam", "mkdir -p /root/robot-platform/probe"],
+      "hide": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "MaixCam: Upload probe",
+      "type": "process",
+      "command": "scp",
+      "args": [
+        "-p",
+        "${workspaceFolder}\\src\\maixcam\\app\\probe.py",
+        "robot-maixcam:/root/robot-platform/probe/probe.py"
+      ],
+      "dependsOrder": "sequence",
+      "dependsOn": ["MaixCam: Prepare probe directory"],
+      "problemMatcher": []
+    },
+    {
+      "label": "MaixCam: Run probe",
+      "type": "process",
+      "command": "ssh",
+      "args": ["robot-maixcam", "python3 /root/robot-platform/probe/probe.py"],
+      "dependsOrder": "sequence",
+      "dependsOn": ["MaixCam: Upload probe"],
+      "problemMatcher": []
+    },
+    {
+      "label": "MaixCam: SSH terminal",
+      "type": "process",
+      "command": "ssh",
+      "args": ["robot-maixcam"],
+      "problemMatcher": [],
+      "presentation": {"reveal": "always", "panel": "dedicated", "focus": true}
     }
   ],
   "inputs": [

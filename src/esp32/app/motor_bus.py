@@ -67,6 +67,24 @@ class MotorBus:
             raise ValueError("can_bus is required")
         self.can = can_bus
         self._sleep_ms = sleep_ms or _default_sleep_ms
+        self.frames_sent = 0
+        self.send_failures = 0
+        self.last_error = None
+
+    def status_snapshot(self):
+        """Return transport counters without claiming motor acknowledgement."""
+        error = None
+        if self.last_error is not None:
+            error = {
+                "type": type(self.last_error).__name__,
+                "message": str(self.last_error),
+            }
+        return {
+            "frames_sent": self.frames_sent,
+            "send_failures": self.send_failures,
+            "last_error": error,
+            "acknowledgement_supported": False,
+        }
 
     @staticmethod
     def _motor_id(motor_id):
@@ -88,9 +106,16 @@ class MotorBus:
             raise ValueError("CAN payload must contain exactly 8 bytes")
         payload = [_bounded_int(value, 0, 0xFF, "payload byte") for value in payload]
         ext_id = build_ext_id(comm_type, motor_id, data2)
-        result = self.can.send(payload, ext_id, extframe=True)
-        if result is False:
-            raise OSError("CAN send returned False")
+        try:
+            result = self.can.send(payload, ext_id, extframe=True)
+            if result is False:
+                raise OSError("CAN send returned False")
+        except Exception as error:
+            self.send_failures += 1
+            self.last_error = error
+            raise
+        self.frames_sent += 1
+        self.last_error = None
         return result
 
     def write_param_uint32(self, motor_id, index, value):

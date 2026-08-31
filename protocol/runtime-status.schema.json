@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robot-platform.local/protocol/runtime-status.schema.json",
+  "title": "Robot Platform Runtime Status Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event",
+    "device",
+    "subsystem",
+    "state",
+    "sequence",
+    "uptime_ms",
+    "error_code",
+    "detail"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "event": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+    "device": {"type": "string", "pattern": "^[a-z][a-z0-9_-]*$"},
+    "subsystem": {"type": "string", "pattern": "^[a-z][a-z0-9_-]*$"},
+    "state": {
+      "enum": [
+        "starting",
+        "idle",
+        "ready",
+        "running",
+        "stopping",
+        "stopped",
+        "disconnected",
+        "safe_idle",
+        "fault",
+        "estop"
+      ]
+    },
+    "sequence": {"type": "integer", "minimum": 0},
+    "uptime_ms": {"type": "integer", "minimum": 0},
+    "error_code": {
+      "type": ["string", "null"],
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "detail": {"type": "object"}
+  }
+}

@@ -1,6 +1,6 @@
 # ESP32底盘安全核心
 
-- 实现位置：`src/esp32/app/main.py`、`src/esp32/app/chassis_control.py`
+- 实现位置：`src/esp32/app/main.py`、`application.py`、`chassis_control.py`、`control_lease.py`
 - 当前验证：L1假MotorBus，不连接CAN或真实电机
 - 部署状态：未部署；历史真机程序继续运行
 
@@ -67,6 +67,10 @@ disable_all(motor_ids)
 
 正式 `MotorBus` 和假CAN帧测试已经在独立目标中实现，并验证使能前后清零、批量失败继续和初始化回滚；详见 [`motor-can.md`](motor-can.md)。目前仍未实现ACK与驱动状态读取，因此状态机只知道“调用没有抛出异常”，不能宣称真实驱动器已执行命令。
 
+`SafeMecanumChassis.status_snapshot()` 现可返回状态、四轮目标和最后错误；`MotorBus.status_snapshot()` 返回发送帧数、发送失败和ACK尚不可用的明确标志。
+
+`ControlLease` 已实现单控制者、有界超时、续租和释放规则，但仍是硬件无关原语。租约过期触发真实停车和失能尚未接入，不得把它表述为已完成的心跳停车。
+
 ## 5. 自动化验证
 
 在VS Code运行：
@@ -81,7 +85,7 @@ ESP32: Run safety tests
 .\.venv\Scripts\python.exe -m unittest discover -s tests\esp32 -p "test_*.py" -v
 ```
 
-当前12项测试覆盖：
+原有12项底盘状态机测试仍全部保留；新增测试另外覆盖运行时状态、状态快照、CAN发送计数与控制租约。底盘状态机基线覆盖：
 
 - `SAFE_IDLE`未知模式回退。
 - 初始禁用状态下 `stop()` 仍发送零目标。

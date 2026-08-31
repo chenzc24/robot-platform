@@ -2,11 +2,14 @@
 
 import importlib.util
 import pathlib
+import sys
 import unittest
 from unittest import mock
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
+VIDEO_DIR = ROOT / "src" / "maixcam" / "video"
+sys.path.insert(0, str(VIDEO_DIR))
 
 
 def load_module(name, relative_path):
@@ -72,6 +75,29 @@ class MediaRelayConfigurationTests(unittest.TestCase):
         self.assertIn('"-c:v", "copy"', wrapper)
         self.assertIn("mediamtx-v1.20.0", wrapper)
         self.assertIn("ffmpeg-9.0.1", wrapper)
+
+
+class DeviceLifecycleScriptTests(unittest.TestCase):
+    def _script(self, name):
+        return (VIDEO_DIR / name).read_text(encoding="ascii")
+
+    def test_start_waits_for_a_structured_ready_event(self):
+        start = self._script("start.sh")
+        self.assertIn("pid_matches_server", start)
+        self.assertIn('"event": "rtsp_started"', start)
+        self.assertIn("RTSP_START_TIMEOUT", start)
+
+    def test_stop_refuses_to_signal_an_unowned_pid(self):
+        stop = self._script("stop.sh")
+        self.assertIn("pid_matches_server", stop)
+        self.assertIn("RTSP_STOP_REFUSED ownership_mismatch", stop)
+        self.assertNotIn("kill -9", stop)
+
+    def test_status_is_read_only_and_checks_process_ownership(self):
+        status = self._script("status.sh")
+        self.assertIn("/proc/$pid/cmdline", status)
+        self.assertIn("RTSP_RUNNING", status)
+        self.assertNotIn('kill "$pid"', status)
 
 
 if __name__ == "__main__":

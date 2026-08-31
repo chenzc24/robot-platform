@@ -98,6 +98,20 @@ class FrameEncodingTests(unittest.TestCase):
         bus = MotorBus(FakeCan(false_calls=(1,)), sleep_ms=lambda _ms: None)
         with self.assertRaises(OSError):
             bus.stop(1)
+        snapshot = bus.status_snapshot()
+        self.assertEqual(snapshot["frames_sent"], 0)
+        self.assertEqual(snapshot["send_failures"], 1)
+        self.assertEqual(snapshot["last_error"]["type"], "OSError")
+        self.assertFalse(snapshot["acknowledgement_supported"])
+
+    def test_successful_send_updates_transport_counters_only(self):
+        bus = MotorBus(FakeCan(), sleep_ms=lambda _ms: None)
+        bus.stop(1)
+        snapshot = bus.status_snapshot()
+        self.assertEqual(snapshot["frames_sent"], 1)
+        self.assertEqual(snapshot["send_failures"], 0)
+        self.assertIsNone(snapshot["last_error"])
+        self.assertFalse(snapshot["acknowledgement_supported"])
 
 
 class SafetySequenceTests(unittest.TestCase):

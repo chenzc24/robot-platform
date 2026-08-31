@@ -4,11 +4,13 @@
 
 ## 当前状态
 
-`app/` 包含已验证的Wi-Fi/WebREPL启动模块、默认 `SAFE_IDLE` 入口、底盘安全状态机和可注入CAN的正式MotorBus。当前仅通过假MotorBus/假CAN测试，尚未构造真实CAN或读取驱动反馈；不能用本目录整体覆盖设备程序。
+`app/` 包含已验证的Wi-Fi/WebREPL启动模块、默认 `SAFE_IDLE` 入口、结构化运行时状态、独占控制租约原语、底盘安全状态机和可注入CAN的正式MotorBus。当前仅通过本地假对象测试，尚未构造真实CAN、读取驱动反馈或把租约过期连接到真实停车；不能用本目录整体覆盖设备程序。
 
 设备备份中的现有底盘程序已原样纳入 `legacy/chassis_2026_08_31/`。该目录是字节级历史快照，不是部署源；静态审计发现未知运行模式自动运动、失能后仍可写速度目标等阻断问题。详见 [`../../docs/esp32/legacy-chassis-audit.md`](../../docs/esp32/legacy-chassis-audit.md)。
 
 当前安全核心和状态转换见 [`../../docs/esp32/chassis-safety.md`](../../docs/esp32/chassis-safety.md)。
+
+运行时契约、模块边界与VS Code入口见 [`../../docs/runtime-foundation.md`](../../docs/runtime-foundation.md)。
 
 MotorBus帧格式、回滚规则和剩余硬件验证见 [`../../docs/esp32/motor-can.md`](../../docs/esp32/motor-can.md)。
 
@@ -24,7 +26,7 @@ Tasks: Run Task
 或者：
 
 ```powershell
-.\.venv\Scripts\python.exe -m compileall -q src\esp32\app
+.\.venv\Scripts\python.exe tools\dev\check_python.py src/esp32/app
 ```
 
 USB和WebREPL任务见 [`../../docs/esp32/development.md`](../../docs/esp32/development.md)。

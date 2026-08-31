@@ -5,7 +5,10 @@
       "label": "ESP32: Check Python sources",
       "type": "process",
       "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
-      "args": ["-m", "compileall", "-q", "${workspaceFolder}\\src\\esp32\\app"],
+      "args": [
+        "${workspaceFolder}\\tools\\dev\\check_python.py",
+        "src/esp32/app"
+      ],
       "problemMatcher": []
     },
     {
@@ -22,6 +25,7 @@
         "test_*.py",
         "-v"
       ],
+      "options": {"env": {"PYTHONDONTWRITEBYTECODE": "1"}},
       "problemMatcher": []
     },
     {
@@ -177,8 +181,12 @@
       "args": [
         "-p",
         "${workspaceFolder}\\src\\maixcam\\video\\rtsp_server.py",
+        "${workspaceFolder}\\src\\maixcam\\video\\maix_runtime_status.py",
+        "${workspaceFolder}\\src\\maixcam\\video\\resource_guard.py",
+        "${workspaceFolder}\\src\\maixcam\\video\\video_service.py",
         "${workspaceFolder}\\src\\maixcam\\video\\start.sh",
         "${workspaceFolder}\\src\\maixcam\\video\\stop.sh",
+        "${workspaceFolder}\\src\\maixcam\\video\\status.sh",
         "robot-maixcam:/root/robot-platform/video/"
       ],
       "dependsOrder": "sequence",
@@ -191,7 +199,7 @@
       "command": "ssh",
       "args": [
         "robot-maixcam",
-        "chmod 755 /root/robot-platform/video/start.sh /root/robot-platform/video/stop.sh && /root/robot-platform/video/start.sh"
+        "chmod 755 /root/robot-platform/video/start.sh /root/robot-platform/video/stop.sh /root/robot-platform/video/status.sh && /root/robot-platform/video/start.sh"
       ],
       "dependsOrder": "sequence",
       "dependsOn": ["MaixCam Video: Upload"],
@@ -272,6 +280,148 @@
         "Start-Process 'http://127.0.0.1:8889/maixcam/'"
       ],
       "problemMatcher": []
+    },
+    {
+      "label": "MaixCam: Check Python sources",
+      "type": "process",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": [
+        "${workspaceFolder}\\tools\\dev\\check_python.py",
+        "src/maixcam",
+        "tools/maixcam"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "MaixCam: Run runtime tests",
+      "type": "process",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "${workspaceFolder}\\tests\\maixcam",
+        "-p",
+        "test_*.py",
+        "-v"
+      ],
+      "options": {"env": {"PYTHONDONTWRITEBYTECODE": "1"}},
+      "problemMatcher": []
+    },
+    {
+      "label": "Protocol: Run contract tests",
+      "type": "process",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "${workspaceFolder}\\tests\\protocol",
+        "-p",
+        "test_*.py",
+        "-v"
+      ],
+      "options": {"env": {"PYTHONDONTWRITEBYTECODE": "1"}},
+      "problemMatcher": []
+    },
+    {
+      "label": "Robot: Validate workspace",
+      "type": "process",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": ["${workspaceFolder}\\tools\\dev\\validate_workspace.py"],
+      "options": {"env": {"PYTHONDONTWRITEBYTECODE": "1"}},
+      "problemMatcher": []
+    },
+    {
+      "label": "Robot: Run all local tests",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "ESP32: Run safety tests",
+        "MaixCam: Run runtime tests",
+        "Protocol: Run contract tests"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Robot: Local preflight",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "ESP32: Check Python sources",
+        "MaixCam: Check Python sources",
+        "Robot: Validate workspace",
+        "Robot: Run all local tests"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "ESP32: Check WebREPL port",
+      "type": "process",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-Command",
+        "if (Test-NetConnection -ComputerName '${input:esp32Host}' -Port 8266 -InformationLevel Quiet) { Write-Output 'ESP32_WEBREPL_REACHABLE' } else { Write-Error 'ESP32 WebREPL is not reachable'; exit 1 }"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Robot: Check live links",
+      "dependsOn": [
+        "ESP32: Check WebREPL port",
+        "MaixCam: Check SSH"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "MaixCam Video: Status",
+      "type": "process",
+      "command": "ssh",
+      "args": ["robot-maixcam", "/root/robot-platform/video/status.sh"],
+      "problemMatcher": []
+    },
+    {
+      "label": "MaixCam Video: Show recent log",
+      "type": "process",
+      "command": "ssh",
+      "args": [
+        "robot-maixcam",
+        "tail -n 80 /root/robot-platform/video/rtsp.log"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "MaixCam Video: PC relay status",
+      "type": "process",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\tools\\maixcam\\mediamtx.ps1",
+        "-Action",
+        "status"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "MaixCam Video: Start development session",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "MaixCam: Check SSH",
+        "MaixCam Video: Start RTSP",
+        "MaixCam Video: Start PC relay",
+        "MaixCam Video: Probe relay"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Robot: Stop PC services",
+      "dependsOrder": "sequence",
+      "dependsOn": ["MaixCam Video: Stop PC relay"],
+      "problemMatcher": []
     }
   ],
   "inputs": [
@@ -279,6 +429,7 @@
     {"id": "localEsp32File", "type": "promptString", "description": "Local file to upload", "default": "src\\esp32\\app\\main.py"},
     {"id": "remoteEsp32File", "type": "promptString", "description": "Remote MicroPython file path", "default": "main.py"},
     {"id": "localDownloadPath", "type": "promptString", "description": "Local destination for a downloaded device file", "default": "device-backups\\main.py"},
-    {"id": "firmwarePath", "type": "promptString", "description": "Local MicroPython firmware image (inspection only)", "default": "ESP32\\MicroPython1.27.bin"}
+    {"id": "firmwarePath", "type": "promptString", "description": "Local MicroPython firmware image (inspection only)", "default": "ESP32\\MicroPython1.27.bin"},
+    {"id": "esp32Host", "type": "promptString", "description": "Current ESP32 IPv4 address"}
   ]
 }

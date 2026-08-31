@@ -30,6 +30,8 @@ MaixVision和MaixCode不属于该链路。SSH/SCP只负责代码部署、进程�
 
 MaixPy RTSP要求摄像头使用NV21，即 `image.Format.FMT_YVU420SP`。视频进程导入MaixPy后立即调用 `comm.rm_default_comm_listener()`，释放系统默认UART0协议监听器；视频代码不读写任何机器人业务串口。
 
+本地源码已拆分为CLI、视频服务、MaixPy后端、摄像头资源所有权和结构化状态模块，并为Shell启停增加PID归属验证。该重构当前只通过本地假后端测试，未上传MaixCam；本文第5节的真机画面结果来自重构前已部署版本。
+
 ## 3. 日常操作
 
 在VS Code中运行以下任务：
@@ -41,6 +43,8 @@ MaixPy RTSP要求摄像头使用NV21，即 `image.Format.FMT_YVU420SP`。视频�
 5. `MaixCam Video: Probe relay`：通过本机RTSP转发再次接收和抓帧。
 6. `MaixCam Video: Open WebRTC`：在浏览器打开MediaMTX自带的WebRTC播放页。
 7. `MaixCam Video: Stop RTSP` 和 `Stop PC relay`：停止对应进程。
+
+本地重构还增加 `Status`、`Show recent log`、`PC relay status` 和 `Start development session` 任务。这些任务已通过JSON静态检查，尚未在重构版本上执行真机上传。
 
 命令行等价操作：
 

@@ -73,6 +73,21 @@ class SafeMecanumChassis:
         self.state = FAULT
         self._best_effort_safe_output()
 
+    def status_snapshot(self):
+        """Return hardware-independent state for telemetry and diagnostics."""
+        error = None
+        if self.last_error is not None:
+            error = {
+                "type": type(self.last_error).__name__,
+                "message": str(self.last_error),
+            }
+        return {
+            "state": self.state,
+            "motor_ids": self.motor_ids,
+            "wheel_speeds_rad_s": self.last_wheel_speeds,
+            "last_error": error,
+        }
+
     def enable_motors(self):
         """Enable only from DISABLED, with explicit zero targets around setup."""
         if self.state != DISABLED:

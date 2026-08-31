@@ -167,6 +167,8 @@ DISCONNECTED → INITIALIZING → IDLE → ARMED → RUNNING → COMPLETED
                                       └──────────────→ FAULT / ESTOP
 ```
 
+上述为未来运动与任务业务状态。设备服务健康状态使用独立的 `protocol/runtime-status.schema.json`，包含设备、子系统、事件、序列号、运行时间、错误码和结构化细节。服务 `running` 不得被解释为机器人正在运动。
+
 协议应同时提供 Python 参考实现、ESP32 实现、模拟器和自动化测试向量。
 
 ## 7. 安全要求

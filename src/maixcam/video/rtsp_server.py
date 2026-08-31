@@ -1,17 +1,19 @@
-"""Minimal MaixCam H.264 RTSP service with no robot-control dependencies."""
+"""Command-line entry point for the guarded MaixCam RTSP video service."""
 
 import argparse
-import json
 import signal
-import sys
 import time
 
-
-DEFAULT_PORT = 8554
-DEFAULT_WIDTH = 1280
-DEFAULT_HEIGHT = 720
-DEFAULT_FPS = 20
-DEFAULT_BITRATE = 2_000_000
+from maix_runtime_status import RuntimeStatus
+from video_service import (
+    DEFAULT_BITRATE,
+    DEFAULT_FPS,
+    DEFAULT_HEIGHT,
+    DEFAULT_PORT,
+    DEFAULT_WIDTH,
+    RtspVideoService,
+    VideoSettings,
+)
 
 
 def build_parser():
@@ -24,83 +26,56 @@ def build_parser():
     return parser
 
 
-def validate_settings(args):
-    if not 1 <= args.port <= 65535:
-        raise ValueError("port must be between 1 and 65535")
-    if args.width <= 0 or args.height <= 0:
-        raise ValueError("width and height must be positive")
-    if not 1 <= args.fps <= 60:
-        raise ValueError("fps must be between 1 and 60")
-    if args.bitrate <= 0:
-        raise ValueError("bitrate must be positive")
-
-
-def run(args):
-    validate_settings(args)
-
-    from maix import camera, comm, err, image, rtsp
-
-    # Importing MaixPy can create its default UART0 protocol listener. This
-    # standalone video process does not own a robot UART, so release it before
-    # opening the camera. Future gateway code must assign UART ownership itself.
-    uart_listener_removed = comm.rm_default_comm_listener()
-
-    camera_device = camera.Camera(
-        args.width,
-        args.height,
-        image.Format.FMT_YVU420SP,
-    )
-    server = rtsp.Rtsp(
+def settings_from_args(args):
+    """Convert parsed arguments to a validated settings object."""
+    return VideoSettings(
         port=args.port,
+        width=args.width,
+        height=args.height,
         fps=args.fps,
-        stream_type=rtsp.RtspStreamType.RTSP_STREAM_H264,
         bitrate=args.bitrate,
     )
-    server.bind_camera(camera_device)
 
-    result = server.start()
-    if result != err.Err.ERR_NONE:
-        raise RuntimeError("RTSP server failed to start: {}".format(result))
 
-    state = {"stop": False}
+def validate_settings(args):
+    """Keep the original validation entry point for host-side tests."""
+    settings_from_args(args)
+
+
+def run(args, service_factory=None, status=None):
+    """Run until a termination signal requests a guarded service stop."""
+    settings = settings_from_args(args)
+    status = status or RuntimeStatus("maixcam", "video")
+    service_factory = service_factory or RtspVideoService
+    service = service_factory(settings=settings, status=status)
+    stop_requested = {"value": False}
 
     def request_stop(_signum, _frame):
-        state["stop"] = True
+        stop_requested["value"] = True
 
     signal.signal(signal.SIGTERM, request_stop)
     signal.signal(signal.SIGINT, request_stop)
-
-    print(
-        json.dumps(
-            {
-                "event": "rtsp_started",
-                "url": server.get_url(),
-                "codec": "h264",
-                "width": args.width,
-                "height": args.height,
-                "fps": args.fps,
-                "bitrate": args.bitrate,
-                "default_uart_listener_removed": uart_listener_removed,
-            },
-            sort_keys=True,
-        ),
-        flush=True,
-    )
-
+    service.start()
     try:
-        while not state["stop"]:
+        while not stop_requested["value"]:
             time.sleep(0.5)
     finally:
-        server.stop()
-        print(json.dumps({"event": "rtsp_stopped"}), flush=True)
+        service.stop()
 
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
+    status = RuntimeStatus("maixcam", "video")
     try:
-        run(args)
-    except Exception as exc:
-        print(json.dumps({"event": "rtsp_error", "error": str(exc)}), file=sys.stderr)
+        run(args, status=status)
+    except Exception as error:
+        if status.state != "fault":
+            status.transition(
+                "fault",
+                event="rtsp_error",
+                error_code="video_runtime_failed",
+                detail={"error_type": type(error).__name__},
+            )
         return 1
     return 0
 

@@ -45,5 +45,4 @@ def start():
     import webrepl
 
     webrepl.start(password=webrepl_password)
-    print("development network ready:", wlan.ifconfig()[0])
     return wlan

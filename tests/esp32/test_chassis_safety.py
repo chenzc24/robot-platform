@@ -141,6 +141,20 @@ class ChassisStateTests(unittest.TestCase):
             self.chassis.drive(float("nan"), 0.0, 0.0)
         self.assertFalse(any(call[0] == "set_speed" for call in self.bus.calls))
 
+    def test_status_snapshot_reports_state_targets_and_fault(self):
+        snapshot = self.chassis.status_snapshot()
+        self.assertEqual(snapshot["state"], DISABLED)
+        self.assertEqual(snapshot["motor_ids"], (1, 2, 3, 4))
+        self.assertEqual(snapshot["wheel_speeds_rad_s"], (0.0, 0.0, 0.0, 0.0))
+        self.assertIsNone(snapshot["last_error"])
+
+        faulted = SafeMecanumChassis(FakeMotorBus(fail_on="stop_all"))
+        with self.assertRaises(OSError):
+            faulted.stop()
+        snapshot = faulted.status_snapshot()
+        self.assertEqual(snapshot["state"], FAULT)
+        self.assertEqual(snapshot["last_error"]["type"], "OSError")
+
 
 if __name__ == "__main__":
     unittest.main()

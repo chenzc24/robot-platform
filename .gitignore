@@ -1,0 +1,42 @@
+# Existing local resource libraries (documents, vendor examples and legacy code)
+/ESP32/
+/Camera/
+/Robot Arm_Claws/
+
+# Temporary document extraction and inspection output
+/tmp/
+
+# Local secrets and device-specific settings
+.env
+.env.*
+!.env.example
+*.local.yaml
+*.local.yml
+secrets.*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Build, package and log output
+build/
+dist/
+release/
+*.log
+logs/
+
+# Device synchronization and backups
+.device-cache/
+device-backups/
+
+# Editors and operating systems
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
+

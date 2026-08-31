@@ -88,13 +88,14 @@ MaixVision不再作为项目开发、部署或视频调试依赖。VS Code与SSH
 - 发现MaixCam RTSP声明packetization mode 0但使用FU-A分片，MediaMTX直拉路径就绪却无媒体字节；改为FFmpeg 9.0.1 `-c:v copy` 重封装后推给MediaMTX v1.20.0，无解码和重新编码。
 - 本机RTSP中继在停止/重启后连续30秒解码592帧，实测20.0 fps；MediaMTX API确认路径就绪且有真实接收字节。
 - HLS清单返回HTTP 200并通过FFmpeg解码；WebRTC播放页返回HTTP 200。
+- 用户随后已在WebRTC播放页确认实际视频流正常，并确认画面应顺时针旋转90°。
 - 已加入VS Code上传、启停、直连探测、中继探测和WebRTC打开任务，MaixVision和MaixCode不再属于项目依赖。
 
 ## 未解决事项
 
 - 设备重启后自启动 `num` 应用会占用摄像头，本目标没有权限改动自启动；启动RTSP前需现场退出该应用。
 - 当前多媒体驱动在同一开机会话内释放后再次初始化可能报 `No buffer space available`；需物理重启恢复，本轮没有修改系统驱动。
-- WebRTC播放页已可达，但浏览器实际画面和端到端延迟尚待用户人工确认；RTSP和HLS已完成实际解码验证。
+- WebRTC实际视频流已经用户确认正常；画面顺时针旋转90°及相应坐标系处理尚未实施。
 
 ## 提交意图
 

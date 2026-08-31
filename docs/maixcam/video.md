@@ -83,7 +83,9 @@ Copy-Item config\mediamtx.example.yml config\mediamtx.local.yml
 | MaixCam RTSP `rtsp://maixcam-6c7d.local:8554/live` | PyAV解码与实际抓帧通过 |
 | 本机RTSP `rtsp://127.0.0.1:8555/maixcam` | 重启后连续30秒解码592帧，1280×720、20 fps |
 | HLS `http://127.0.0.1:8888/maixcam/index.m3u8` | HTTP 200且FFmpeg解码通过 |
-| WebRTC `http://127.0.0.1:8889/maixcam/` | 播放页HTTP 200；浏览器画面与端到端延迟待人工确认 |
+| WebRTC `http://127.0.0.1:8889/maixcam/` | 播放页HTTP 200，用户已确认实际视频流正常 |
+
+用户验收时确认画面需要顺时针旋转90°。该需求已记录，但本视频通信目标不修改原始编码流；旋转将在后续显示和视觉坐标系目标中统一实施。
 
 ## 6. 停止与恢复
 
@@ -95,7 +97,7 @@ Copy-Item config\mediamtx.example.yml config\mediamtx.local.yml
 
 ## 7. 尚未包含
 
-- 视频方向、畸变、曝光和颜色标定。
+- 已确认的顺时针90°显示旋转，以及畸变、曝光和颜色标定。
 - 检测框、目标坐标和识别结果叠加。
 - 浏览器控制台布局及设备控制。
 - 自动启动、守护、健康检查和断线恢复策略。

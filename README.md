@@ -14,6 +14,8 @@
 
 ESP32 MicroPython开发环境见 [docs/esp32/development.md](docs/esp32/development.md)。
 
+ESP32与MaixCam的日常启动、结束、排障和问题登记见 [docs/development-session.md](docs/development-session.md)。
+
 ## 开发工作流
 
 本项目采用精简定制的计划—实施—验证—日志—提交闭环：

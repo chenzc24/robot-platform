@@ -1,150 +1,150 @@
 # Robot Platform Agent Working Rules
 
-本仓库使用“目标计划 → 有界实施 → 按风险验证 → 事实日志 → 提交推送”的Agent辅助开发流程。所有Agent和人工协作者都应将本仓库视为包含真实运动硬件的工程项目，而不是纯软件试验目录。
+This repository uses an agent-assisted workflow of goal planning, bounded implementation, risk-based validation, factual logging, and commit/push. Treat it as an engineering project that controls real moving hardware, not as a software-only sandbox.
 
-## 1. 项目入口
+## 1. Project Entry Points
 
-开始工作前按顺序阅读：
+Read these files in order before starting work:
 
 1. `README.md`
 2. `docs/overall-plan.md`
 3. `plan/README.md`
-4. 与当前子系统相关的设计、协议和部署文档
+4. The design, protocol, and deployment documents for the affected subsystem
 
-设备职责基线：
+Baseline device responsibilities:
 
-- ESP32-S3：通过MaixCam UART接收正式运行命令，负责底盘运动、CAN、电机、传感器和底层安全；Wi-Fi只用于开发维护。
-- MaixCam：视觉、视频、电脑唯一运行入口、ESP32和机械臂统一运行控制网关及状态汇总。
-- 机械臂LAN1：由MaixCam经UART/TCP232控制。
-- 机械臂LAN2：电脑维护、示教和故障诊断。
-- 电脑：VS Code、部署、视觉推理、统一控制台、日志和高层任务编排；正常运行时只与MaixCam通信。
+- ESP32-S3: receives production runtime commands over the MaixCam UART link and owns chassis motion, CAN, motors, sensors, and low-level safety. Wi-Fi is for development and maintenance only.
+- MaixCam: owns vision, video, the computer-facing runtime endpoint, command routing to ESP32 and the robot arm, and aggregated status.
+- Robot arm LAN1: controlled by MaixCam through UART/TCP232.
+- Robot arm LAN2: used by the computer for maintenance, teaching, deployment, and fault diagnosis.
+- Computer: owns VS Code development, deployment, vision inference, the unified console, logging, and high-level task orchestration. During normal operation it communicates only with MaixCam.
 
-改变这些边界前必须先更新并由用户确认总体方案。
+Update the overall plan and obtain user confirmation before changing these boundaries.
 
-## 2. 开始目标前
+## 2. Before Starting a Goal
 
-1. 在仓库根目录执行 `git status --short --branch`。
-2. 审计所有未提交路径：区分当前目标、用户已有修改、其他协作者修改和历史遗留。
-3. 如果脏文件与当前所有权重叠、归属不明或改变当前目标依赖的共享契约，停止编辑并请求协调。
-4. 不相关的脏文件不要求清理，但必须在目标计划中说明，并且不得暂存或修改。
-5. 确定目标、风险等级、可修改文件、只读文件、共享依赖、验证范围和提交意图。
+1. Run `git status --short --branch` at the repository root.
+2. Audit every uncommitted path and distinguish current-goal work, user changes, other collaborator changes, and historical leftovers.
+3. Stop and request coordination if a dirty file overlaps the current ownership scope, has unclear ownership, or changes a shared contract required by the goal.
+4. Unrelated dirty files do not need to be cleaned, but they must be noted in the goal plan and must not be modified or staged.
+5. Define the goal, risk level, editable files, read-only files, shared dependencies, validation scope, and commit intent.
 
-以下目标必须在编辑前创建 `plan/<YYYY-MM-DD-goal-slug>/plan.md`：
+Create `plan/<YYYY-MM-DD-goal-slug>/plan.md` before editing when a goal:
 
-- 运行代码、设备配置、协议、部署工具或VS Code自动化发生变化。
-- 总体架构、安全规则或跨设备契约发生变化。
-- 需要连接、写入、刷写或驱动真实设备。
-- 修改跨越多个文件或子系统。
+- changes runtime code, device configuration, a protocol, deployment tooling, or VS Code automation;
+- changes the overall architecture, a safety rule, or a cross-device contract;
+- requires connecting to, writing to, flashing, or moving real hardware; or
+- spans multiple files or subsystems.
 
-仅修改一个文件且不改变行为的错字、链接或格式，可不建立独立目标目录，但仍须检查工作区、验证差异，并在形成提交时记录到 `plan/log.md`。
+A typo, link, or formatting fix in one file that does not change behavior may omit a separate goal directory. It still requires a clean workspace audit, diff validation, and a `plan/log.md` entry if committed.
 
-## 3. 文件所有权和保护范围
+## 3. File Ownership and Protected Scope
 
-目标计划必须声明：
+Every goal plan must declare:
 
-- 可修改文件或目录。
-- 可检查但不可修改的文件或目录。
-- 依赖的共享契约、生成物、配置或设计决策。
+- files or directories that may be modified;
+- files or directories that may be inspected but not modified; and
+- shared contracts, generated artifacts, configuration, or design decisions on which it depends.
 
-固定保护规则：
+Fixed protection rules:
 
-- `ESP32/`、`Camera/`、`Robot Arm_Claws/` 是本地原始资料库，只读且不进入Git。
-- `tmp/` 是文档检查临时目录，不得作为产品代码来源。
-- 不得把设备文件系统当作唯一代码源；设备上的有效修改必须回收到受版本管理的本地代码。
-- 不得修改目标计划之外的文件；确需扩展范围时先更新计划。
-- 不得覆盖、清理、重置或提交用户及其他协作者的未提交修改。
+- `ESP32/`, `Camera/`, and `Robot Arm_Claws/` are local raw-resource archives. They are read-only and excluded from Git.
+- `tmp/` is for temporary document inspection and is not a product-code source.
+- A device filesystem must never be the only source of code. Recover every valid device-side change into version-controlled local source.
+- Do not edit outside the declared goal scope. Update the plan before expanding scope.
+- Never overwrite, clean, reset, or commit uncommitted work owned by the user or another collaborator.
 
-## 4. 秘密信息和本地配置
+## 4. Secrets and Local Configuration
 
-禁止提交：
+Never commit:
 
-- 手机热点名称和密码。
-- SSH、WebREPL、Tailscale或设备登录凭据。
-- 私钥、访问令牌和真实秘密配置。
-- 包含秘密信息的终端输出、日志或设备备份。
+- phone hotspot names or passwords;
+- SSH, WebREPL, Tailscale, or device login credentials;
+- private keys, access tokens, or real secret configuration; or
+- terminal output, logs, or device backups that contain secrets.
 
-使用 `.env.example`、`*.example.yaml` 等无秘密模板。真实值写入 `.env` 或 `*.local.yaml`；这些路径必须保持被 `.gitignore` 排除。检查命令输出时避免打印凭据。
+Use secret-free templates such as `.env.example` and `*.example.yaml`. Store real values in `.env` or `*.local.yaml`, and keep those paths excluded by `.gitignore`. Avoid printing credentials during diagnostics.
 
-## 5. 实施纪律
+## 5. Implementation Discipline
 
-- 保持单个目标有界，避免混入无关清理或重构。
-- 优先形成小而可审阅的提交。
-- 本地仓库是可信源，部署到设备属于发布动作。
-- 共享协议变化必须同步检查 `protocol/`、`esp32/`、`maixcam/`、`console/`、模拟器、测试向量和相关文档；未涉及的部分必须在计划中说明原因。
-- 网络地址、串口、TCP232和机械臂参数不得散落硬编码；使用配置模型和本地覆盖。
-- 新风险、依赖或范围出现时，先更新目标计划再继续。
-- 只有在行为变化、回归保护或共享契约需要时添加测试；不要为了形式完整而复制实现逻辑。
-- 验证应从最小确定性检查开始，风险或影响面扩大时再扩大测试范围。
+- Keep each goal bounded; do not mix unrelated cleanup or refactoring into it.
+- Prefer small, reviewable commits.
+- The local repository is the source of truth; deploying to a device is a release action.
+- A shared-protocol change requires coordinated review of `protocol/`, `src/esp32/`, `src/maixcam/`, `src/console/`, simulators, test vectors, and related documentation. Explain any unaffected area in the plan.
+- Do not scatter hard-coded network addresses, serial ports, TCP232 settings, or robot-arm parameters. Use a configuration model with local overrides.
+- Update the goal plan before continuing when new risks, dependencies, or scope appear.
+- Add tests only when behavior changes, regression protection is needed, or a shared contract requires them. Do not duplicate implementation logic merely for formal completeness.
+- Start validation with the smallest deterministic check and expand it as risk or impact increases.
 
-## 6. 硬件写入和运动安全门
+## 6. Hardware Write and Motion Safety Gates
 
-### 6.1 写入设备前
+### 6.1 Before Writing to a Device
 
-- 确认设备型号、连接方式、目标端口和供电状态。
-- 刷写固件、擦除文件系统或覆盖设备配置前，先读取当前状态并备份可恢复内容。
-- 明确恢复路径，包括USB、BOOT/RST、已知可用固件和设备文件备份。
-- 未经用户明确授权，不改变机械臂IP、TCP232工作模式、底盘总线参数、安全限值或示教点。
+- Confirm the device model, connection method, target port, and power state.
+- Read current state and back up recoverable content before flashing firmware, erasing a filesystem, or overwriting device configuration.
+- Define a recovery path, including USB, BOOT/RST, known-good firmware, and device-file backups.
+- Do not change robot-arm IP settings, TCP232 mode, chassis bus parameters, safety limits, or taught points without explicit user authorization.
 
-### 6.2 产生运动前
+### 6.2 Before Producing Motion
 
-L3或L4验证开始前必须获得用户对本轮测试的明确确认，确认内容至少包括：
+Before L3 or L4 validation, obtain explicit confirmation for the current test that:
 
-- 人员在现场并能操作实体急停。
-- 机械臂和底盘周边空间无人员及障碍物。
-- 底盘已架空、限位或处于约定安全区域。
-- 机械臂使用已确认的安全位、工作空间、低速和负载。
-- 本轮预期动作、停止条件和失败处理已经说明。
+- a person is present and can operate the physical emergency stop;
+- the area around the robot arm and chassis is clear of people and obstacles;
+- the chassis is raised, restrained, or inside the agreed safe area;
+- the robot arm uses a confirmed safe pose, workspace, low speed, and load; and
+- the expected motion, stop conditions, and failure response have been explained.
 
-禁止：
+Never:
 
-- 无人值守的真实运动测试。
-- 依赖Wi-Fi、SSH、WebREPL、Tailscale或电脑软件急停作为唯一保护。
-- 为通过测试而提高速度、扩大工作空间、提高抓取力或绕过联锁。
-- 在底盘未确认停止时执行机械臂动作，或在机械臂未回安全位时允许底盘高速运动。
+- run unattended real-motion tests;
+- rely on Wi-Fi, SSH, WebREPL, Tailscale, or a computer software stop as the only protection;
+- increase speed, workspace, or gripping force, or bypass an interlock merely to pass a test; or
+- move the robot arm before the chassis has confirmed stop, or allow high-speed chassis motion before the arm has returned to its safe pose.
 
-## 7. 验证等级
+## 7. Validation Levels
 
-每个目标选择覆盖其最高风险的等级：
+Select the level that covers the highest risk of the goal:
 
-| 等级 | 范围 | 典型检查 |
+| Level | Scope | Typical checks |
 |---|---|---|
-| L0 | 文档和静态配置 | 格式、链接、模式校验、`git diff --check` |
-| L1 | 本地软件和模拟器 | 单元测试、协议向量、模拟设备、类型/语法检查 |
-| L2 | 真机连接但不运动 | 发现、SSH、WebREPL、串口、TCP连接、状态查询 |
-| L3 | 单设备低速真实运动 | 底盘或机械臂的受控动作、超时停车和急停验证 |
-| L4 | 多设备联合任务 | 底盘—视觉—机械臂联锁、断链和故障恢复 |
+| L0 | Documentation and static configuration | Formatting, links, schema validation, `git diff --check` |
+| L1 | Local software and simulators | Unit tests, protocol vectors, simulated devices, type and syntax checks |
+| L2 | Real-device connection without motion | Discovery, SSH, WebREPL, serial, TCP connection, status queries |
+| L3 | Controlled low-speed motion of one device | Chassis or arm motion, command timeout stop, emergency-stop validation |
+| L4 | Coordinated multi-device task | Chassis-vision-arm interlocks, link loss, and fault recovery |
 
-要求：
+Requirements:
 
-- L0和L1可在无设备时自动执行。
-- L2不得隐含产生运动；如果目标设备连接就可能运动，按L3处理。
-- L3和L4必须执行上面的人工安全门。
-- 无法完成的验证不得写成通过，应记录为未执行、原因和剩余风险。
-- 每个目标至少运行 `git diff --check` 和 `git status --short --branch`。
+- L0 and L1 may run automatically without hardware.
+- L2 must not imply motion. If connecting the target can cause motion, treat it as L3.
+- L3 and L4 require the manual safety gate above.
+- Never record unperformed validation as passed. Record it as not run, with the reason and residual risk.
+- Every goal must run at least `git diff --check` and `git status --short --branch`.
 
-## 8. 完成目标
+## 8. Completing a Goal
 
-完成前依次执行：
+Complete these steps in order:
 
-1. 按计划完成与风险相称的验证。
-2. 审阅完整差异，确认没有秘密、设备备份或原始资料进入Git。
-3. 更新目标计划的实际结果和未解决事项。
-4. 在 `plan/log.md` 添加事实记录：目标、修改范围、验证、硬件状态和提交状态。
-5. 只暂存计划声明的文件。
-6. 按提交意图提交并推送。
-7. 推送后复核本地分支与远程同步状态。
+1. Run the planned validation appropriate to the risk.
+2. Review the full diff and confirm that no secret, device backup, or raw resource enters Git.
+3. Record actual results and unresolved items in the goal plan.
+4. Add a factual `plan/log.md` entry covering the goal, modified scope, validation, hardware state, and commit status.
+5. Stage only files declared in the plan.
+6. Commit and push with the stated intent.
+7. Confirm that the local branch and its remote are synchronized.
 
-当前分支策略：
+Current branch policy:
 
-- 单人、低风险、边界清楚的目标可直接提交到 `main`。
-- 跨子系统、高风险、需要审阅或与他人并行的目标使用 `target/<slug>` 分支和Pull Request。
-- 不得将多个无关目标合并进同一提交。
+- A single-person, low-risk goal with clear boundaries may commit directly to `main`.
+- Use a `target/<slug>` branch and pull request for cross-subsystem, high-risk, review-dependent, or parallel work.
+- Do not combine unrelated goals in one commit.
 
-## 9. 计划、日志和经验的区别
+## 9. Plans, Logs, Git, and Lessons
 
-- 计划：修改前的意图、范围和验证承诺。
-- 日志：完成后的事实记录。
-- Git：实际版本状态。
-- 经验：从多个事实中提炼的可复用判断。
+- A plan records intent, scope, and validation commitments before changes.
+- A log records facts after work is performed.
+- Git records the actual version state.
+- A lesson is a reusable conclusion derived from multiple facts.
 
-本仓库暂不启用固定经验目录。Agent不得自动宣称某次工作产生了“经验”。出现重复故障、规则被事实推翻、验证缺口或可迁移的安全模式时，可以在目标计划中标记“经验信号”；只有用户明确要求后，才创建经验文档。
+This repository does not currently use a permanent lessons directory. Agents must not automatically claim that one task produced a reusable lesson. A goal may mark a "lesson signal" when a failure repeats, a rule is disproved, a validation gap appears, or a safety pattern is transferable. Create a lesson document only when the user explicitly requests it.

@@ -1,24 +1,24 @@
-# 引入机器人项目工作流内核
+# Introduction of robot projects into the workflow Nuclear
 
-- 状态：`completed`
-- 负责人：Agent实施，用户决策
-- 最高验证等级：`L0`
+- Status:`completed`
+- Responsible: Agent Implementation, User Decision-Making
+- Highest validation level:`L0`
 
-## 目标
+## Objective
 
-将 `agent-workflow-kernel` 的计划—实施—验证—日志—提交闭环引入本仓库，并针对ESP32、MaixCam、机械臂和真实运动安全进行精简定制。
+Will `agent-workflow-kernel` The plan-implementation-validation-dimension logs-representation of closed loops to this repository, and streamlining and customization of ESP32, MaixCam, robot arm and real motion security.
 
-## 工作区初始状态
+## Initial state of the workspace
 
-执行 `git status --short --branch` 的结果为：
+Implementation `git status --short --branch` The results are:
 
 ```text
 ## main...origin/main
 ```
 
-工作区干净，可以开始本目标。
+The work area is clean, and we can start the target.
 
-## 可修改文件
+## Modifyable File
 
 - `AGENTS.md`
 - `README.md`
@@ -27,7 +27,7 @@
 - `plan/log.md`
 - `plan/2026-08-31-adopt-agent-workflow/plan.md`
 
-## 只读文件和目录
+## Read-only files and directories
 
 - `docs/overall-plan.md`
 - `ESP32/`
@@ -35,53 +35,53 @@
 - `Robot Arm_Claws/`
 - `tmp/`
 
-后三个设备资料目录和临时分析目录均由 `.gitignore` 排除，本目标不得修改其中内容。
+The last three device catalogues and the temporary analysis catalogues are all by `.gitignore` Excluded, this objective cannot be modified.
 
-## 共享依赖
+## Shared Dependencies
 
-- `docs/overall-plan.md` 中已经冻结的设备职责、网络拓扑和安全原则。
-- `.gitignore` 中对资料、秘密配置和设备备份的保护。
-- 上游 `chenzc24/agent-workflow-kernel` 的计划—日志—经验分层。
+- `docs/overall-plan.md` It's a frozen device duty, cyber-stamping and safety principles.
+- `.gitignore` In information, secret configuration and backup protection.
+- Upstream `chenzc24/agent-workflow-kernel` It's a plan. It's a log.
 
-## 预期工作
+## Expected work
 
-1. 创建项目专用 `AGENTS.md`，保留上游内核的范围、所有权、验证和提交纪律。
-2. 增加机器人硬件安全门、协议联动规则、秘密信息保护及分级验证要求。
-3. 加入精简的目标计划说明、模板和维护日志。
-4. 更新仓库README，说明开发目标的执行方法。
-5. 暂不加入经验库；经验提炼仅在用户明确要求时启用。
+1. Create project specific `AGENTS.md`, preserve the upper core, ownership, validation and submission of discipline.
+2. Add robotic hardware security doors, protocol connection rules, secret information protection and rating requirements.
+3. Add streamlined target plan statements, templates and maintenance logs.
+4. Update the repository README to show how development targets are implemented.
+5. Refusal to join the repository of experience; experience distillation is only available when clearly requested by the user.
 
-## 验证
+## Validation
 
 - `git diff --check`
 - `git status --short --branch`
-- 使用 `rg` 检查计划、日志、验证等级、资料只读和真实运动确认规则。
-- 使用 `git check-ignore` 复核三个资料目录仍未进入版本管理。
-- 审阅暂存差异，确认只包含本计划声明的文件。
+- Use `rg` Check plans, logs, check levels, read-only and true motion confirmation rules.
+- Use `git check-ignore` The review of three directories is still not being managed.
+- Review the pending discrepancies and confirm that only documents containing this plan statement are available.
 
-这些检查覆盖本目标全部文档行为和仓库保护规则；本目标不改动运行代码，因此不需要设备测试或完整测试套件。
+These checks cover all document behaviour and repository protection rules for this target; This target does not change the running codes, so no device testing or complete testing packages are required.
 
-## 实际结果
+## Actual results
 
-- 已建立机器人项目专用 `AGENTS.md`，并保留上游内核的目标范围、文件所有权、风险验证、事实日志和提交闭环。
-- 已增加资料只读保护、秘密信息保护、设备写入恢复要求以及L3/L4真实运动人工安全门。
-- 已建立目标计划说明、模板和维护日志；经验目录按决策暂不启用。
-- `git diff --check` 通过。
-- `rg` 检查确认计划、日志、L0–L4、三个资料目录、真实运动确认和经验触发规则均存在。
-- `git check-ignore` 确认 `ESP32/`、`Camera/`、`Robot Arm_Claws/` 和 `tmp/` 仍被忽略。
-- 未连接、写入或驱动任何真实设备。
+- Special purpose for robotic projects established `AGENTS.md`, and keep the target range of the upstream core, document ownership, risk verification, fact logs and submission loops.
+- We've added data-only protection, secret information protection, device written into recovery requirements and L3/L4 real motion safety doors.
+- A statement of the target plan has been established, templates and maintenance logs are maintained; the directory of experience is suspended for decision.
+- `git diff --check` Pass.
+- `rg` Check the confirmation plan, logs, L0-L4, three directories of information, real movement confirmation and experience trigger rules exist.
+- `git check-ignore` Confirm. `ESP32/`, `Camera/`, `Robot Arm_Claws/` and `tmp/` Still neglected.
+- No connection, write or drive any real device.
 
-## 未解决事项
+## Outstanding matters
 
-- 无。本工作流将在下一目标“VS Code开发环境基线”中首次用于运行代码和开发配置。
+- None. This workflow will be used for the first time in the next target, "VS Code Development Environmental Baseline", to run codes and develop configurations.
 
-## 经验信号（供人工审阅）
+## Experience signal (for manual review)
 
-本次只是引入工作流基线，暂不提炼经验。
+This is just the introduction of the workflow baseline, not the lessons.
 
-## 提交意图
+## Intent to submit
 
-提交信息：
+Submission of information:
 
 ```text
 docs: adopt robot development workflow kernel

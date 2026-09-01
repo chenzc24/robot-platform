@@ -1,52 +1,52 @@
-# MaixCam视频通信
+# MaixCam video communication
 
-## 1. 当前边界
+## 1. Current boundary
 
-本阶段只建立MaixCam到电脑的视频链路，不实现统一控制台、视觉识别、ESP32通信或机械臂控制。
+At this stage, only MaixCam's video link to the computer is set up, without a unified console, visual recognition, ESP32 communication or robot arm control.
 
 ```text
 MaixCam GC4653
-  └─ NV21采集 / H.264编码
+  └ - NV21 Collect / H.264
       └─ RTSP :8554/live
-          ├─ PyAV直接探测和抓帧
-          └─ FFmpeg -c:v copy（电脑，仅解包/重封装）
-              └─ MediaMTX（电脑）
+          Ideas-PyAV direct detection and capture frames
+          └-FFmpeg-c:v copy (computer, unpacking/repackaging only)
+              └ - MediaMTX (computer)
                   ├─ RTSP 127.0.0.1:8555/maixcam
                   ├─ HLS  http://127.0.0.1:8888/maixcam/index.m3u8
                   └─ WebRTC http://127.0.0.1:8889/maixcam/
 ```
 
-MaixVision和MaixCode不属于该链路。SSH/SCP只负责代码部署、进程启停和日志，不承载持续视频。
+MaixVision and MaixCode are not part of the chain. SSH/SCP is only responsible for code deployment, process start-up and log, and no continuous video.
 
-## 2. 默认媒体参数
+## 2. Default media parameters
 
-- 分辨率：1280×720。
-- 编码：H.264。
-- 目标帧率：20 fps。
-- 目标码率：2 Mbps。
-- 设备RTSP端口：8554。
-- 路径：`/live`。
-- RTSP接收优先使用TCP，避免Windows防火墙阻断RTP/UDP回包。
+- Resolution: 1280 x 720.
+- Encoding: H.264.
+- Target frame rate: 20 fps.
+- Target code rate: 2 Mbps.
+- Device RTSP port: 8554.
+- Path:`/live`.
+- RTSP accepts priority use of TCP to avoid the Windows firewall blocking the RTP/UDP package.
 
-MaixPy RTSP要求摄像头使用NV21，即 `image.Format.FMT_YVU420SP`。视频进程导入MaixPy后立即调用 `comm.rm_default_comm_listener()`，释放系统默认UART0协议监听器；视频代码不读写任何机器人业务串口。
+MaixPy RTSP requires cameras to use NV21, which is `image.Format.FMT_YVU420SP`... that the video process calls as soon as MaixPy is imported `comm.rm_default_comm_listener()`, release the system default UART0 protocol listening device; video code does not read and write any robot business trails.
 
-本地源码已拆分为CLI、视频服务、MaixPy后端、摄像头资源所有权和结构化状态模块，并为Shell启停增加PID归属验证。该重构当前只通过本地假后端测试，未上传MaixCam；本文第5节的真机画面结果来自重构前已部署版本。
+Local source code has been split into CLI, video service, MaixPy backend, camera resource ownership and structured state module, and additional PID attribution for Shell launch. The reconstruction is currently only using local false backend tests and MaixCam has not been uploaded; the results of this section 5 are from pre-restructuring versions already deployed.
 
-## 3. 日常操作
+## 3. Daily operations
 
-在VS Code中运行以下任务：
+Run the following tasks in VS Code:
 
-1. MaixCam重启后先在设备屏幕退出自启动的 `num` 应用；它与RTSP服务不能同时占用摄像头。
-2. `MaixCam Video: Start RTSP`：上传并启动设备RTSP服务。
-3. `MaixCam Video: Probe direct`：直接接收10秒并保存 `tmp/maixcam-frame.png`。
-4. `MaixCam Video: Start PC relay`：启动电脑侧FFmpeg兼容桥和MediaMTX转发服务。
-5. `MaixCam Video: Probe relay`：通过本机RTSP转发再次接收和抓帧。
-6. `MaixCam Video: Open WebRTC`：在浏览器打开MediaMTX自带的WebRTC播放页。
-7. `MaixCam Video: Stop RTSP` 和 `Stop PC relay`：停止对应进程。
+1. MaixCam exits self-started on device screen after restarting `num` application;it does not occupy cameras with RTSP services.
+2. `MaixCam Video: Start RTSP`: Upload and start device RTSP service.
+3. `MaixCam Video: Probe direct`: Directly receive and save 10 seconds `tmp/maixcam-frame.png`.
+4. `MaixCam Video: Start PC relay`: Activate computer-side FFmpeg compatibility bridge and MediaMTX forwarding service.
+5. `MaixCam Video: Probe relay`: Transmit re-receiving and grab frames through this machine RTSP.
+6. `MaixCam Video: Open WebRTC`: Open the WebRTC page with MediaMTX in the browser.
+7. `MaixCam Video: Stop RTSP` and `Stop PC relay`: Stop the correspondence process.
 
-本地重构还增加 `Status`、`Show recent log`、`PC relay status` 和 `Start development session` 任务。这些任务已通过JSON静态检查，尚未在重构版本上执行真机上传。
+Local remodeling has increased. `Status`, `Show recent log`, `PC relay status` and `Start development session` Mission. These missions have been checked through JSON's static system and have not yet been uploaded on the remodeled version.
 
-命令行等价操作：
+Command line equivalent operation:
 
 ```powershell
 ssh robot-maixcam /root/robot-platform/video/start.sh
@@ -55,56 +55,56 @@ tools\maixcam\mediamtx.ps1 -Action start
 .venv\Scripts\python.exe tools\maixcam\rtsp_probe.py --url rtsp://127.0.0.1:8555/maixcam --seconds 10
 ```
 
-探针会把mDNS名称显式解析为IPv4。当前热点同时发布了不可达的设备IPv6地址，直接让FFmpeg/PyAV自行选择可能造成长时间等待；不要把当前DHCP IPv4提交到仓库。
+The probe will decipher the mDNS name as IPv4. The current hotspots simultaneously release an unattainable device IPv6 address, which may cause FFmpeg/PyAV to wait for a long time; do not submit the current DHCP IPv4 to the repository.
 
-## 4. 电脑侧兼容桥与MediaMTX
+## 4. Computer side compatibility bridge and MediaMTX
 
-当前电脑使用MediaMTX v1.20.0和FFmpeg 9.0.1 Windows amd64，放在Git忽略目录：
+The current computer uses MediaMTX v1.20.0 and FFmpeg 9.1 Windows amd64 in Git ignore directory:
 
 ```text
 .tools/mediamtx-v1.20.0/
 .tools/ffmpeg-9.0.1/
 ```
 
-两个发布包的SHA256均已与发布方校验值匹配。MaixCam的RTSP会话声明H.264 packetization mode 0，但实际包含FU-A分片；MediaMTX直接拉取时会显示路径就绪但收不到媒体字节。因此FFmpeg先以 `-c:v copy` 解包并重新封装，再作为publisher推给MediaMTX。该过程不解码、不重新编码，不改变分辨率和目标码率。
+Both SHA256 published packages have matched the publisher's verification values. MaixCam's RTSP session declared H264 package mode 0, but actually contained a FU-A fraction; MediaMTX direct pull shows the path ready but cannot receive the media bytes. `-c:v copy` Unpack and repackage, and push it to MediaMTX as publisher. The process does not decode, recode, and does not change the resolution and target code.
 
-可提交模板为 `config/mediamtx.example.yml`；实际 `config/mediamtx.local.yml` 被Git忽略。启动包装器每次从 `maixcam-6c7d.local` 查询当前IPv4，但不把DHCP地址写入配置或仓库。MediaMTX的 `maixcam` 路径只接受本机FFmpeg publisher。
+Can submit Templates as `config/mediamtx.example.yml`;actual `config/mediamtx.local.yml` Ignored by Git. `maixcam-6c7d.local` Query for current IPv4, but do not write DHCP addresses to configuration or repository. MediaMTX `maixcam` The path only accepts the machine FFmpeg publicsher.
 
-新电脑安装时，从 [MediaMTX Releases](https://github.com/bluenviron/mediamtx/releases) 下载 v1.20.0 Windows amd64，并从 [FFmpeg官方下载页](https://ffmpeg.org/download.html) 选择Windows amd64发布包。校验发布方SHA256后解压到上述目录，再创建本地配置：
+New computer installed from [MediaMTX Releases](https://github.com/bluenviron/mediamtx/releases) Download v1.20.0 Windows amd64, and from [Official download page of FFmpeg](https://ffmpeg.org/download.html) Select Windows amd64 to release the package. Verify that the publisher SHA256 depresses to the above directory and create a local configuration:
 
 ```powershell
 Copy-Item config\mediamtx.example.yml config\mediamtx.local.yml
 ```
 
-`tools/maixcam/mediamtx.ps1` 只负责解析当前设备IPv4、按顺序启停两个成熟工具、记录PID和日志，不实现媒体协议或编解码。
+`tools/maixcam/mediamtx.ps1` Only the task is to parse the current device IPv4, sequentially suspend two mature tools, record PIDs and logs, and not achieve media protocols or decoding.
 
-配置仅监听电脑回环地址，关闭未使用的RTMP、SRT和MoQ入口。未来需要其它电脑观看时，应另建网络与认证目标，不能直接把端口暴露到不受控网络。
+Configure only listening computer loop addresses, close unused RTMPs, SRTs and MoQ portals. When other computers are needed in the future, a separate network and validation target should be created, and the port should not be exposed directly to uncontrolled networks.
 
-## 5. 已验证的输出
+## Verified output
 
-| 端点 | 本轮验证 |
+| Peer | Current round of validation |
 |---|---|
-| MaixCam RTSP `rtsp://maixcam-6c7d.local:8554/live` | PyAV解码与实际抓帧通过 |
-| 本机RTSP `rtsp://127.0.0.1:8555/maixcam` | 重启后连续30秒解码592帧，1280×720、20 fps |
-| HLS `http://127.0.0.1:8888/maixcam/index.m3u8` | HTTP 200且FFmpeg解码通过 |
-| WebRTC `http://127.0.0.1:8889/maixcam/` | 播放页HTTP 200，用户已确认实际视频流正常 |
+| MaixCam RTSP `rtsp://maixcam-6c7d.local:8554/live` | PyAV decoded with actual grab frames. |
+| RTSP `rtsp://127.0.0.1:8555/maixcam` | Reactivated 30 seconds to decode 592 frames, 1280 x 720, 20 fps |
+| HLS `http://127.0.0.1:8888/maixcam/index.m3u8` | HTTP 200 and FFmpeg decoded through |
+| WebRTC `http://127.0.0.1:8889/maixcam/` | Playpage HTTP 200, user confirmed actual stream is normal |
 
-用户验收时确认画面需要顺时针旋转90°。该需求已记录，但本视频通信目标不修改原始编码流；旋转将在后续显示和视觉坐标系目标中统一实施。
+User acceptance confirms that the image requires a clockwise rotation of 90°. This requirement is documented, but this video communication target does not modify the original coding stream; The rotation will be carried out uniformly in the subsequent display and visual coordinates system target.
 
-## 6. 停止与恢复
+## 6. Cessation and recovery
 
-- 本目标不设置设备自启动；MaixCam重启后视频服务默认不运行。
-- 设备确认/返回键可能终止当前MaixPy视频进程。
-- 使用 `stop.sh` 正常释放摄像头后，当前多媒体驱动存在同一系统会话内再次初始化失败的风险；如果日志出现 `No buffer space available` 或卡在ISP初始化，应停止残留进程并物理重启设备。
-- 强制终止进程前先尝试 `stop.sh`；不得同时运行两个摄像头应用。
-- `Stop PC relay` 先停FFmpeg，再停MediaMTX；不影响MaixCam原生RTSP服务。
+- This target does not set the device to start automatically; maixCam does not run the video service by default after restart.
+- Device confirm/return key may terminate the current MaixPy video process.
+- Use `stop.sh` After normal release of the camera, there is a risk that the current multimedia drive will fail again in the same system session; if logs appear `No buffer space available` Or the initialization of the ISP should stop the residual process and physically restart the device.
+- Try to force the termination of the process first `stop.sh`;do not run two cameras at once.
+- `Stop PC relay` Stop the FFmpeg, then MediaMTX;
 
-## 7. 尚未包含
+## Not yet included
 
-- 已确认的顺时针90°显示旋转，以及畸变、曝光和颜色标定。
-- 检测框、目标坐标和识别结果叠加。
-- 浏览器控制台布局及设备控制。
-- 自动启动、守护、健康检查和断线恢复策略。
-- 录像、循环存储与数据保留策略。
+- The confirmed clockwise displays a 90-degree rotation, as well as malformations, exposure and colouring.
+- The detection box, the target coordinates and the identification results are superimposed.
+- Browser console layout and device control.
+- Autostart, guard, health check and cut-off recovery strategy.
+- Video, recycling storage and data retention policy.
 
-这些内容分别建立后续目标；视频不得作为机器人安全状态的唯一反馈。
+These content sets up follow-up targets; Video cannot be the only feedback on robotic safety.

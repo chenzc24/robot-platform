@@ -1,22 +1,22 @@
-# ESP32安全空闲入口与底盘状态机
+# ESP32 Safe Free Entry and Cable Status Machine
 
-- 状态：`completed`
-- 负责人：Agent执行
-- 最高验证等级：`L1`
+- Status:`completed`
+- Responsible: Agent Implementation
+- Highest validation level:`L1`
 
-## 目标
+## Objective
 
-从历史审计结论出发，在当前 `src/esp32/app/` 建立默认 `SAFE_IDLE` 应用入口和不依赖硬件的底盘安全状态机。确定性修复“未知模式自动运动”“初始停车被缓存跳过”“失能后仍可写速度”和“重新使能前后未清零”四个软件问题，并用假MotorBus回归测试证明。此目标不迁移CAN实现、PS2、传感器、舵机或Camera UART，不连接或部署真机。
+Proceeding from historical audit findings, `src/esp32/app/` Create Default `SAFE_IDLE` Application access and non-hardware-dependent chassis safety machines. Validity fixes the four software problems of "unknown mode automobilization" initial parking that has been clogged over "defunct" and "re-enabled zero" software, with proof of a fake MotorBus regression test. This goal does not migrate to CAN.
 
-## 工作区初始状态
+## Initial state of the workspace
 
 ```text
 ## main...origin/main
 ```
 
-工作区干净，上一L3 PS2通路测试已完成并提交。设备继续使用现有历史程序，本目标只修改本地正式源码。
+The area is clean, the previous L3 PS2 route test has been completed and submitted....The device continues to use the existing historical program, and this goal is to modify only the local official source code.
 
-## 可修改文件
+## Modifyable File
 
 - `.vscode/tasks.json`
 - `src/esp32/app/main.py`
@@ -30,69 +30,69 @@
 - `plan/2026-08-31-esp32-safe-chassis-core/plan.md`
 - `plan/log.md`
 
-## 只读文件和目录
+## Read-only files and directories
 
 - `src/esp32/legacy/`
-- `src/esp32/app/boot.py`、`network_boot.py`、`secrets.example.py`
-- ESP32设备和文件系统
-- 原始资料、设备备份和其它子系统
+- `src/esp32/app/boot.py`, `network_boot.py`, `secrets.example.py`
+- ESP32 Device and file systems
+- Source information, backup of device and other subsystems
 
-## 共享依赖
+## Shared Dependencies
 
-- 历史 `MotorBus` 的预期接口：`prepare_speed_mode`、`set_acc`、`set_speed`、`stop_all`、`disable_all`。
-- 审计中的C1/C2阻断项和速度限制基线。
-- 当前MicroPython兼容目标；正式模块不得依赖CPython专有功能。
+- History `MotorBus` Expected interface:`prepare_speed_mode`, `set_acc`, `set_speed`, `stop_all`, `disable_all`.
+- Baseline of C1/C2 blockages and speed limits in audits
+- The current MicroPython compatibility target; official modules cannot rely on the CPython feature.
 
-## 设计边界
+## Design boundaries
 
-- `SAFE_IDLE` 是缺失、未知或尚未迁移模式的唯一回退，不初始化任何运动硬件。
-- 底盘状态至少包括 `DISABLED`、`ENABLING`、`ENABLED_STOPPED`、`MOVING`、`FAULT`。
-- 失能时拒绝非零运动目标；`stop()` 每次都向总线发送零目标，不依赖软件缓存跳过。
-- 使能顺序必须在驱动初始化前后发送零目标；任何异常进入 `FAULT` 并尽力停车、失能。
-- 本目标只提供安全核心和假总线测试，不声称真实驱动反馈或硬件动作已验证。
+- `SAFE_IDLE` It's the only retreat that is missing, unknown or not yet moving, without initializing any motor hardware.
+- The chassis state at least includes `DISABLED`, `ENABLING`, `ENABLED_STOPPED`, `MOVING`, `FAULT`.
+- Rejecting non-zero movement targets in case of failure;`stop()` Send zero targets to the bus every time, without relying on software caches.
+- Enabling sequence must send zero targets before and after driver initialization; any abnormal entry `FAULT` And try to stop the car, it's dead.
+- This target only provides security core and false bus tests, and does not claim that real drive feedback or hardware actions have been validated.
 
-## 预期工作
+## Expected work
 
-1. 为 `main.py` 增加显式运行模式归一化，未知模式回退 `SAFE_IDLE`。
-2. 实现底盘状态机、速度限幅、使能/停车/失能和故障回滚。
-3. 使用标准库 `unittest` 和假MotorBus覆盖阻断项及错误路径。
-4. 增加VS Code测试任务和安全核心文档。
-5. 更新历史审计状态，但不改动冻结快照。
+1. Yes `main.py` Add visible run mode to integration, unknown mode back `SAFE_IDLE`.
+2. Accomplish the chassis, speed limit, enable/stop/facility and failure back.
+3. Use Standard Library `unittest` And fake MotorBus overwhelm block and error path.
+4. Add VS Code test assignments and secure core files.
+5. Update historical audit status without changing the freeze.
 
-## 验证
+## Validation
 
 - `python -m unittest discover -s tests/esp32 -p "test_*.py"`
 - `python -m compileall -q src/esp32/app tests/esp32`
-- 假MotorBus调用序列断言与状态断言。
-- 未知运行模式归一化为 `SAFE_IDLE`。
-- 秘密扫描、VS Code JSON解析。
+- Fake MotoBus call sequence and status.
+- Unknown mode of running to `SAFE_IDLE`.
+- Secret scan, VS Code JSON analysis.
 - `git diff --check`
 - `git status --short --branch`
 
-## 实际结果
+## Actual results
 
-- 正式 `main.py` 只允许 `safe_idle`；配置缺失、非字符串、历史 `ps2`/`idle` 或其它未知值全部归一化为 `SAFE_IDLE`，且不导入运动硬件。
-- `device_config.example.py` 明确将 `RUN_MODE` 默认设为 `safe_idle`。
-- 新增硬件无关 `SafeMecanumChassis`，实现 `DISABLED`、`ENABLING`、`ENABLED_STOPPED`、`MOVING`、`FAULT` 五态。
-- 使能流程按“全部失能—写零—驱动初始化—再次写零”执行；非使能状态拒绝运动；`stop()` 每次向总线写零；`disable()` 写零后失能。
-- 运动学保留历史线速度、角速度、轮速和加速度上限，并在总线写入前拒绝NaN、无穷和非正加速度。
-- 使能、运动或失能总线异常进入 `FAULT`；使能和运动异常会尽力停车、失能，原异常保留给上层。
-- 新增12项标准库 `unittest` 假MotorBus测试，覆盖C1/C2阻断项、正常状态转换、限幅、零速度、重复使能、非有限输入及三类故障路径，全部通过。
-- 新增VS Code安全测试任务和独立设计文档；历史快照未修改，并在审计文档中记录为“本地回归已保护、尚未硬件验证”。
-- VS Code JSON、Python静态编译、秘密扫描和Git格式检查通过。
-- 本轮未连接、写入或驱动ESP32、CAN或电机。
+- Formal `main.py` Only allowed `safe_idle`;configuring missing, nonstring, history `ps2`/`idle` , or any other unknown value is converted to `SAFE_IDLE`, and do not import sports hardware.
+- `device_config.example.py` Explicitly `RUN_MODE` Default set to `safe_idle`.
+- New hardware is irrelevant `SafeMecanumChassis`, Achieved `DISABLED`, `ENABLING`, `ENABLED_STOPPED`, `MOVING`, `FAULT` Five.
+- (a) Enable the energy process to be performed by "total failure - write zero - drive initialization - write zero again";`stop()` Zero for each bus;`disable()` Write zero and fail.
+- Momentology retains historical line speed, angular speed, wheel speed and acceleration caps, and rejects NAN, infinity and non-positive acceleration before the bus is written.
+- An abnormal entry of power, motion or failure bus `FAULT`; the energy and exercise anomalies will stop as much as possible, and the malfunctions will remain in the upper layers.
+- New 12 Standard Library `unittest` The fake MotorBus test, covering C1/C2 blockages, normal state conversion, limit band, zero speed, duplicate energy, non-limited input and three types of failure path, all passed.
+- Add a new VS Code security test task and independent design document; history snapshot unmodified and recorded in the audit document as "local return protected, not hardware verified".
+- VS Code JSON, Python Static Compiled, Secret Scan and Git Format Check passed.
+- This round is not connected, write or drive ESP 32, CAN or electric.
 
-## 未解决事项
+## Outstanding matters
 
-- 尚未迁移真实MotorBus/CAN适配器，状态只代表调用未抛异常，不代表驱动已确认执行。
-- PS2接收、失联停车、控制权、Camera UART、网络控制、传感器、循迹和舵机均未迁移。
-- 尚未在MicroPython运行时执行正式安全核心，也未进行L2/L3验证或部署。
+- The real MotorBus/CAN adapter has not yet been migrated, the status only means calling unattended anomalies, not driving confirmed execution.
+- PS2 reception, lost parking, control, Camera UART, network control, sensors, tracks and rudders are not moving.
+- The official security core has not yet been implemented at MicroPython, nor has L2/L3 verification or deployment taken place.
 
-## 经验信号（供人工审阅）
+## Experience signal (for manual review)
 
-- 执行器安全核心可先通过依赖注入和假总线固定调用顺序、非法状态和故障回滚，再接入真实驱动反馈。
+- The core of the implementer's security can be placed in a fixed order of call by relying on injection and false bus, illegal state and failure rollback, and then access real-driven feedback.
 
-## 提交意图
+## Intent to submit
 
 ```text
 feat: add ESP32 safe chassis state machine

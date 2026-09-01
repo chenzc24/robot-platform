@@ -1,18 +1,18 @@
-# ESP32现有底盘源码基线与静态审计
+# ESP32 Existing chassis source baseline and static audit
 
-- 基线来源：ESP32文件系统备份根目录
-- 备份时间标识：`20260831-111429`
-- 版本化快照：`src/esp32/legacy/chassis_2026_08_31/`
-- 审计等级：L1，仅静态编译与无硬件模拟
-- 部署结论：**历史快照禁止直接部署或合并到 `src/esp32/app/`**
+- Baseline source: ESP32 filesystem backup root directory
+- Backup time identification:`20260831-111429`
+- Version snapshot:`src/esp32/legacy/chassis_2026_08_31/`
+- Audit Level: L1, static translation only and no hardware simulation
+- Deployment findings: **History snapshot prohibits direct deployment or integration `src/esp32/app/`**
 
-后续状态：`src/esp32/app/` 已在独立目标中实现默认 `SAFE_IDLE` 和假MotorBus底盘状态机，针对C1/C2建立了回归保护；冻结快照保持不变。该安全核心尚未接入CAN或部署真机，不能把C1/C2标记为硬件验证通过。详见 [`chassis-safety.md`](chassis-safety.md)。
+Follow-up status:`src/esp32/app/` Default achieved in stand-alone goal `SAFE_IDLE` And the fake MotorBus status machine, which established back-up protection for C1/C2; Freezing snapshots remained the same. The security core has not yet accessed CAN or deployed the real machine, and C1/C2 cannot be marked as hardware validation. [`chassis-safety.md`](chassis-safety.md).
 
-## 1. 快照完整性
+## 1. Scanning integrity
 
-设备备份根目录与版本化快照包含相同的11个Python文件，文件大小和SHA-256逐项一致。文件均为有效UTF-8，但混合使用LF与CRLF并保留原有尾随空白；`.gitattributes` 对该冻结快照关闭文本转换和空白规范检查，以保持字节级原样。该豁免不适用于当前应用源码。
+The backup root directory of the device contains the same 11 Python files as the versioned snapshot, the size of which corresponds to each item of SHA-256. The files are valid UTF-8, but the LF and CRLF are used in combination and the original trail blank is maintained;`.gitattributes` The freeze snapshot closes text conversion and blank specifications check to keep the byte level as it is. The exemption does not apply to the current source code.
 
-| 文件 | 字节 | SHA-256 |
+| Documentation | Bytes | SHA-256 |
 |---|---:|---|
 | `boot.py` | 217 | `f3a6a0a4ad763ab19eee1a70a9edab10b61a1f5515ef9dd39f791d7c97c85673` |
 | `chassis_control.py` | 6936 | `9485118ca20ba76889b6daf7255380835a0726fb26b825c10d5835f4c149865a` |
@@ -26,96 +26,96 @@
 | `servo_control.py` | 4842 | `6dca54b74916dfc54d3d37d30878210f8e1684a90bd53476fafba8cf6bc95bb9` |
 | `servo_lib.py` | 12790 | `fbb1f88e1e6d4ce1bf3973f4c819eaab98c59977ea26870987d4674463f1a537` |
 
-根目录和设备上的 `SmartHybridChasisDemo/` 在备份目标中已经确认是相同的11对文件，因此本次只纳管根目录一份，不重复提交第二份。
+Root directory and device `SmartHybridChasisDemo/` The same 11 pairs of files have been identified in the backup target, so this is only a one-in-one directory, not a second one.
 
-## 2. 当前结构
+## 2. Current structure
 
 ```text
 main.py
-├── 顶层初始化 Camera UART、CAN、底盘对象和接收线程
+Ideas - Top Level Initialization Camera UART, CAN, chassis objects and receiver lines Cheng
 ├── RUN_MODE == "ps2" → PS2Receiver → ps2_loop()
-└── 其它任意RUN_MODE → 自动执行底盘和舵机动作示例
+└ - Any other RUN MODE auto-example chassis and rudder manoeuvres
 
 ps2_loop()
-├── 普通摇杆控制
-├── 停车、失能和重新使能按键
-├── Camera UART裸字符串收发
-└── PS2 L1按键进入循迹避障内部循环
+Idea-- normal swing control.
+Idea-- Stop, disable and re-enactment keys.
+Ideas — Carmela UART raw string
+└ - PS2 L1 key into the internal loop of the barrier
 ```
 
-## 3. 必须在部署前修复
+## 3. Must be repaired prior to deployment
 
-### C1：未知运行模式会自动运动
+### C1: Unknown running mode moves automatically
 
-`robot_config.py:25` 只有 `"ps2"` 被显式识别；`main.py:137-230` 对其它任意值执行前进、后退、横移、旋转、轮速和可选舵机测试。配置缺失、拼写错误或未来增加模式时都会落入运动示例，而不是安全空闲。
+`robot_config.py:25` Only `"ps2"` Visible;`main.py:137-230` Execute any other value forward, backward, transverse, rotate, wheel speed and optional rudder test. The configuration is missing, spelling errors or future growth patterns fall into the example of movement, not free time.
 
-要求：运行模式采用显式白名单；未知、缺失和解析失败一律进入 `SAFE_IDLE`，禁止初始化或使能运动执行器。演示动作只能通过独立L3测试入口和人工确认启动。
+Request: Run mode uses a visible white list; unknown, missing resolution failed to enter `SAFE_IDLE`, prohibition of initialization or enabling motion implementers. Demonstrations can only be activated by independent L3 test portal and manual confirmation.
 
-### C2：失能状态仍可写非零目标，重新使能前未强制清零
+### C2: Disable states can still be written as non-zero targets, re-enacting unenforceable zero before the energy becomes available
 
-`chassis_control.py:87-92` 重新使能时调用驱动初始化，但没有显式发送零速度；同时把 `_motors_stopped` 设为真。`stop()` 在该标志为真时直接返回。`drive()` 和 `drive_wheel_speeds()` 不检查 `motors_enabled`，因此失能后仍会向驱动器写入非零目标。无硬件模拟确认该调用序列确实会产生速度写操作。
+`chassis_control.py:87-92` Re-initiation of the energy call drive, but no visible dispatch of zero speed; and `_motors_stopped` Make it real.`stop()` Return directly when the sign is true.`drive()` and `drive_wheel_speeds()` Do Not Check `motors_enabled`, so when you fail, you write non-zero targets to the drive. No hardware simulation confirms that the call sequence actually produces speed writing.
 
-如果驱动器在失能期间保存目标值，随后重新使能可能立即执行旧目标。是否保存需要查阅驱动器协议并在L2/L3确认，但软件当前没有形成安全边界。
+If the drive saves the target value during a failure, then the re-enactment may immediately execute the old target ... Whether to save requires access to the drive protocol and confirmation of L2/L3, but the software does not currently create a secure boundary.
 
-要求：失能时拒绝所有非零目标；使能前、使能后均发送并确认零目标；停止不得只依赖软件缓存跳过；状态机至少区分 `DISABLED`、`ENABLING`、`ENABLED_STOPPED`、`MOVING` 和 `FAULT`。
+Require: Reject all non-zero targets in case of failure; Before enabling, enabling and confirming zero targets; Stop relying on software caches; Status machines at least distinguish `DISABLED`, `ENABLING`, `ENABLED_STOPPED`, `MOVING` and `FAULT`.
 
-## 4. 高风险问题
+## 4. High-risk issues
 
-### H1：导入模块即初始化真实硬件
+### H1: Import module i.e. initialised real hardware
 
-`main.py:57-118` 在函数外创建Camera UART和CAN、清空CAN接收队列、创建底盘对象、可选初始化舵机并启动线程。`ps2_control.py:128-129` 在导入时读取时间并配置循迹和超声波引脚。仅导入模块就改变硬件状态，无法安全测试、诊断或按依赖顺序启动。
+`main.py:57-118` Creates Camera UART and CAN outside the function, emptys CAN receiving queues, creates chassis objects, selects the initialization wheel and starts the thread.`ps2_control.py:128-129` Read time and configure retrospects and ultrasounds when importing. Importing modules alone changes the state of hardware, does not allow security testing, diagnoses or starts in the order of dependence.
 
-要求：所有硬件构造和线程启动移入显式生命周期；先完成配置校验和安全状态建立，再逐个启动服务。
+Requirements: all hardware construction and linear startup move into a visible life cycle; first configuration check and security set up, then start the service one by one.
 
-### H2：CAN初始化失败可能形成无限复位循环
+### H2: Can failure to initialize may result in an infinite repetition cycle
 
-`main.py:65-76` 捕获任何CAN初始化异常后等待一秒并执行 `machine.reset()`，没有重试上限、故障状态或维护入口。永久接线、引脚或资源冲突会导致持续复位，也会反复执行 `boot.py` 网络初始化。
+`main.py:65-76` Wait for one second after the initialization anomaly of any CAN capture `machine.reset()`, there is no maximum test, failure or maintenance of the entrance... permanent connection, lead or resource conflict will result in continuous repositioning and repeated execution `boot.py` Network initialization.
 
-要求：记录具体异常并进入可维护的 `FAULT`，保持电机失能；只有明确可恢复的错误才有界重试。
+Request: Record specific anomalies and enter maintenanceable `FAULT`Maintaining power failure; only those errors that are clearly recoverable can be retried.
 
-### H3：循迹避障模式没有失联停车门
+### H3: We've got a back-up mode. The door.
 
-`ps2_control.py:50-105` 进入内部无限循环后虽然读取 `fresh`，但不检查该值。手柄失联时无法可靠识别退出键；先前下发的运动目标可能继续保持。超声波只有在 `0 < distance < 20` 时停车，超时、异常和无效距离不是失败停车。循环内还有0.5秒阻塞，超过普通PS2路径的250毫秒新鲜度窗口。
+`ps2_control.py:50-105` Once you're inside the infinite cycle, read it. `fresh`, but without checking the value. The exit key cannot be reliably identified when the handle is missing; the previously released motor target may continue. The ultrasound is only `0 < distance < 20` Time parking, time out, abnormal and invalid distance is not a failure to stop. There's a 0.5-second blockage in the cycle, 250 millisecond fresh window beyond the normal PS2 path.
 
-要求：自主/循迹功能使用有界状态机；每次迭代先检查控制所有权、手柄/任务心跳、传感器新鲜度和有效性，任一失败立即停车并退出或进入故障。
+(b) Control ownership, handle/mission heartbeat, sensor freshness and validity, any failure to stop immediately and exit or fail.
 
-### H4：没有驱动反馈和已验证状态
+### H4: No driver feedback and verified status
 
-`motor_lib.py` 只发送CAN写命令，没有ACK、状态读取、故障上报或部分初始化失败后的回滚。四个电机依次配置和控制，中途异常可能留下混合状态。软件中的 `motors_enabled` 和 `_motors_stopped` 只是本地假设。
+`motor_lib.py` Only send CAN write commands, no ACK, status read, rollback after failure to report or partial initialization. Four machines are configured and controlled in sequence, and the intermediate abnormality may leave a mixed state. `motors_enabled` and `_motors_stopped` It's just a local assumption.
 
-要求：引入驱动状态查询和命令结果；批量使能失败时停止并失能全部电机；控制台状态不得把“已发送”表示为“已执行”。
+Requires: Introduction of driver status queries and command results; Bulk failure to stop and disable all generators; Console status shall not be "sent" as "executed".
 
-后续状态：正式 `MotorBus` 已通过假CAN实现严格帧校验、批量失败继续和全组回滚，但尚无驱动ACK或状态读取，因此H4只完成软件发送侧保护，未关闭。详见 [`motor-can.md`](motor-can.md)。
+Follow-up status: Formal `MotorBus` Strict frame verification has been achieved through false CANs, batch failure continues and group rolls back, but no driver ACK or status read yet, so H4 only completes software side protection, not closed. [`motor-can.md`](motor-can.md).
 
-### H5：预留舵机启用后会在启动阶段产生动作
+### H5: Retain the rudder to generate action during start-up.
 
-当前 `RESERVE_SERVO_ENABLED=False`，所以未执行。若改为真，`main.py:85-99` 会在进入 `main()` 前重置圈数、锁定并移动到初始角。并且 `servo_lib.py:52-55` 使用双参数 `time.ticks_add()`；本轮连接的MicroPython 1.27.0曾对该形式返回参数数量错误，兼容性尚未解决。
+Current `RESERVE_SERVO_ENABLED=False`, so it's not implemented.`main.py:85-99` It's going in. `main()` Reset the number of circles, lock and move to the initial angle. And `servo_lib.py:52-55` Use two arguments `time.ticks_add()`; MicroPython 1.27.0 of the current round connected had an error in the number of parameters returned in this form, compatibility not resolved.
 
-要求：舵机初始化不得位于导入阶段；时间兼容层必须针对当前固件测试；任何回零、锁定或初始角移动均按L3动作处理。
+Request: The rudder initialization should not be at the import stage; The time compatibility layer must be tested for the current firmware; Any return zero, locking or initial angle movement is handled by L3.
 
-## 5. 中等风险和维护问题
+## Medium risk and maintenance issues
 
-- `ps2_loop()` 的普通路径具有250毫秒快照新鲜度检查、停车键和失能键，这是可保留的安全基础；但线程停止只修改标志，没有等待后台线程退出。
-- Camera UART接收使用共享字典跨线程传递裸字符串。收到任意数据立即回复 `ok`，没有消息边界、长度约束、序列号、CRC、超时或响应匹配；当前只打印数据，尚未据此执行动作。
-- Camera接收线程只捕获 `UnicodeError`，但解码使用 `errors="replace"`，该异常通常不会发生；其它UART和线程错误会直接终止接收。
-- `sensor.py` 与 `ps2_control.py` 重复包含循迹代码和硬编码引脚，形成两个实现源；正式代码应保留一个传感器服务。
-- 速度层存在积极保护：车体线速度限制为0.60 m/s、角速度限制为0.80 rad/s，轮速按200 RPM归一化，电机驱动层还有44 rad/s上限。限幅不能替代使能状态、心跳和反馈。
-- `main.py`、`hcsr04.py` 和 `sensor.py` 都包含可直接运行的真实硬件示例，后续应移到明确的L3测试目录。
+- `ps2_loop()` The normal path has a 250 ms snapshot of freshness, parking keys and power failure keys, which are the safe foundation to keep; but the thread stops only changing the sign, and does not wait for the back-stage line to exit.
+- Carmela UART receives a shared dictionary cross-line to pass a nudist string. Any data received immediately `ok`, no message boundary, length constraint, serial number, CRC, timeout or response matching; currently only print data, and no action has been executed.
+- Camera receiving threads only. `UnicodeError`, but decoded `errors="replace"`, this anomaly usually does not happen; other UART and thread error will directly terminate the reception.
+- `sensor.py` and `ps2_control.py` Repeats the recoding code and the hard coding lead, creating two realization sources; the official code should retain a sensor service.
+- Positive protection exists in the velocity layer: the body line speed limit is 0.60 m/s, the angle speed limit is 0.80 rad/s, the wheel speed is standardized at 200 RPM, and the motor drive is capped at 44 rad/s. The limit is not a substitute for the performance state, the heartbeat and feedback.
+- `main.py`, `hcsr04.py` and `sensor.py` Both contain examples of real hardware that can run directly, and then move to a clear L3 test directory.
 
-## 6. L1验证结果
+## 6. L1 validation results
 
-- 11个文件通过CPython `compileall`，验证只解析源码，没有导入或执行MicroPython硬件模块。
-- 使用假的MotorBus执行底盘纯逻辑检查：超大车体命令会被限制到配置的轮速上限。
-- 同一模拟确认：新建底盘对象的 `stop()` 不产生总线停车命令；失能后调用 `drive()` 仍会产生四个非零速度写操作。这是C2的确定性软件证据。
-- 未连接ESP32、未上传文件、未发送CAN/UART命令、未进行真实运动。
+- 11 documents through CPython `compileall`, certify only the source code, does not import or execute MicroPython hardware module.
+- Use a fake MotorBus to perform a purely chassis logical check: Superbody commands will be limited to the configuration speed limit.
+- Same simulation confirmed: New underboard object `stop()` no bus parking command; call after failure `drive()` There are still four non-zero speed writing operations. It's proof of certainty in C2.
+- No ESP32 connection, no upload file, no Can/UART message, no real exercise.
 
-## 7. 后续重构边界
+## 7. Follow-up rebuilding of borders
 
-下一目标应从历史快照选择性迁移到 `src/esp32/app/`，而不是整体复制：
+The next target should be moved from historical snapshots to a selective one. `src/esp32/app/`, instead of copying:
 
-1. 建立安全应用入口和显式运行模式，默认 `SAFE_IDLE`。
-2. 重构电机/底盘状态机，首先修复C2并添加假的总线回归测试。
-3. 将PS2普通控制迁为一个控制源，保留250毫秒失联停车；循迹功能暂不迁入运行路径。
-4. 将Camera UART改为有边界、序列号和校验的协议适配器，当前裸字符串仅保留为历史记录。
-5. 分离传感器与舵机服务，所有产生运动的初始化延后到获得控制权和安全确认之后。
-6. 完成L1模拟与协议测试后，再建立独立L2部署目标；任何轮子或舵机真实动作进入L3。
+1. Create safe application access and visible mode, default `SAFE_IDLE`.
+2. Reconstruct the electrical/disk status machine, first repair C2 and add a false bus regression test.
+3. Move PS2 normal control to a control source, maintain 250 milliseconds of unconnected parking; retrace not moving into the running path.
+4. Change Camera UART to a protocol adapter with a boundary, serial number and verification, and the current raw string is kept only as a historical record.
+5. Separating sensors and rudder services, the initialization of all motion generation is delayed until control and safety confirmation is obtained.
+6. Once the L1 simulation and protocol tests have been completed, establish an independent L2 deployment target;

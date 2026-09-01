@@ -1,22 +1,22 @@
-# ESP32现有底盘源码纳管与静态审计
+# ESP32 Existing chassis source tube and static audit
 
-- 状态：`completed`
-- 负责人：Agent执行
-- 最高验证等级：`L1`
+- Status:`completed`
+- Responsible: Agent Implementation
+- Highest validation level:`L1`
 
-## 目标
+## Objective
 
-将已备份的ESP32根目录11个Python文件原样复制为受版本管理的历史基线，确认复制完整性，并静态审计启动、运动控制、通信、异常处理和安全风险。此目标不连接、写入或驱动真实设备，也不把历史基线直接合并到当前可部署 `app/`。
+Copy the backuped ESP32 directories of 11 Python files as historical baselines managed by the version, confirm copy integrity, and initiate static audits, movement control, communications, abnormal handling and security risks. This target is not connected, write or drive real device, and does not integrate historical baselines directly into current deployable ones `app/`.
 
-## 工作区初始状态
+## Initial state of the workspace
 
 ```text
 ## main...origin/main
 ```
 
-工作区干净。源文件来自Git忽略的只读备份 `device-backups/esp32/20260831-111429/`；该备份与设备根目录在上一目标中已确认完整。
+Workspace clean. Source file from read-only backup ignored by Git `device-backups/esp32/20260831-111429/`; this backup and device root directory is confirmed in the previous target.
 
-## 可修改文件
+## Modifyable File
 
 - `.gitattributes`
 - `src/esp32/legacy/chassis_2026_08_31/`
@@ -26,68 +26,68 @@
 - `plan/2026-08-31-esp32-legacy-source-baseline/plan.md`
 - `plan/log.md`
 
-## 只读文件和目录
+## Read-only files and directories
 
 - `device-backups/esp32/20260831-111429/`
-- `ESP32/`、`Camera/`、`Robot Arm_Claws/` 和 `tmp/`
+- `ESP32/`, `Camera/`, `Robot Arm_Claws/` and `tmp/`
 - `src/esp32/app/`
-- 设备文件系统和COM7
-- 其余仓库文件
+- Device file system and COM7
+- Remaining repository files
 
-## 共享依赖
+## Shared Dependencies
 
-- 已完成的ESP32文件系统备份和SHA-256一致性结论。
-- 当前 `src/esp32/app/` Wi-Fi/WebREPL安全启动基线。
-- 设备职责、安全门和L0–L4验证规则。
+- Complete ESP32 backup and SHA-256 consistency conclusion
+- Current `src/esp32/app/` Wi-Fi/WebREPL Safe Start Baseline.
+- Device duties, security doors and L0-L4 validation rules.
 
-## 风险和判断
+## Risk and judgement
 
-- 历史代码包含真实电机、CAN、UART和PS2控制逻辑；纳管不代表可安全部署。
-- `main.py` 在导入阶段初始化外设，静态编译不会执行这些语句。
-- 快照必须保持字节级原样，审计意见写入独立文档，不在同一目标中修复历史代码。
-- 历史文件均为有效UTF-8，但混合使用LF与CRLF行尾并包含原有尾随空白；该冻结快照路径按Git二进制内容保存并豁免空白规范检查，避免检出或格式化时改写历史字节。其它源码仍使用仓库默认空白检查。
-- 备份可能包含设备特定参数，但不得包含热点、WebREPL或其他秘密；提交前执行秘密扫描。
+- History code contains real power, CAN, UART and PS2 control logic;
+- `main.py` Initiating externals during import, static compilation will not execute these statements.
+- The snapshot must remain byte, the audit opinion is written in a stand-alone file, and the historical code is not repaired in the same target.
+- The historical documents are valid UTF-8, but the combination of the LF and CRLF ends and contains the original trail blank; The freezing snapshot path saves with Git binary content and exempts the blanks, and avoids rewriting the historical bytes when checking out or formatting. Other sources still use the repository default blanks.
+- Backup may contain device-specific parameters, but may not contain hot spots, WebREPL or other secrets;
 
-## 预期工作
+## Expected work
 
-1. 将备份根目录11个Python文件原样复制到版本化历史基线目录。
-2. 比较源与目标的文件清单、大小和SHA-256。
-3. 使用CPython静态编译全部文件，不导入、不执行硬件代码。
-4. 审计启动副作用、运动默认值、停车/失能路径、线程、通信解析、异常与复位行为。
-5. 记录事实、风险分级和后续重构边界，不在本目标内上传设备或进行运动测试。
+1. Copy the backup root directory of 11 Python files in their original version of the historical baseline directory.
+2. List of documents comparing sources and targets, size and SHA-256.
+3. Compile all files using CPython static, not import, not execute hardware codes.
+4. Audit initiates side effects, movement defaults, parking/deactivation paths, threads, communications resolution, abnormality and repositioning behavior.
+5. Record the facts, risk classification and subsequent re-constructing of the boundary, not uploading device or conducting exercise tests within this target.
 
-## 验证
+## Validation
 
-- 11个源文件与版本化快照逐文件SHA-256一致。
-- `python -m compileall` 静态编译通过。
-- 检查导入图、顶层硬件副作用和关键安全调用。
-- 检查Git差异中无秘密、设备备份目录或原始资料路径被误纳入。
+- The 11 source documents are consistent with the release snapshot by SHA-256.
+- `python -m compileall` Still compiled.
+- Check import maps, top-level hardware side effects and key security calls.
+- Check that there's no secret in the Git difference, that the device backup directory or source path is wrongly incorporated.
 - `git diff --check`
 - `git status --short --branch`
 
-## 实际结果
+## Actual results
 
-- 从只读备份根目录机械复制11个Python文件到 `src/esp32/legacy/chassis_2026_08_31/`；未纳入内容相同的 `SmartHybridChasisDemo/` 第二份副本。
-- 11个文件均为有效UTF-8，但行尾格式混合；通过路径专用 `.gitattributes -text` 保持版本化快照字节不变。
-- 源备份与快照的文件名、字节数和SHA-256逐项一致，11/11通过。
-- 11个历史文件和当前 `src/esp32/app/` 均通过CPython静态编译；没有导入或执行MicroPython硬件模块。
-- 审计确认两个部署阻断项：未知 `RUN_MODE` 自动执行整套运动示例；失能后仍允许写入非零目标且重新使能前没有强制清零。
-- 审计同时记录导入即初始化硬件、CAN异常无限复位、循迹失联不停车、缺少驱动反馈、舵机启动动作/时间API兼容性、Camera UART裸字符串和线程生命周期等风险。
-- 假MotorBus检查确认速度限幅生效，同时确定性复现初始 `stop()` 不发送总线停车命令，以及失能后 `drive()` 仍产生速度写操作。
-- 新增独立审计文档并将历史快照明确标为不可部署；没有修改 `src/esp32/app/`。
-- 秘密扫描和Git格式检查通过；本轮未连接、写入或驱动真实设备。
+- From read-only backup root directory machine copying of 11 Python files to `src/esp32/legacy/chassis_2026_08_31/`;not including identical content `SmartHybridChasisDemo/` Second copy.
+- 11 files are valid UTF-8, but line end format is mixed; `.gitattributes -text` Keep the version fast byte.
+- Source backup corresponds to snapshot file names, bytes and SHA-256 item by 11/11.
+- 11 historical documents and current `src/esp32/app/` all compiled via CPython static; neither imported nor executed MicroPython hardware module.
+- Audit confirmed two deployment blockages: unknown `RUN_MODE` Examples of auto-executing a whole set of movements; failure to write to a non-zero target and no mandatory zero before re-enactment.
+- The audit also recorded risks such as import, i.e. initialization hardware, abnormal limitless re-entry of CAN, loss of connection, lack of driver feedback, rudder starter action/time API compatibility, Camera UART naked string and thread life cycle.
+- Fake MotorBus check to confirm speed limit effective, while confirming initial recurrence `stop()` Do not send a bus stop order, and after failure `drive()` It still produces speed writing.
+- Add independent audit files and clearly mark history snapshots as non-deployable; no changes `src/esp32/app/`.
+- Secret scan and Git format check passed; current round is not connected, write or drive real devices.
 
-## 未解决事项
+## Outstanding matters
 
-- 历史快照中的阻断项均未在本目标修复；下一目标需选择性迁移，不能整体复制到部署目录。
-- 电机驱动器是否在失能期间保存非零目标需查阅协议并在完成软件防护后按L2/L3验证。
-- 当前MicroPython的 `ticks_add` 兼容性、CAN反馈能力和传感器失效语义仍需专项确认。
+- None of the blockages in the historical snapshots have been repaired in this target; the next target has to be selectively migrated and cannot be copied to the deployment catalogue as a whole.
+- Whether or not to keep non-zero targets during a malfunction requires access to the protocol and verification of L2/L3 upon completion of software protection.
+- Current MicroPython `ticks_add` Compatibility, Can feedback capability and sensor failure semantics still need specific confirmation.
 
-## 经验信号（供人工审阅）
+## Experience signal (for manual review)
 
-- 执行器软件状态缓存与真实驱动状态可能分离；停止、失能和重新使能必须用显式零目标和反馈闭环验证。
+- (b) Stop, disable and re-energize must be verified in a visible zero target and feedback loop.
 
-## 提交意图
+## Intent to submit
 
 ```text
 docs: import and audit ESP32 chassis source baseline

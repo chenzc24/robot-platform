@@ -1,19 +1,19 @@
-# 设备运行时基础
+# Device running time base
 
-- 状态：本地L1基线，未部署真机
-- 适用：ESP32安全应用、MaixCam视频服务和后续设备服务
-- 共享契约：`protocol/runtime-status.schema.json`
+- Status: Local L1 baseline, no real machine deployed
+- Application: ESP32 security application, MaixCam video service and follow-up device service
+- Shared contracts:`protocol/runtime-status.schema.json`
 
-## 1. 语言与边界
+## 1. Languages and borders
 
-- 新增运行代码、注释、docstring、标识符、日志键、事件名和错误码使用英文。
-- 项目设计、现场操作和安全文档可使用中文。
-- `src/esp32/legacy/` 是字节级历史快照，不翻译、不格式化、不作为部署源。
-- 本地 `secrets.py`、`device_config.py`和编译缓存不进入Git，工作区验证工具不读取秘密文件内容。
+- Add running codes, notes, docstring, identifier, log keys, event name and error code in English.
+- Project design, on-site operation and security document available in Chinese.
+- `src/esp32/legacy/` It's a byte history snapshot, no translation, no formatting, no deployment source.
+- Local `secrets.py`, `device_config.py`And compile caches that do not enter Git, workspace validation tools do not read secret files.
 
-## 2. 结构化状态契约
+## 2. Structured status compacts
 
-ESP32、MaixCam和后续控制台共享下列必填字段：
+ESP32, MaixCam and the follow-up console share the following mandatory fields:
 
 ```json
 {
@@ -29,80 +29,80 @@ ESP32、MaixCam和后续控制台共享下列必填字段：
 }
 ```
 
-服务生命周期状态为：
+The service life cycle status is:
 
 ```text
 starting / idle / ready / running / stopping / stopped
 disconnected / safe_idle / fault / estop
 ```
 
-这些是服务健康和安全状态，不等于未来机器人任务的 `ARMED/RUNNING/COMPLETED` 业务状态。两者必须使用不同字段，避免把“服务正在运行”误解为“运动任务正在执行”。
+These are service health and safety, not equal to future robotic missions. `ARMED/RUNNING/COMPLETED` Business status. Both have to use different fields to avoid the misperception of "service is running" as "motion is on."
 
-## 3. ESP32模块
+## 3. ESP32 Module
 
-| 模块 | 职责 | 当前硬件行为 |
+| Module | Duties | Current hardware behaviour |
 |---|---|---|
-| `main.py` | 组合入口 | 无 |
-| `application.py` | 运行模式门禁和生命周期 | 仅 `SAFE_IDLE` |
-| `esp_runtime_status.py` | MicroPython兼容的JSON状态事件 | 无 |
-| `control_lease.py` | 单控制者、有界超时、续租和释放 | 无，尚未连接底盘停车 |
-| `chassis_control.py` | 底盘状态机、限幅和故障回滚 | 通过注入MotorBus才可发生 |
-| `motor_bus.py` | CAN帧编码、发送、失败计数和批量回滚 | 通过注入CAN才可发生 |
+| `main.py` | Group entrance | None |
+| `application.py` | Operating mode doors and life cycle | Only `SAFE_IDLE` |
+| `esp_runtime_status.py` | MicroPython compatible JSON status event | None |
+| `control_lease.py` | Single controller, timeout, renewal and release | None, not connected to chassis parking |
+| `chassis_control.py` | Baseboard status machine, limit bands and failure rollback | It's only possible by injecting MotoBus. |
+| `motor_bus.py` | Can frame encoding, sending, failure count and batch rollback | It's only possible by injecting Can. |
 
-`ControlLease` 当前只是已测试的保护原语。在正式底盘服务完成前，租约过期不会自动调用真实停车，不得宣称心跳停车已实现。
+`ControlLease` It's only a protected language that has been tested. Until the official chassis service is completed, the lease expires without automatically calling the real parking, without claiming that the heartbeat has been stopped.
 
-## 4. MaixCam视频模块
+## 4. MaixCam video module
 
 ```text
-rtsp_server.py        CLI、信号和进程生命周期
+rrtsp server.py CLI, signal and process life cycle
   └─ video_service.py
-       ├─ RtspVideoService      状态、回滚与摄像头所有权
-       └─ MaixRtspBackend       MaixPy摄像头与RTSP薄适配器
+       Ideas - RtspVideoService Status, Rollback and Camera Ownership
+       └ - MaixRtspBackend MaixPy camera and RTSP thin adapter
 
-maix_runtime_status.py                  结构化状态
-resource_guard.py                       进程内资源独占
-start.sh / stop.sh / status.sh          PID归属验证与运行入口
+maix runtime status.py structured state
+Resources within the process
+Start.sh / stop.sh / status.sh PID at validation and running entrance
 ```
 
-保护规则：
+Rules of protection:
 
-- 导入CLI和服务模块不导入 `maix`，因此不会在本地测试时占用UART或摄像头。
-- 只有 `MaixRtspBackend` 构造时导入 `maix`，并立即释放系统默认UART0监听器。
-- 视频服务必须成功获得 `camera` 所有权后才创建后端。
-- 启动或停止异常时释放所有权、记录稳定错误码并进入 `fault`。
-- Shell脚本在发送终止信号前检查PID是否确实属于本项目RTSP程序。
+- Import CLI and Service Module Not Import `maix`, so they won't use UART or cameras for local tests.
+- Only `MaixRtspBackend` Import when Construct `maix`, and release the system default UART0 monitor immediately.
+- Video services must be successfully accessed `camera` Create backend after ownership.
+- Release ownership when the anomaly is activated or stopped, record the error code and enter `fault`.
+- Shell scripts check if PID really belongs to the RTSP program on this item before sending the termination signal.
 
-## 5. VS Code入口
+## 5. VS Code entrance
 
-本轮只修改 `.vscode/tasks.json`，不改用户未提交的 `.vscode/settings.json` 按钮配置。
+Change only in current cycle `.vscode/tasks.json`,do not change the user 's unsubmitted `.vscode/settings.json` Button Configuration.
 
-新增的主入口：
+New main entrance:
 
-- `Robot: Local preflight`：无设备语法、工作区、契约和全部单元测试。
-- `Robot: Run all local tests`：ESP32、MaixCam和共享契约测试。
-- `Robot: Check live links`：用户稍后手动运行，只检查ESP32 WebREPL端口和MaixCam SSH。
-- `MaixCam Video: Start development session`：上传、启动、电脑中继和实际帧探测；运行前仍需人工退出 `num`。
-- `MaixCam Video: Status`、`Show recent log`、`PC relay status`：分层诊断。
-- `Robot: Stop PC services`：只停止电脑侧FFmpeg和MediaMTX，不停止设备RTSP。
+- `Robot: Local preflight`: Unequipped syntax, workspace, contract and all unit tests.
+- `Robot: Run all local tests`ESP32, MaixCam and shared compact test.
+- `Robot: Check live links`: Users run manually later, checking only ESP32 WebREPL port and MaixCam SSH.
+- `MaixCam Video: Start development session`: Upload, start, computer relay and actual frame detection; still manual exit before running `num`.
+- `MaixCam Video: Status`, `Show recent log`, `PC relay status`Declining.
+- `Robot: Stop PC services`: Stop only FFmpeg and MediaMTX, not device RTSP.
 
-扁平日常入口新增：
+Add the flat daily entrance:
 
-- `Robot: Connect`：发现两台设备，启动缺失的MaixCam RTSP和电脑中继，健康服务保持不动。
-- `Robot: Status`：只读三级摘要。
-- `Robot: Details`：展开全部检查、错误码和下一步建议。
-- `Robot: Disconnect`：只停止电脑中继。
+- `Robot: Connect`: Two devices were found, the missing MaixCam RTSP and the computer relay were activated, and the health services remained intact.
+- `Robot: Status`: Three-tier summary only.
+- `Robot: Details`: Perform all checks, error codes and suggestions for next steps.
+- `Robot: Disconnect`: Stop computer relay only.
 
-这些任务调用仓库根目录的 `robot.cmd`。同一CLI还提供受保护的 `ps/logs/stop/restart/kill/reboot`维护命令，但不提供任意PID强杀；ESP32重启在安全运行时真机验收前保持锁定。
+These tasks call the repository root directory. `robot.cmd`The same CLI provides protection. `ps/logs/stop/restart/kill/reboot`Maintain commands, but do not provide any PID to kill; ESS32 restarts locking until it's secure.
 
-本轮不添加电机使能、底盘速度或机械臂动作快捷入口。
+This wheel does not add motors, chassis speed or robot arm movement shortcuts.
 
-## 6. 验收边界
+## 6. Receiving and inspection boundaries
 
-本轮只可确认：
+This round will only confirm:
 
-- 共享状态字段和设备实现在本地测试中一致。
-- ESP32安全入口仍不初始化运动硬件。
-- 控制租约、摄像头所有权、状态反馈和故障回滚通过假对象测试。
-- 新部署清单和脚本尚未在MicroPython或MaixCam真机上执行。
+- Share status fields and devices to achieve consistency in local testing.
+- The ESP32 security entrance still does not initiate motor hardware.
+- Control the lease, camera ownership, state feedback and failure rolls back through false object testing.
+- New deployment lists and scripts have not been implemented on MicroPython or MaixCam.
 
-用户上机后必须另建L2目标，先验证导入、文件部署、结构化日志、摄像头启停和恢复；未通过L2前不部署ESP32运动模式。
+Once onboard, the user must set an additional L2 target, verify import, file deployment, structured log, camera startup and recovery; do not deploy ESP32 mode before L2.

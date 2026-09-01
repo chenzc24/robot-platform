@@ -1,82 +1,82 @@
-# 验证机械臂无LAN2运行路径
+# Validate robot arm without LAN2 path
 
-- 状态：`completed`
-- 日期：`2026-09-01`
-- 最高验证等级：`L3`
-- 提交意图：测试完成后仅提交本目标计划和事实日志
+- Status:`completed`
+- Date:`2026-09-01`
+- Highest validation level:`L3`
+- Submission intent: Only this target plan and fact log will be submitted after the test is completed
 
-## 目标
+## Objective
 
-区分并验证两个问题：机械臂冷启动后既有TCP工程是否已经运行，以及工程经LAN2启动后，拔除LAN2是否仍能由MaixCam经UART/TCP232和机械臂LAN1持续完成诊断与受控动作。
+Distinguishing and verifying two questions: whether the existing TCP project has been operational since the arm's cold was activated, and whether the removal of the LAN2 after the project was initiated by the LAN2 is still capable of continuous diagnosis and control by MaixCam through UART/TCP232 and the robot arm LAN1.
 
-## 工作区初始状态
+## Initial state of the workspace
 
-- 当前分支：`target/maixcam-arm-l2`
-- 工作区已有用户修改：`.vscode/settings.json`
-- 该修改与本目标无关，不检查内容、不修改、不暂存。
+- Current branch:`target/maixcam-arm-l2`
+- Workspace has been modified:`.vscode/settings.json`
+- This change has nothing to do with this goal, does not check the content, does not modify, does not hold.
 
-## 文件所有权
+## Document ownership
 
-可修改：
+Modifyable:
 
 - `plan/2026-09-01-arm-no-lan2-autostart-test/plan.md`
 - `plan/log.md`
-- `tmp/legacy_arm_once.py`（忽略的单次测试工具）
-- `tmp/run_guarded_legacy_once.sh`（忽略的UART保护入口）
+- `tmp/legacy_arm_once.py`(neglected single test tool)
+- `tmp/run_guarded_legacy_once.sh`(overlooking UART protection portal)
 
-只读：
+Read only:
 
 - `src/maixcam/arm/`
-- `Camera/code/used/通讯案例-机械臂/`
+- The legacy robot-arm communication-example directory under `Camera/code/used/`
 - `protocol/arm-diagnostic-v1.md`
 - `docs/robot-arm/lan1-diagnostic.md`
-- MaixCam现有部署目录、机械臂现有工程和TCP232配置
+- MaixCam's current deployment catalogue, existing robot arm engineering and TCP 232 configuration
 
-保护范围：
+Scope of protection:
 
-- 不修改机械臂IP、TCP232模式/参数、示教点、速度参数或安全配置。
-- 不上传或替换ESP32、MaixCam或机械臂产品程序；只允许向MaixCam `/tmp` 上传本轮单次测试工具，结束后删除。
-- 不连接LAN2，不启动DobotStudio。
+- Do not modify robot arm IP, TCP 232 mode/parameter, taught point, speed parameters or security configuration.
+- No ESP32, MaixCam or robot arm products program; only MaixCam allowed `/tmp` Upload this goal single test tool, delete it after.
+- Do not connect to LAN2, do not start DobotStudio.
 
-## 预期工作
+## Expected work
 
-1. 只读确认MaixCam SSH、`/dev/ttyS0`所有者和现有受保护UART入口。
-2. 由用户确认L3现场安全门、LAN2未连接和单次固定P2预期动作。
-3. 因机械臂初始已在P2，先单次发送`Initialize`到P1并等待用户确认，再单次发送`biao00300031-020`返回P2；每一步读取旧程序`yunxing`响应。
-4. 禁止自动重试；异常、超时或结果未知时停止并由现场人员确认实际状态。
-5. 恢复MaixCam原UART所有者，记录实际动作、响应和无LAN2路径结论。
+1. Read only MaixCam SSH.`/dev/ttyS0`Owner and existing protected UART entrance.
+2. User confirm L3 site secure doors, LAN2 unconnected and single fixed P2 expected movements.
+3. Since the robot arm is initially at P2, send it one time.`Initialize`Go to P1 and wait for user confirmation, send one more time`biao00300031-020`returns P2; reading old programs every step`yunxing`Response.
+4. It is prohibited to try again automatically; abnormally, stop when the time is exceeded or the result is unknown and confirm the actual state by the person on the scene.
+5. Restore MaixCam's original UART owner, record actual movements, respond and no LAN2 path conclusion.
 
-## 风险和停止条件
+## Risks and conditions of cessation
 
-- 旧程序将`biao`后的坐标只用于解析，实际固定执行`MovJ(P2, {"user": 0, "v": 100})`。
-- `yunxing`在动作前返回，只代表请求被接受，不代表动作完成。
-- 发送前必须确认人员现场、实体急停可用、周边净空、底盘固定、机械臂安全位、全局低速和负载。
-- 方向、速度、范围异常、重复动作、通信超时或现场观察不一致时立即实体急停并停止软件操作。
+- The old program will`biao`The coordinates that follow are used only for decomposition and actually fix execution`MovJ(P2, {"user": 0, "v": 100})`.
+- `yunxing`Back before the action, only the request is accepted, not the action is complete.
+- Before sending, you must confirm the location of the person, the physical presence, the physical presence, the perimeter clean, the chassis fixed, the robot arm secure position, the overall low speed and load.
+- Direction, speed, range anomaly, repeat actions, immediate physical stoppage and stop software operations when communication is out of time or when on-site observations are inconsistent.
 
-## 验证
+## Validation
 
-- L0：`git diff --check`、计划差异和秘密检查。
-- L2：MaixCam SSH、UART所有者、无LAN2和TCP232物理状态由现场与只读检查共同确认。
-- L3：只发送一次固定旧协议消息；用户现场观察P2动作并确认最终状态。
-- 不执行底盘动作；`Initialize`与`biao`分两次人工授权执行，任一步均不自动重试。
+- L0: `git diff --check`Plan discrepancies and secret checks.
+- L2: MaixCam SSH, owner of UART, no LAN2 and TCP232 physical state confirmed on site with read-only inspection.
+- L3: Only one fixed old protocol message sent; user on-site observation of P2 actions and confirmation of final state.
+- Do not perform chassis actions;`Initialize`and`biao`It's carried out in two manual delegations, and it's not automatic.
 
-## 实际结果
+## Actual results
 
-- 更正：用户所说“P2已经达到”描述的是测试前机械臂所在位置，不是本轮测试结果；此前Agent未发送任何运动命令，不能据此判定验证通过。
-- 用户随后再次授权立即执行，并维持现场急停、净空、底盘固定、安全位、低速和负载等准备条件。
-- 首次在LAN2未连接时，Agent通过受保护UART入口精确发送一次旧协议`Initialize`。MaixCam成功写出完整消息，但2秒内没有收到`yunxing`，用户确认机械臂完全没有动作；没有重发，也没有继续发送`biao`。
-- 后续确认机械臂实际运行的是本仓库RPA1诊断工程，旧协议`Initialize`不属于该工程协议，因此旧协议超时本身不能证明LAN2是运行期必需链路。
-- 用户重新连接LAN2并启动RPA1后，MaixCam发送无运动`PING`成功，往返326毫秒，机械臂返回`ready`。
-- 用户拔除LAN2并等待10秒后，MaixCam再次发送无运动`PING`成功，往返194毫秒；返回`ready`、`motion_enabled=false`和`fixed_step_consumed=false`。
-- 沿用本轮明确的L3现场安全授权，Agent只发送一次RPA1固定`STEP`：J1正向1°、等待1秒、反向1°回位，速度和加速度5%，无自动重试。机械臂返回成功，往返3201毫秒，最终`ready`、`motion_enabled=false`和`fixed_step_consumed=true`；用户现场确认动作正常。
-- 因此已验证：RPA1工程一旦运行，拔除LAN2不会中断`MaixCam /dev/ttyS0 → TCP232 → 机械臂LAN1`运行链路；LAN2不承载运行期控制数据。
-- 测试退出后`/dev/ttyS0`已恢复由launcher持有；MaixCam `/tmp`和本地`tmp/`中的旧协议单次探针均已删除。
-- ESP32和底盘未参与；没有修改机械臂IP、TCP232参数、安全配置、示教点、产品程序或机械臂工程。
+- The user's description of "P2 has reached" is the location of the front arm of the test, not the result of the current test; Agent did not send any motion orders prior to that, and could not be judged to have passed.
+- Users then renewed their authorization for immediate execution, and maintained readiness conditions for site stop, clean empty, chassis fixed, secure, low speed and load.
+- For the first time that LAN2 was not connected, Agent sent the old protocol accurately through the protected UART portal`Initialize`MaixCam wrote the whole story, but it didn't come in two seconds.`yunxing`, the user confirmed that the arm of the machine was not moving at all; there was no re-emergence, nor did it continue.`biao`.
+- Following confirmation that the arm of the machine actually works is the RPA1 diagnostic work in this repository.`Initialize`It's not part of the project agreement, so the timeout of the old agreement does not in itself prove that LAN2 is the necessary link for the running period.
+- After the user reconnects LAN2 and starts RPA1, MaixCam sends non-motion`PING`Success, 326 milliseconds, robot arm back.`ready`.
+- The user unplugs LAN2 and waits for 10 seconds before MaixCam retransmits motionless`PING`Success, rounding 194 ms; returning`ready`, `motion_enabled=false`and`fixed_step_consumed=false`.
+- Following the clear L3 security clearance of this round, Agent sent RPA1 only once.`STEP`J1 is heading 1°, waiting for 1 second, reverse 1°, speed and acceleration 5%, no automatic retest. Robot arm returns successfully, 3201 ms, eventually`ready`, `motion_enabled=false`and`fixed_step_consumed=true`; user confirm movement is normal.
+- Verified: once RPA1 is running, unplugging LAN2 does not interrupt the `MaixCam /dev/ttyS0 → TCP232 → robot arm LAN1` runtime path. LAN2 does not carry runtime control data.
+- After testing exit`/dev/ttyS0`Restored held by launcher; MaixCam `/tmp`and local`tmp/`The old protocols have been deleted.
+- ESP32 and chassis were not involved; no changes were made to robot arm IP, TCP 232 parameters, safe configuration, taught point, product program or robot arm engineering.
 
-## 结论和剩余风险
+## Conclusions and residual risks
 
-- 已通过：RPA1已启动时，LAN2可以拔除；MaixCam经LAN1完成了双向状态通信和一次受控真实动作。
-- 未通过/未验证：机械臂冷启动和实体使能是否会自动启动RPA1。当前事实仍表明“实体使能”不能替代“确认工程正在运行”。
-- 机械臂每次重新上电后，在配置并验证可靠的开机任务或本地启动入口前，仍应通过LAN2/DobotStudio启动RPA1并先用无运动`PING`确认`ready`；确认后即可拔除LAN2。
-- 旧协议`Initialize`/`biao`与RPA1诊断协议不是同一运行契约，不能混用；本目标没有验证旧工程的任意坐标控制或完成反馈。
-- 本轮固定STEP只证明既定的单次低速动作链路，不代表通用动作接口、断链恢复、幂等语义或上电自启动已经完成。
+- Adopted: LAN2 can be removed when RPA1 is activated; MaixCam completes a two-way state communication and a controlled real action.
+- Failure to pass/no validation: whether robot arm cold start and physical enabler will automatically start RPA1. Current facts continue to indicate that "substantive enabler" is not a substitute for "confirmation that the project is running".
+- Every time a machine arm repowers, the RPA1 should be activated through LAN2/DobotStudio and non-motion prior to configuration and validation of a reliable startup mission or local launch entrance.`PING`Confirm.`ready`;to remove LAN2.
+- Old agreement`Initialize`/`biao`The RPA1 diagnostic protocol is not the same operating contract and cannot be used; this target does not verify arbitrary coordinates control or completion of feedback on old projects.
+- The stationary STEP of this round only proves that the established single low-speed motion link does not represent a universal action interface, a break-up recovery, semantics, or up-to-date self-start.

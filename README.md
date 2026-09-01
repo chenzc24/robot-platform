@@ -1,30 +1,25 @@
 # Robot Platform
 
-复合移动机器人统一开发与控制项目。项目将底盘（ESP32-S3）、视觉系统（MaixCam）和 Magician 6 机械臂统一到 VS Code 开发环境，并逐步建设同一套电脑控制台。
+This project unifies development and control of an ESP32-S3 mobile chassis, a MaixCam vision system, and a Magician 6 robot arm in one VS Code workspace and, eventually, one computer-side control console.
 
-## 当前架构
+## Current Architecture
 
-- 电脑：统一开发、部署、调试、视觉推理、日志和高层任务编排；正常运行时只连接MaixCam。
-- MaixCam：视频服务、电脑通信、命令校验与分发、状态汇总，以及ESP32和机械臂的唯一运行网关。
-- ESP32-S3：通过MaixCam UART接收运行命令，负责底盘运动、CAN、电机、传感器和底层安全；Wi-Fi只用于开发维护。
-- 机械臂：通过 LAN1 接收 MaixCam 经 TCP232 转发的控制；LAN2 供电脑维护和示教。
-- 网络：运行时只有电脑和MaixCam必须加入局域网；开发维护时ESP32也连接同一个2.4 GHz热点。
+- Computer: development, deployment, debugging, vision inference, logging, and high-level task orchestration. During normal operation it communicates only with MaixCam.
+- MaixCam: video, the computer-facing command/status endpoint, command validation and routing, status aggregation, and the sole runtime gateway to ESP32 and the robot arm.
+- ESP32-S3: receives runtime commands over MaixCam UART and owns chassis motion, CAN, motors, sensors, and low-level safety. Wi-Fi is for development and maintenance only.
+- Robot arm: receives runtime commands on LAN1 through MaixCam and TCP232. LAN2 is reserved for computer maintenance, deployment, and teaching.
+- Network: only the computer and MaixCam must join the LAN during normal operation. ESP32 also joins the 2.4 GHz development hotspot when WebREPL maintenance is required.
 
-完整方案见 [docs/overall-plan.md](docs/overall-plan.md)。
+See the [overall plan](docs/overall-plan.md), [runtime baseline](docs/runtime/README.md), and [deployment baseline](docs/deployment/README.md).
 
-正常任务的消息、状态、常驻服务和安全边界见 [docs/runtime/README.md](docs/runtime/README.md)。
+Subsystem and operating documentation:
 
-三端源码发布、启动、健康检查和恢复路径见 [docs/deployment/README.md](docs/deployment/README.md)。
+- [ESP32 MicroPython development](docs/esp32/development.md)
+- [Daily development session and troubleshooting](docs/development-session.md)
+- [Shared runtime foundation](docs/runtime-foundation.md)
+- [MaixCam-to-arm LAN1 diagnostics and controlled L3 validation](docs/robot-arm/lan1-diagnostic.md)
 
-ESP32 MicroPython开发环境见 [docs/esp32/development.md](docs/esp32/development.md)。
-
-ESP32与MaixCam的日常启动、结束、排障和问题登记见 [docs/development-session.md](docs/development-session.md)。
-
-共享状态契约、模块边界、保护原语和VS Code入口见 [docs/runtime-foundation.md](docs/runtime-foundation.md)。
-
-MaixCam经UART/TCP232到机械臂LAN1的无运动诊断和受控L3链路验证见 [docs/robot-arm/lan1-diagnostic.md](docs/robot-arm/lan1-diagnostic.md)。
-
-日常连接可在仓库根目录直接使用扁平CLI：
+Use the flat CLI from the repository root for routine connection management:
 
 ```powershell
 .\robot status
@@ -33,48 +28,48 @@ MaixCam经UART/TCP232到机械臂LAN1的无运动诊断和受控L3链路验证�
 .\robot disconnect
 ```
 
-`connect`只确保缺失的MaixCam视频服务和电脑中继运行，不部署代码、不登录ESP32 REPL、不复位设备。维护命令和保护规则见 [docs/development-session.md](docs/development-session.md)。
+`connect` only starts a missing MaixCam video service or computer-side relay. It does not deploy code, enter the ESP32 REPL, or reset a device. See [the development-session guide](docs/development-session.md) for maintenance commands and protection rules.
 
-## 开发工作流
+## Development Workflow
 
-本项目采用精简定制的计划—实施—验证—日志—提交闭环：
+The project uses a bounded development loop:
 
 ```text
-目标计划 → 有界实施 → L0–L4分级验证 → 事实日志 → Git提交
+Goal plan → bounded implementation → L0-L4 validation → factual log → Git commit
 ```
 
-- Agent和协作者规则见 [AGENTS.md](AGENTS.md)。
-- 目标计划方法及模板见 [plan/README.md](plan/README.md)。
-- 已完成工作的事实记录见 [plan/log.md](plan/log.md)。
+- [Agent and collaborator rules](AGENTS.md)
+- [Goal-planning method and template](plan/README.md)
+- [Factual work log](plan/log.md)
 
-运行代码、设备配置、共享协议和真机操作必须先建立目标计划。单设备真实运动为L3，多设备联合任务为L4；二者都必须由现场人员确认安全条件后执行。
+Runtime code, device configuration, shared protocols, and real-device operations require a goal plan first. Real motion of one device is L3; coordinated motion across devices is L4. Both require explicit confirmation from an on-site person who can operate the physical emergency stop.
 
-## 资料管理
+## Resource Management
 
-现有三个资料目录只保留在本机，不进入 Git：
+These raw-resource directories remain local and are excluded from Git:
 
 - `ESP32/`
 - `Camera/`
 - `Robot Arm_Claws/`
 
-其中包含设备文档、固件、厂商示例和遗留代码。后续使用的代码应经过整理后迁入本仓库的新目录，避免直接修改资料原件。
+They contain vendor documentation, firmware, examples, and legacy code. Promote reviewed material into the version-controlled project structure instead of modifying the source archives directly.
 
-## 计划中的仓库结构
+## Planned Repository Structure
 
 ```text
 robot-platform/
-├── .vscode/       # VS Code 任务、调试与工作区配置
-├── config/        # 可提交的配置模板
-├── docs/          # 架构、协议、部署与验收文档
-├── protocol/      # 跨设备通信协议
+├── .vscode/       # VS Code tasks, debugging, and workspace configuration
+├── config/        # Commit-safe configuration templates
+├── docs/          # Architecture, protocol, deployment, and acceptance documents
+├── protocol/      # Cross-device communication contracts
 ├── src/
-│   ├── console/   # 电脑统一控制台
-│   ├── esp32/     # ESP32 底盘程序
-│   └── maixcam/   # 视觉和机械臂网关程序
-├── tests/         # 自动化和集成测试
-└── tools/         # 部署、诊断和设备模拟工具
+│   ├── console/   # Computer-side unified console
+│   ├── esp32/     # ESP32 chassis software
+│   └── maixcam/   # Vision and gateway software
+├── tests/         # Automated and integration tests
+└── tools/         # Deployment, diagnostics, and device simulators
 ```
 
-## 安全原则
+## Safety Principle
 
-任何真实运动测试都必须有人现场监护并能够操作实体急停。电脑、Wi-Fi、SSH、WebREPL 或互联网断开后，设备应进入本地定义的安全状态；底盘停车、机械臂限位和设备联锁不依赖远程链路。
+Every real-motion test requires on-site supervision and access to the physical emergency stop. Loss of the computer, Wi-Fi, SSH, WebREPL, or internet connection must lead to a locally defined safe state. Chassis stopping, arm limits, and device interlocks must not depend on a remote link.

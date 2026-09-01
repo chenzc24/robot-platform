@@ -1,81 +1,81 @@
-# ESP32 PS2控制通路低速真机测试
+# ESP32 PS2 Control Access Low Speed Truth Test
 
-- 状态：`completed`
-- 负责人：Agent负责无线启动和记录，用户负责现场安全与手柄操作
-- 最高验证等级：`L3`
+- Status:`completed`
+- Agent is responsible for wireless start-up and recording, and the user is responsible for site security and handle operations.
+- Highest validation level:`L3`
 
-## 目标
+## Objective
 
-在不修改设备文件的前提下，通过已验证的手机热点和WebREPL让ESP32重新进入设备现有PS2主程序，由用户在底盘架空或可靠限位条件下测试手柄—ESP32—CAN—电机通路、停车键和失能键。
+Without modifying the device file, re-enter the existing PS2 main program for the ESP32 via certified cell phone hotspots and WebREPL, with users testing the handle-ESP32-CAN-wire access, parking keys and power failure keys under empty or reliable limit conditions.
 
-## 工作区初始状态
+## Initial state of the workspace
 
 ```text
 ## main...origin/main
 ```
 
-工作区干净。ESP32当前地址 `10.114.1.97` 的ICMP与TCP 8266均可达；USB已拔除。
+Workspace clean. ESP32 current address. `10.114.1.97` ICMP and TCP 8266 are available; USB has been removed.
 
-## 可修改文件
+## Modifyable File
 
 - `plan/2026-08-31-esp32-ps2-path-test/plan.md`
 - `plan/log.md`
-- ESP32运行状态：仅在安全门确认后执行一次远程硬复位
+- ESP32 operational state: perform remote hard-to-do position only once after security door confirmation
 
-## 只读文件和目录
+## Read-only files and directories
 
-- 仓库全部源码和配置
-- ESP32文件系统
-- 原始资料目录和设备备份
+- Repository full source code and configuration
+- ESP32 Filesystem
+- Source directory and device backup
 
-## 共享依赖
+## Shared Dependencies
 
-- ESP32现有 `RUN_MODE="ps2"` 主程序。
-- 手机热点、WebREPL和当前DHCP地址。
-- PS2映射：右摇杆控制平移，左摇杆X控制旋转，R1停车，X失能，Triangle重新使能，SELECT退出。
-- 已记录但尚未修复的历史源码安全风险。
+- ESP32 Existing `RUN_MODE="ps2"` Main program.
+- Cell phones hot, WebREPL and current DHCP address.
+- PS2 Map: Right Roller Control Horizontal, Left Roller X Control Rotation, R1 Stop, X Deactivation, Triangle Re-enactment, SELECT exit.
+- Historical source security risks documented but not repaired.
 
-## 人工安全门
+## Manual security doors
 
-启动前用户必须明确确认本轮全部条件：
+The user must clearly confirm all conditions of this round before starting:
 
-1. 人员在现场并能立即操作实体急停或切断电机电源。
-2. 底盘四轮已架空，或底盘被可靠机械限位在约定安全区域。
-3. 底盘周边无人员、线缆和障碍物；机械臂处于安全位且不会参与本轮动作。
-4. PS2手柄处于中位，用户知道R1停车、X失能和实体断电方式。
-5. 同意以下动作和停止条件：只做小幅、短时单轴输入；任何上电即动、方向异常、持续运动、失联不停或按键无效，立即实体急停/断电并终止测试。
+1. Personnel present and capable of immediately operating the physical stoppage or disconnection of electrical power.
+2. The chassis four wheels are empty, or the chassis has a reliable mechanical limit in the agreed safety zone.
+3. There are no people around the chassis, cables and barriers;
+4. The PS2 handle is in the middle. Users know R1 parking, X power failure and physical power outage.
+5. The following actions and suspension conditions are agreed: only small, short-time single-axis inputs; any on-the-spot, directional abnormality, continuous movement, failure to connect or non-validity of the key, immediate physical stoppage/cut off and termination of the test.
 
-## 预期步骤
+## Expected steps
 
-1. 安全门确认后，通过WebREPL执行一次 `machine.reset()`；该命令会断开无线会话。
-2. 等待启动并只检查ICMP和TCP 8266恢复，不进入REPL干扰PS2主程序。
-3. 用户先按X失能，再按Triangle重新使能。
-4. 用户依次小幅、短时测试前后、横移和旋转，每次松回中位。
-5. 用户测试R1停车，最后按X失能结束。
-6. 用户报告每一步结果；Agent不发送任何速度或运动指令。
+1. Once the security door is confirmed, we'll do it through WebREPL. `machine.reset()`- The order will be disconnected.
+2. Waiting for start-up and only checking ICMP and TCP 8266 to resume, not enter the RSL interference PS2 main program.
+3. Users press X-deactivated, then Triangle re-activated.
+4. User size in turn, short-time test before and after, transverse and rotate, and take it back to the middle.
+5. User test R1, stop and end with X-ray failure.
+6. User report results per step; Agent does not send any speed or motion commands.
 
-## 验证
+## Validation
 
-- L2前置：ICMP与TCP 8266可达。
-- L3现场：上电静止、PS2各轴方向、摇杆回中停车、R1停车、X失能、Triangle使能。
-- 故障时只记录事实，不继续扩大动作或速度。
+- L2 foreword: ICMP and TCP 8266 to reach.
+- L3 site: electrostatic, PS2 axis, roller-back stop, R1, X-deactivation, Triangle power.
+- If you fail, you record the facts, you don't continue to expand your movement or speed.
 - `git diff --check`
 - `git status --short --branch`
 
-## 实际结果
+## Actual results
 
-- 用户已明确确认五项L3现场安全条件。
-- 已通过WebREPL鉴权并发送一次 `machine.reset()`；12秒后ICMP和TCP 8266均恢复，说明网络引导与主启动流程已重新开始。
-- 用户按既定顺序完成PS2现场测试并报告成功：失能、重新使能、小幅单轴底盘控制、摇杆回中、R1停车和最终失能通路均可用。
-- Agent只执行远程复位和网络恢复检查，没有发送速度或运动指令；所有动作由现场用户通过PS2手柄触发。
+- Users have confirmed five L3 site safety conditions.
+- It was sent once through WebREPL. `machine.reset()`; ICMP and TCP 8266 are restored in 12 seconds, indicating that the network guidance and main startup process has been restarted.
+- Users complete the PS2 site test in the sequence and report success: incompetence, re-enabling, small single-axis chassis control, roller back, R1 parking and final failure access.
+- Agent only performs remote reset and network recovery checks without sending speed or motion commands; all actions are triggered by live users via PS2 handles.
 
-## 未解决事项
+## Outstanding matters
 
-- 本轮不验证网络控制、循迹、摄像头UART、舵机或机械臂。
-- 本轮不修复静态审计发现的状态机问题。
-- 本轮结论只证明当前PS2人工控制通路可用，不证明未知模式、失联、自主循迹、网络控制或驱动反馈安全。
+- This wheel does not verify network controls, tracks, cameras UART, rudders or robot arms.
+- The current round does not repair the problem of the stationary audit.
+- The conclusion of this round only proves that the current PS2 manual control route is available, does not prove unknown patterns, missing connections, autonomous tracks, network controls or drive feedback secure.
 
-## 提交意图
+## Intent to submit
 
 ```text
 test: record ESP32 PS2 hardware path validation

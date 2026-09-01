@@ -1,201 +1,211 @@
-# 项目维护日志
+# Project maintenance log
 
-本日志只记录已经发生的项目维护事实。可复用经验不是自动收尾产物，只有用户明确要求时才单独提炼。
+The log only records the maintenance of projects that have occurred. Reusable experience is not an automatic tailing, but is only extracted separately when the user so specifically requests.
 
-条目格式：
+entry format:
 
 ```text
-## YYYY-MM-DD - 目标名称
+## YYYY-MM-DD - Destination Name
 
-- 目标：本次工作要完成什么。
-- 修改区域：实际修改的文件、目录或子系统。
-- 验证：实际执行的检查和最高等级。
-- 硬件：是否连接、写入或驱动真实设备。
-- 提交状态：未提交、已提交、已推送或受阻。
-- 后续：剩余问题或下一目标。
+- Target: What to do with this job.
+- Modify area: actually modified files, directories or subsystems.
+- Validation: Physically executed inspection and highest level
+- Hardware: Whether to connect, write or drive real devices.
+- Submission status: Not submitted, submitted, pushed or blocked.
+- Follow-up: remaining issues or next goal
 ```
 
-## 2026-08-31 - 建立机器人统一开发与控制仓库
+## 2026-08-31 - Establishment of integrated robotic development and control repository
 
-- 目标：建立私有GitHub仓库并记录ESP32底盘、MaixCam视觉和Magician 6机械臂的总体方案。
-- 修改区域：`.gitignore`、`.gitattributes`、`README.md`、`docs/overall-plan.md`。
-- 验证：L0；确认三个资料目录和临时目录被Git忽略，检查暂存文件、文本格式、远程可见性和分支同步状态。
-- 硬件：未连接、写入或驱动真实设备。
-- 提交状态：已提交并推送到 `main`，提交为 `619190e` 和 `fa8da6a`。
-- 后续：建立VS Code开发环境基线。
+- Objective: To establish a private GitHub repository and record the overall programme of the ESP32 chassis, MaixCam visual and Magician 6 robot arm.
+- Modify Area:`.gitignore`, `.gitattributes`, `README.md`, `docs/overall-plan.md`.
+- Verify: L0; confirm that three directories and temporary directories were ignored by Git, check the temporary files, text formats, remote visibility and branch synchronization.
+- Hardware: Unconnected, written or driven real device.
+- Submission status: Submitted and delivered `main`,Submitted as `619190e` and `fa8da6a`.
+- Follow-up: establishment of an environmental baseline for VS Code development.
 
-## 2026-08-31 - 引入机器人项目工作流内核
+## 2026-08-31 - Introduction of robotic project work streams Nuclear
 
-- 目标：采用精简定制的计划—实施—验证—日志—提交工作流，并加入机器人硬件安全约束。
-- 修改区域：`AGENTS.md`、`README.md` 和 `plan/`。
-- 验证：L0；检查文本差异、关键规则、资料忽略状态和提交范围。
-- 硬件：未连接、写入或驱动真实设备。
-- 提交状态：本条记录随目标提交推送到 `main`。
-- 后续：以“VS Code开发环境基线”作为第一个使用新模板的开发目标。
+- Objective: To introduce a streamlined and customized plan - implement - validate - logs - to submit workstreams, and to incorporate robotic hardware security constraints.
+- Modify Area:`AGENTS.md`, `README.md` and `plan/`.
+- Validation: L0; checking text discrepancies, key rules, neglect status and submission range.
+- Hardware: Unconnected, written or driven real device.
+- Submission status: This record will be sent as the target is submitted `main`.
+- Follow-up: "VS Code develops an environmental baseline" as the first development objective using a new template.
 
-## 2026-08-31 - 整理网络方案文档
+## 2026-08-31 - Collating Web Program Documents
 
-- 目标：将手机热点、设备接口、机械臂双网口、远程访问边界和网络验收方法写入独立网络文档。
-- 修改区域：`docs/network/README.md`、`docs/overall-plan.md` 和目标计划。
-- 验证：L0；检查关键网络决策、相对链接、Git格式和提交范围。
-- 硬件：未连接、写入或驱动真实设备。
-- 提交状态：本条记录随目标提交推送到 `main`。
-- 后续：实际设备接入后填写IP和TCP232确认结果，并按网络验收清单执行L2检查。
+- Target: Write cell phone hotspots, device interfaces, robot arm double access, remote access to borders and network acceptance methods into independent network files.
+- Modify Area:`docs/network/README.md`, `docs/overall-plan.md` and target plan
+- Validation: L0; check key network decisions, relative links, Git format and submission range.
+- Hardware: Unconnected, written or driven real device.
+- Submission status: This record will be sent as the target is submitted `main`.
+- Follow-up: Completion of IP and TCP 232 confirmations after physical device access and implementation of L2 inspection according to a web-based acceptance list.
 
-## 2026-08-31 - 建立ESP32 MicroPython开发基线
+## 2026-08-31 - Establishment of the ESP32 MicroPython development baseline
 
-- 目标：在不安装ESP-IDF、不连接真机的前提下，建立VS Code、Python 3.12、mpremote、esptool和官方WebREPL客户端的开发环境。
-- 修改区域：`.vscode/`、`src/esp32/`、`docs/esp32/`、开发依赖、忽略规则、总体目录说明和目标计划。
-- 验证：L1；验证主机工具版本、Python编译、JSON配置、官方WebREPL客户端语法和Git保护范围。
-- 硬件：未连接、写入或驱动真实设备。
-- 提交状态：本条记录随目标提交推送到 `main`。
-- 后续：用户连接ESP32 USB后，建立L2目标完成只读识别、文件系统备份、热点配置和WebREPL无线链路验证。
+- Objective: To create a development environment for VS Code, Python 3.12, mpremote, esptool and the official WebREPL client without installation of ESP-IDF.
+- Modify Area:`.vscode/`, `src/esp32/`, `docs/esp32/`, develop dependency, ignore rules, general catalogue description and target plan.
+- Validation: L1; Validation of the host tool version, Python compilation, JSON configuration, official WebREPL client grammar and Git protection range.
+- Hardware: Unconnected, written or driven real device.
+- Submission status: This record will be sent as the target is submitted `main`.
+- Follow-up: When the user connects to ESP32 USB, create L2 target to complete read-only recognition, file system backup, hotspot configuration and WebREPL wireless link validation.
 
-## 2026-08-31 - 识别ESP32 USB设备
+## 2026-08-31 - Identification of ESP32 USB device
 
-- 目标：通过COM7只读确认目标设备型号，不修改Flash或文件系统。
-- 修改区域：设备识别目标计划和维护日志。
-- 验证：L2；用户确认现场安全并手动进入下载模式后，`esptool 5.3.1` 成功识别ESP32-S3 QFN56修订版v0.2、40 MHz晶振和8 MB嵌入式PSRAM。
-- 硬件：连接COM7；识别stub仅上传到RAM，未擦除或烧录Flash，结束时设备通过RTS硬复位。
-- 提交状态：本条记录随目标提交推送到 `main`。
-- 后续：通过MicroPython REPL读取运行时版本并备份设备文件系统，然后配置手机热点和WebREPL。
+- Objective: To confirm the target device model only through COM7 without changing Flash or the file system.
+- Modification area: Device targeting plan and maintenance log.
+- Validation: L2; Users confirm that the site is safe and manually enters download mode.`esptool 5.3.1` Successfully identified ESP32-S3 QFN56 revision v. 0.2, 40 MHz crystal vibrates and 8 MB embedded PSRAM.
+- Hardware: Connect to COM7; identify stubs only uploaded to RAM, unwieldy or burn Flash, and at the end the device is reset hard through RTS.
+- Submission status: This record will be sent as the target is submitted `main`.
+- Follow-up: Read the running time version and back up the device file system through MicroPython REPL, then configure cell phones hotspots and WebREPL.
 
-## 2026-08-31 - 识别并备份ESP32 MicroPython运行时
+## 2026-08-31 - Identify and backup ESP32 MicroPython Time
 
-- 目标：通过COM7读取MicroPython版本和文件树，并在不修改设备的情况下备份现有文件系统。
-- 修改区域：ESP32开发文档、VS Code文件树任务、运行时备份目标计划和维护日志；本地备份位于Git忽略目录。
-- 验证：L2；确认MicroPython 1.27.0与 `ESP32_GENERIC_S3-SPIRAM_OCT`，备份22个文件共125684字节，并确认根目录与 `SmartHybridChasisDemo/` 的11对文件SHA-256完全一致。
-- 硬件：通过COM7读取运行时和文件系统；`mpremote`停止当前程序并软复位进入维护操作，没有上传、删除或执行运动代码。
-- 提交状态：本条记录随目标提交推送到 `main`。
-- 后续：保持复位安全条件，通过USB写入本地热点配置并运行 `webrepl_setup`，再验证手机热点上的WebREPL。
+- Target: Read MicroPython version and file tree through COM7 and back up the existing file system without modifying the device.
+- Modify area: ESP32 development document, VS Code file tree task, run-time backup target plan and maintenance log; local backup at Git ignore directory.
+- Verify: L2; confirm MicroPython 1.27.0 with `ESP32_GENERIC_S3-SPIRAM_OCT`125684 bytes of 22 files, confirmed root directory and `SmartHybridChasisDemo/` 11 pairs of SHA-256 identical.
+- Hardware: read running time and file systems through COM7;`mpremote`Stops the current program and softly resets into maintenance, does not upload, deletes or executes the movement code.
+- Submission status: This record will be sent as the target is submitted `main`.
+- Follow-up: Maintain the compound security condition, configure and run local hotspots through USB `webrepl_setup`Check the WebREPL on the hotspot.
 
-## 2026-08-31 - 配置ESP32手机热点与WebREPL
+## 2026-08-31 - Configure ESP32 hotspots and WebREPL
 
-- 目标：让COM7上的ESP32-S3在重启后自动接入2.4 GHz手机热点，并从Windows开发电脑通过WebREPL进行无线维护。
-- 修改区域：ESP32网络启动源码和秘密模板、VS Code WebREPL入口、ESP32开发文档、目标计划；真实凭据仅保存在Git忽略文件和设备文件系统。
-- 验证：L2；当前会话与硬复位后均验证DHCP、ICMP、TCP 8266、WebREPL鉴权、MicroPython版本和只读REPL探针；同时通过设备端/本地语法、JSON、秘密扫描和Git格式检查。
-- 硬件：通过COM7向ESP32根目录写入 `network_boot.py`、`secrets.py` 和 `boot.py`，并执行硬复位；未修改设备原有底盘 `main.py`，未发送运动命令，验证结束后再次复位恢复原有启动流程。
-- 提交状态：本条记录随目标提交推送到 `main`。
-- 后续：增加动态设备发现或mDNS；另行审计并迁移设备原有底盘程序；需要真实运动时建立L3目标并重新执行人工安全门。
+- Target: Allow ESP32-S3 on COM7 to automatically access 2.4 GHz hotspots after restart and develop computers from Windows for wireless maintenance via WebREPL.
+- Modifications: ESP32 Web Launch Source Code and Secret Template, VS Code WebREPL portal, ESP32 Development Document, Target Scheme; True certificates are only stored in Git to ignore file and device file systems.
+- Validation: L2; Validation of DHCP, ICMP, TCP 8266, WebREPL Rights, MicroPython version and read-only RESL probes after current sessions and hard-repeated sessions; and Checking through device end/local grammar, JSON, Secret Scan and Git format.
+- Hardware: Write to ESP32 directories via COM7 `network_boot.py`, `secrets.py` and `boot.py`, and execute hard resets; without modification of the device's original chassis `main.py`, do not send a motion order, resume the start-up process after validation.
+- Submission status: This record will be sent as the target is submitted `main`.
+- (b) Separately audit and relocate the device's original chassis program;
 
-## 2026-08-31 - 纳管并审计ESP32现有底盘源码
+## 2026-08-31 - Naughty and audit of ESP32 available bottom source Code
 
-- 目标：将ESP32备份中的11个现有底盘Python文件原样纳入Git，并在不运行硬件代码的前提下建立部署前安全审计基线。
-- 修改区域：`src/esp32/legacy/chassis_2026_08_31/` 字节级快照、路径Git属性、ESP32静态审计与开发文档、目标计划。
-- 验证：L1；11/11文件与只读备份SHA-256一致，全部源码静态编译通过；假MotorBus验证速度限幅并复现初始停车被缓存跳过及失能后仍可写速度的状态问题；秘密扫描和Git格式检查通过。
-- 硬件：未连接、写入或驱动真实设备；没有修改当前 `src/esp32/app/` 或设备文件系统。
-- 提交状态：本条记录随目标提交推送到 `main`。
-- 后续：从历史快照选择性迁移，先建立默认安全空闲与电机状态机并添加回归测试；阻断项解决前禁止整体部署历史快照。
+- Objective: To incorporate 11 existing chassis Python files from the ESP32 backup into Git and establish a pre-deployment security audit baseline without running hardware codes.
+- Modify Area:`src/esp32/legacy/chassis_2026_08_31/` Byteshot, PathGit Properties, ESP32 Statistic Audit and Development Documents, Target Plan.
+- Validation: L1; 11/11 consistent with read-only back-up SHA-256, all source-code static translation passed; false MotorBus validation speed limit and recapitulation of the state of the initial parking that is still writeable after a slow jump and failure; Secret scanning and Git format check passed.
+- Hardware: not connected, write or drive real devices; no current changes `src/esp32/app/` Or device file systems.
+- Submission status: This record will be sent as the target is submitted `main`.
+- Follow-up: Selective migration from historical snapshots, first setting up default safe idle and motors stations and adding regression tests; prohibition of the full deployment of historical snapshots until the block item is resolved.
 
-## 2026-08-31 - 验证ESP32 PS2真实控制通路
+## 2026-08-31 - Verifying ESP32 PS2 True Control Access
 
-- 目标：在底盘架空/限位和现场实体急停条件下，验证PS2手柄—ESP32—CAN—四轮电机的现有控制、停车和失能通路。
-- 修改区域：L3测试目标计划和维护日志；没有修改源码、配置或设备文件系统。
-- 验证：L3；用户确认五项现场安全门后，Agent通过WebREPL执行一次硬复位并确认ICMP与TCP 8266恢复；用户报告失能、使能、小幅单轴控制、回中、R1停车和最终失能均成功。
-- 硬件：连接真实ESP32、PS2手柄、CAN和底盘电机；运动由现场用户手柄触发，Agent没有发送速度指令，机械臂和其它功能不参与。
-- 提交状态：本条记录随目标提交推送到 `main`。
-- 后续：该结果只确认现有人工通路可用；继续在L1修复默认运动和电机状态机阻断项，修复完成前不扩大真机测试范围。
+- Target: Verify the current controls of the PS2 handle -- ESP32-CAN -- the 4-wheeler, parking and malfunctioning circuits, under empty chassis/limits and physical stopover conditions.
+- Modification area: L3 test target plan and maintenance log; no changes to source code, configuration or device file system.
+- (a) Validation: L3;
+- Hardware: Connecting real ESP32, PS2 handles, CAN and chassis engines; motion triggered by live user handles, Agent did not send speed instructions, robot arm and other functions did not participate.
+- Submission status: This record will be sent as the target is submitted `main`.
+- Follow-up: This result only confirms that existing manual access is available; Continue to repair the default motion and electrical status block in L1 and do not expand the real machine test until the repairs are completed.
 
-## 2026-08-31 - 建立ESP32安全空闲与底盘状态机
+## 2026-08-31 - Establishment of ESP32 safe idle and chassis status machines
 
-- 目标：在不接入真机的前提下，修复历史审计中的未知模式自动运动和失能状态仍可写速度问题，建立可测试的正式底盘安全核心。
-- 修改区域：`src/esp32/app/` 的安全入口、配置模板和底盘状态机，`tests/esp32/` 假MotorBus测试，VS Code任务、ESP32设计/开发/审计文档及目标计划。
-- 验证：L1；12项单元测试覆盖默认 `SAFE_IDLE`、五态转换、使能前后清零、失能拒绝运动、停车不跳过、限幅、非法输入和故障回滚；Python静态编译、JSON、秘密扫描和Git格式检查通过。
-- 硬件：未连接、写入或驱动ESP32、CAN、电机或其它真实设备；历史真机程序保持不变。
-- 提交状态：本条记录随目标提交推送到 `main`。
-- 后续：迁移并测试真实MotorBus/CAN适配器及驱动反馈，然后迁移PS2普通控制和250毫秒失联停车；在L1/L2通过前不部署。
+- Target: Without access to the real machine, repairing the unknown mode automobilization and failure in the historical audit is still writeable at speed, creating a testable formal chassis safety core.
+- Modify Area:`src/esp32/app/` Security entrance, configuration templates and chassis status machines,`tests/esp32/` Fake MotorBus test, VS Code mission, ESP32 design/development/audit document and target plan.
+- Validation: L1; 12 unit tests overwrite default `SAFE_IDLE`Python Static Compiler, JSON, Secret Scan and Git Format Check passed.
+- Hardware: Unconnected, write or drive ESP32, CAN, electric or other real device; Historical real machine program remains unchanged.
+- Submission status: This record will be sent as the target is submitted `main`.
+- Follow-up: Migration and testing of the real MotorBus/CAN adapter and driver feedback, and migration of PS2 general controls and 250 ms lost parking; Non-deployment pending L1/L2.
 
-## 2026-08-31 - 建立ESP32电机CAN适配器
+## 2026-08-31 - Establishment of an ESP32 adapter Can
 
-- 目标：从冻结历史快照选择性迁移电机CAN速度模式协议，形成可注入安全底盘状态机的正式MotorBus，并验证发送侧帧和失败回滚。
-- 修改区域：`src/esp32/app/motor_bus.py`、FakeCAN测试、ESP32 CAN/安全/开发/审计文档及目标计划。
-- 验证：L1；10项新增FakeCAN测试与12项既有底盘安全测试共22项全部通过，覆盖扩展ID、8字节小端载荷、速度限幅、使能前后清零、批量失败继续、全组回滚和状态机集成；Python静态编译、秘密扫描和Git格式检查通过。
-- 硬件：未连接、写入或驱动ESP32、CAN、电机或其它真实设备；设备仍运行历史PS2程序。
-- 提交状态：本条记录随目标提交推送到 `main`。
-- 后续：用厂商资料确认协议和反馈帧，再建立不使能电机的L2 CAN连接检查；实现ACK与状态读取前不得把发送成功表示为驱动已执行。
+- Target: Selective migration of electrics from the freeze of historical snapshots to the CAN speed model protocol to create the official MotorBus that can be injected into the security chassis, and verify sending frames and failure rolls back.
+- Modify Area:`src/esp32/app/motor_bus.py`, FakeCAN Test, ESS32 CAN/Safety/Development/Audit Documents and Target Plans.
+- Validation: L1; 10 new FakeCAN tests and 12 existing chassis security tests have all passed, covering the extended ID, 8-bytes small-end load, speed limit, enabling zero before, after, after, after, after, after lot failure, and full rollback and status machine integration; Python static compilation, confidential scanning and Git format check passed.
+- Hardware: Unconnected, write or drive ESP32, CAN, electric or other real device; Device still runs the historical PS2 program.
+- Submission status: This record will be sent as the target is submitted `main`.
+- Follow-up: confirm protocols and feedback frames with manufacturer information and establish L2 CAN connection checks that do not allow power generators to be inspected; and do not express sending success as a driver of execution until ACK and status read.
 
-## 2026-08-31 - 建立MaixCam无线开发通道
+## 2026-08-31 - Establishment of the MaixCam wireless development channel
 
-- 目标：将MaixCam Pro接入现有开发热点，在不启动相机、串口或运动链路的条件下建立VS Code本地编辑、SSH诊断和SCP部署通道。
-- 修改区域：`.vscode/tasks.json`、`docs/maixcam/`、`src/maixcam/`、`tests/maixcam/` 和目标计划；用户未提交的 `.vscode/settings.json` 保持只读。
-- 验证：L2；确认设备为Buildroot/riscv64、Python 3.11.6和MaixCam库1.24.0，完成872文件写入前备份、专用密钥登录、探针上传、SHA-256一致性和JSON状态回读；热点短暂掉线后重新连接，完整通路恢复。
-- 硬件：连接真实MaixCam与热点；没有启动摄像头采集，没有连接或发送ESP32、TCP232、机械臂及底盘控制命令。
-- 提交状态：本条记录随目标提交推送到 `main`。
-- 后续：人工确认MaixVision实时画面；另建目标设计视觉服务和两路UART所有权，并在任何运动验证前执行相应L3/L4安全门。
+- Target: To connect MaixCam Pro to existing development hotspots, establish VS Code local editor, SSH diagnostics and SCP deployment channels without starting cameras, serials or motion links.
+- Modify Area:`.vscode/tasks.json`, `docs/maixcam/`, `src/maixcam/`, `tests/maixcam/` target plan;user not submitted `.vscode/settings.json` Keep reading only.
+- Validation: L2; Confirmation of device as Buildroot/riscv64, Python 3.11.0 and MaixCam library 1.24.0, completion of pre-writing backup of 872 files, dedicated key login, probe upload, SHA-256 consistency and JSON status read-back; Reconnection after short break of hot spots, complete route recovery.
+- Hardware: Linking real MaixCam to hot spots; Not starting camera collection, not connecting or sending ESP 32, TCP 232, robot arm and chassis control command.
+- Submission status: This record will be sent as the target is submitted `main`.
+- Follow-up: Manual confirmation of MaixVision real-time images; additional target design visual services and two-way UART ownership, and implementation of corresponding L3/L4 security doors before any campaign validation.
 
-## 2026-08-31 - 建立MaixCam到电脑的视频链路
+## 2026-08-31 - Creation of a MaixCam-computer video link
 
-- 目标：不依赖MaixVision，建立MaixCam原生RTSP/H.264输出、电脑直接探测和面向后续控制台的本机RTSP/HLS/WebRTC转发层。
-- 修改区域：`src/maixcam/video/`、`tools/maixcam/`、`config/`、`tests/maixcam/`、VS Code任务、开发依赖、MaixCam/网络/总体文档和目标计划。
-- 验证：L2；原生RTSP解码和抓帧通过，FFmpeg `-c:v copy` 重封装推流后本机RTSP重启并连续30秒解码592帧，1280×720、20 fps；MediaMTX真实字节、HLS解码和WebRTC页面可达检查通过，用户随后确认WebRTC实际视频流正常。
-- 硬件：连接真实MaixCam并开启摄像头采集；没有连接、配置或驱动ESP32、TCP232、机械臂或底盘。
-- 提交状态：本条记录随目标提交推送到 `main`。
-- 后续：用户已确认画面应顺时针旋转90°；另建目标处理方向/标定、视觉识别和控制台集成。
+- Objective: To create a primary RTSP/H264 output for MaixCam without relying on MaixVision, a direct computer detection and a follow-up console RTSP/HLS/WebRTC repeater layer.
+- Modify Area:`src/maixcam/video/`, `tools/maixcam/`, `config/`, `tests/maixcam/`, VS Code, Development Dependence, MaixCam/Network/Overview Documentation and Target Plan.
+- Validation: L2; Native RTSP decoded and snapped, FFmpeg `-c:v copy` Resealed RTSP restarts and decodes 592 frames, 1280 x 720, 20 fps; MediaMTX real bytes, HLS decodes and WebRTC pages can be accessed and the user then confirms that WebRTC actual video stream is normal.
+- Hardware: Connect real MaixCam and open camera collection; no connection, configuration or drive ESP 32, TCP 232, robot arm or chassis.
+- Submission status: This record will be sent as the target is submitted `main`.
+- Follow-up: The user has confirmed that the image should rotate at 90 degrees in a clockwise fashion; and another target processing direction/marking, visual recognition and control desk integration.
 
-## 2026-08-31 - 记录统一开发会话SOP
+## 2026-08-31 - Records Unified Development SessionSOP
 
-- 目标：将ESP32与MaixCam已验证链路的日常启动、结束、排障、恢复和问题状态从对话整理为项目操作文档。
-- 修改区域：`docs/development-session.md`、项目入口、MaixCam视频文档、视频验收计划和目标记录。
-- 验证：L0；检查文档结构、链接目标、事实一致性、本地地址/私钥泄漏和Git差异格式。
-- 硬件：未连接、写入或驱动任何设备；只记录既有真机事实和用户人工验收结果。
-- 提交状态：本条记录随目标提交推送到 `main`。
-- 后续：另建目标改进ESP32无线部署、MaixCam摄像头所有权/恢复和画面方向标定。
+- Objective: To organize ESP32 and MaixCam from dialogue into project operating documents for routine start-up, end-up, debarment, recovery and problem status.
+- Modify Area:`docs/development-session.md`Project entrance, MaixCam video file, video acceptance plan and target record.
+- Verify: L0; check document structure, link target, factual consistency, local address/private key leak and Git variance format.
+- Hardware: Not connected, written or driven by any device; records only the actual facts and the user's manual acceptance results.
+- Submission status: This record will be sent as the target is submitted `main`.
+- Follow-up: Additional targets to improve the ESP32 wireless deployment, MaixCam camera ownership/restoration and visual orientation.
 
-## 2026-08-31 - 建立模块化设备运行时基础
+## 2026-08-31 - Create a running-time basis for modularized device
 
-- 目标：在不接入真机的前提下，将ESP32和MaixCam占位程序整理为全英文正式源码、模块化服务、结构化状态、资源/控制所有权与可诊断VS Code入口。
-- 修改区域：共享 `protocol/`，ESP32应用、MaixCam视频服务、三组测试、开发验证工具、VS Code任务、运行时/总体/子系统文档和目标计划；用户未提交的 `.vscode/settings.json` 保持只读。
-- 验证：L1；共享协议4项、ESP32 30项、MaixCam 18项共52项测试通过，18个正式Python源文件无缓存编译通过且排除本地秘密/设备覆盖文件，Bash语法、PowerShell解析、VS Code JSON、状态Schema、源码语言和Git格式检查通过。
-- 硬件：未连接、写入、上传、复位或驱动ESP32、MaixCam、机械臂、TCP232、CAN或电机；设备继续运行此前部署版本。
-- 提交状态：本条记录随目标提交推送到 `main`；只提交目标声明路径，不包含用户 `.vscode/settings.json`。
-- 后续：另建L2目标逐设备验证新模块导入、部署、结构化日志、视频启停和恢复；控制租约连接真实停车前不得宣称失联停车已完成。
+- Objective: To organize ESP32 and MaixCam into full English official source code, modular services, structured state, resource/control ownership and diagnostic VS Code entrance without access to real machines.
+- Modify Area: Share `protocol/`ESP32 application, MaixCam video service, three sets of tests, development of validation tool, VS Code task, running time/overall/subsystem documentation and target plan; not submitted by user `.vscode/settings.json` Keep reading only.
+- Validation: L1; Sharing protocol 4; ESSP 32 30; MaixCam 18 out of 52 tests; 18 official Python files without caches have passed and local secret/device overwhelming files, Bash syntax, PowerShell resolution, VS Code JSON, Status Schema, Source Language and Git format check passed.
+- Hardware: Not connected, written, uploaded, duplicated or driven ESP 32, MaixCam, robot arm, TCP 232, CAN or motors; device continues to run its previously deployed version.
+- Submission status: This record will be sent as the target is submitted `main`;only submitting target declaration paths, not including users `.vscode/settings.json`.
+- Follow-up: Another L2 target-by-design verification of new module import, deployment, structured logs, video start-up and recovery; no loss of connection until the lease is controlled.
 
-## 2026-09-01 - 建立扁平连接管理与维护CLI
+## 2026-09-01 - Establishment of flat connection management and maintenance of CLI
 
-- 目标：将ESP32、MaixCam和电脑视频中继的日常连接压缩为单层连接保护与单层异常反馈，并提供受保护的状态、日志、停止、重启、强杀和设备重启CLI入口。
-- 修改区域：根目录CLI包装器、电脑连接管理与命令入口、16项开发工具测试、VS Code任务、统一开发会话/运行时文档和目标计划；用户未提交的 `.vscode/settings.json` 保持只读。
-- 验证：L1共68项测试通过，CLI源码编译、46个VS Code任务JSON、正式源码语言和Git格式检查通过；L2确认ESP32 8266、MaixCam SSH/RTSP、本机RTSP/WebRTC均在线，幂等连接3.29秒返回READY，本机中继重启6.76秒后恢复READY，实际H.264解码为1280×720、20 fps。
-- 硬件：启动了缺失的MaixCam项目RTSP并重启一次电脑侧FFmpeg/MediaMTX；没有登录或复位ESP32，没有上传设备代码，没有执行MaixCam停止/强杀/整机重启，没有连接或驱动底盘、CAN、TCP232和机械臂。
-- 提交状态：本条记录随目标提交推送到 `main`；不包含用户 `.vscode/settings.json`、本地设备地址、缓存或日志。
-- 后续：真机验证MaixCam维护命令和摄像头恢复边界；安全运行时部署并完成L3验收前保持ESP32重启锁定；机械臂参数确认后再添加连接适配器。
+- Target: Compress ESP32, MaixCam and the daily connection of the computer video relay to single-layer connection protection and single-layer abnormal feedback, and provide protected status, log, stop, restart, kill and equip to restart the CLI entrance.
+- Modified Area: Root Catalogue CLI Packer, Computer Connection Management and Command Entry, 16 Development Tool Tests, VS Code Tasks, Unified Development Sessions/Runtime Documents and Target Plans; Unsubmitted by Users `.vscode/settings.json` Keep reading only.
+- Validation: L1 has passed a total of 68 tests, CLI code compiled, 46 VS Code missions JSON, official source language and Git format checked; L2 confirms ESP 32 8266, MaixCam SSH/RTSP, this machine RTSP/WebRTC is online, and the connection is 3.29 seconds back to READY, returning to READY after rebooting 6.76 seconds and de facto H264 decoded to 1280 x 720, 20 fps.
+- Hardware: The missing MaixCam project RTSP was activated and the computer side FFmpeg/MediaMTX was restarted once; no login or repositioning ESP32, no uploading device code, no execution of MaixCam stop/strike/turn restart, no connection or drive chassis, CAN, TCP232 and robot arm.
+- Submission status: This record will be sent as the target is submitted `main`;does not include users `.vscode/settings.json`, local device address, cache or log.
+- Follow-up: Validation of MaixCam maintenance commands and cameras to restore boundary; Maintenance of ESP32 re-locking until deployment and L3 acceptance is completed when operating safely; Establishment of robot arm parameters and addition of connector adaptor.
 
-## 2026-09-01 - 验证PS2底盘与视频并行链路
+## 2026-09-01 - Validation of PS2 chassis and video parallel links
 
-- 目标：在同一热点下验证ESP32历史PS2底盘程序与MaixCam本机视频转发能够并行运行，并定位PS2一度无法操纵的原因。
-- 修改区域：固定WebREPL复位/启动/PS2/受保护底盘探针、23项开发工具测试中的7项ESP32工具测试、L3目标计划和维护日志；用户未提交的 `.vscode/settings.json` 保持只读。
-- 验证：L2确认ESP32 WebREPL、MaixCam SSH、设备RTSP和本机中继最终均为READY；本机中继连续120.047秒解码2399帧H.264视频，1280×720、20 fps、无断流；L3读取有效PS2帧 `0x73/0x5A`，执行设备端自动停车/失能的 `0.05 m/s`、0.3秒固定脉冲，并由用户确认PS2使能、运动、停车和失能均正常。
-- 硬件：连接真实ESP32、PS2、CAN、底盘电机和MaixCam；底盘架空并由用户现场监护。Agent发送一次有界低速脉冲，机械臂不参与；没有上传或修改设备文件。
-- 结论：不是硬件或服务占用；WebREPL中断了ESP32 `main.py`，旧多次Ctrl-C造成提示符错位，且复位后的TCP会话未优雅关闭导致误报。单次中断和分离复位反馈后，复位原因从1变2，最终PS2链路恢复。
-- 提交状态：本条记录随目标提交推送到 `main`；不包含用户 `.vscode/settings.json`、本地地址、秘密、缓存或设备日志。
-- 后续：保持WebREPL维护通道与正式控制通道分离；部署正式安全底盘服务前继续把历史PS2程序视为过渡实现。
+- Target: Verify in the same hotspot that the ESP32 history PS2 chassis program works in parallel with MaixCam's live video transfer, and locates why PS2 was once unmanageable.
+- Modified area: fixed WebREPL reposition/start/PS2 protected chassis probe, 7 ESP32 tool tests of 23 development tool tests, L3 target planning and maintenance logs; not submitted by users `.vscode/settings.json` Keep reading only.
+- Validation: L2 confirms ESP32 WebREPL, MaixCam SSH, device RTSP and in-house relays are ultimately READY; This machine repeats 120.047 seconds to decode 2399 frames H.264 video, 1280 x 720, 20 fps, no breakout; L3 reads valid PS2 frames `0x73/0x5A`, execute device end automatic parking/deactivating `0.05 m/s`, 0.3 seconds of fixed pulse, confirmed by the user of PS2, motion, parking and failure.
+- Hardware: Connecting the real ESP32, PS2, CAN, chassis motor and MaixCam; emptied the chassis and supervised by the user on site. Agent sent a low-speed pulse without the robot arm; no uploading or modification of the device file.
+- Conclusion: not hardware or service occupation; WebREPL interrupted ESP32 `main.py`, the old multiple Ctrl-C caused the hints to be wrong, and the TCP conversation after the reset was not stymied and resulted in the misreporting. After the one interruption and the separation of the re-entry feedback, the re-entry cause was changed from one to two, and the PS2 link eventually recovered.
+- Submission status: This record will be sent as the target is submitted `main`;does not include users `.vscode/settings.json`Local address, secret, cache or device log.
+- (b) Continue to consider the historical PS2 process as a transitional realization until official security chassis services are deployed.
 
-## 2026-09-01 - 打通MaixCam到机械臂LAN1链路
+## 2026-09-01 - Break MaixCam to the machine arm LAN1 chain Road
 
-- 目标：按冻结架构打通 `MaixCam /dev/ttyS0 → PCB TCP232 → 机械臂LAN1 192.168.5.1:5200`，先完成无运动双向诊断，再执行一次受控低速回位动作。
-- 修改区域：`protocol/arm-diagnostic-v1*`、MaixCam机械臂网关/L2/L3探针和launcher资源保护、DobotStudio独立机械臂项目、双端测试、VS Code任务、机械臂/MaixCam/网络文档和目标计划；用户未提交的 `.vscode/settings.json` 保持只读。
-- 验证：L2 `PING/PONG` 序列号1、往返163毫秒且机械臂无动作；L3固定 `STEP` 为J1正向1°、等待1秒、反向1°回位，速度/加速度5%，两次独立人工授权均返回 `DONE`，往返3525毫秒和3221毫秒，用户最终确认链路打通。最终launcher supervisor运行，`/dev/ttyS0` 恢复由launcher持有。
-- 安全：STEP不携带运动参数，机械臂项目每次启动只消费一次，MaixCam不自动重试；第一次用户漏看后没有直接重发，而是人工停止/重启项目并重新授权。实体急停、区域清空、底盘固定、安全位、低速和负载条件由用户现场确认。
-- 本地验证：协议10项、ESP32 30项、MaixCam 40项、机械臂7项、开发工具23项，共110项通过；31个Python源文件、52个VS Code任务、JSON、Bash语法、工作区和Git格式检查通过。
-- 硬件：连接真实MaixCam、TCP232和Magician E6；电脑LAN2只用于DobotStudio维护。未修改机械臂IP、TCP232参数、安全参数、示教点、ESP32、底盘或视频服务；真机拔线超时未执行。
-- 提交状态：本条记录随目标提交推送到 `target/maixcam-arm-l2`；不包含用户 `.vscode/settings.json`、秘密、设备备份、缓存或原始资料。
-- 后续：另建目标设计通用机械臂状态/动作协议、模拟器和统一控制台适配器；在状态查询、幂等语义和故障恢复明确前，不把固定STEP扩展为任意运动入口。
+- Goal: validate the frozen `MaixCam /dev/ttyS0 → PCB TCP232 → robot arm LAN1 192.168.5.1:5200` path, first with bidirectional non-motion diagnostics and then with one controlled low-speed return action.
+- Modify Area:`protocol/arm-diagnostic-v1*`MaixCam robot arm gateway/L2/L3 probe and launcher resource protection, DobotStudio independent robot arm project, double-end testing, VS Code mission, robot arm/MaixCam/network file and target plan; not submitted by user `.vscode/settings.json` Keep reading only.
+- Validation: L2 `PING/PONG` Serial number 1, 163 ms round-trip and no movement on robot arm; L3 fixed `STEP` With J1 heading 1°, waiting for 1 second, reverse 1°, speed/acceleration 5%, return both independent manual authorizations `DONE`It's 3525 milliseconds and 3221 milliseconds, and the user finally confirms that the link is connected.`/dev/ttyS0` Resume held by launcher.
+- Security: STEP does not carry motion parameters, robot arm projects consume only once each time and MaixCam does not automatically retry; instead of having a direct re-run after the first user's omission, the project was stopped/recommenced manually and reauthorised. The entity stopped fast, the area was empty, the chassis was fixed, the position was secure, the low speed and load conditions were confirmed at the user's site.
+- Local validation: protocol 10, ESSP 32 30, MaixCam 40, robot arm 7, development tool 23, 110 passed; 31 Python source files, 52 VS Code missions, JSON, Bash syntax, work area and Git format check passed.
+- Hardware: Connecting real MaixCam, TCP232 and Magician E6; Computer LAN2 for DobotStudio maintenance only. Robot arm IP, TCP232 parameters, security parameters, instructional points, ESSP32, chassis or video services are not performed.
+- Submission status: This record will be sent as the target is submitted `target/maixcam-arm-l2`;does not include users `.vscode/settings.json`Secret, device backup, cache or source.
+- (b) Do not extend the fixed STEP to any physical entry until the status query, semantics and malfunctions are restored.
 
-## 2026-09-01 - 验证机械臂无LAN2运行路径
+## 2026-09-01 - Verifying robot arm without LAN2 operating path
 
-- 目标：区分机械臂工程启动依赖与运行期数据链路，验证RPA1经LAN2启动后，拔除LAN2是否仍能由MaixCam经UART/TCP232和机械臂LAN1完成诊断与受控动作。
-- 修改区域：仅新增本目标计划并追加事实日志；用户未提交的`.vscode/settings.json`保持只读。
-- 验证：首次无LAN2旧协议`Initialize`在2秒内无`yunxing`且无动作；后续确认RPA1并不使用该旧协议。用户经LAN2启动RPA1后，连接LAN2时无运动`PING`往返326毫秒；拔除LAN2并等待10秒后，`PING`仍成功且往返194毫秒。沿用已确认的L3安全门，Agent无重试地发送一次固定STEP，J1正向1°、等待1秒、反向1°回位，速度/加速度5%；机械臂3201毫秒返回成功并恢复`ready`，用户确认动作正常。
-- 硬件：真实MaixCam、TCP232和机械臂参与；最终PING和STEP均在LAN2物理拔除后完成。测试退出后串口恢复由launcher持有，单次临时探针已从MaixCam和本地删除；没有修改产品程序、机械臂工程、TCP232配置、ESP32或底盘。
-- 结论：LAN2只用于启动、维护和诊断机械臂工程，不承载RPA1运行期控制；RPA1一旦运行即可拔除LAN2，MaixCam—TCP232—LAN1链路继续工作。冷启动/实体使能能否自动启动RPA1仍未验证，在配置自动启动前，每次机械臂重新上电仍需先通过LAN2启动并以无运动PING确认就绪。
-- 提交状态：本条记录随目标提交推送到`target/maixcam-arm-l2`；不包含用户`.vscode/settings.json`、秘密、缓存或原始资料。
-- 后续：另建目标调查并验证RPA1开机自动启动；不要混用旧`Initialize`/`biao`协议与RPA1诊断协议，也不要把本次固定STEP结果外推为通用动作接口或断链恢复能力。
+- Target: Distinguishing the reliance of robot arm work on the data link during the running period, verifying whether RPA 1 can still be diagnosed and controlled by MaixCam through UART/TCP232 and robot arm LAN1.
+- Modify area: add only this target plan and add a fact log; not submitted by the user`.vscode/settings.json`Keep reading only.
+- Validation: No old LAN2 protocol for the first time`Initialize`Not in 2 seconds.`yunxing`No action; follow-up confirmation that RPA1 is not using the old protocol. Users are not moving when connecting to LAN2 after the RPA1 has been activated by LAN2`PING`It's about 326 milliseconds back and forth;`PING`Still successful and moving to and from 194 milliseconds. Following the confirmed L3 safe door, Agent is sending a fixed STEP one degree, J1 is waiting one second, returning to 1 degree, speed/acceleration 5%; robot arm is returning successfully and recovering in 3201 milliseconds`ready`, user confirm action is normal.
+- Hardware: Real MaixCam, TCP232 and robot arm involvement; Ultimately, PING and STEP were completed after the physical removal of LAN2. After the test exit, the serial was restored to launcher and the single temporary probe was removed from MaixCam and locally; No modification of the product program, robot arm engineering, TCP232 configuration, ESP32 or chassis.
+- Conclusion: LAN2 is used only for start-up, maintenance and diagnosis of robot arm works, without carrying RPA1 operational period control; RPA1 can remove the LAN2, MaixCam-TCP232-LAN1 link once it is in operation. The ability of a cold start/entity enabler to initiate RPA1 automatically remains unverified, and each re-electrication of a robot arm must be initiated through LAN2 and confirmed without motion PING before the configuration automatically starts.
+- Submission status: This record will be sent as the target is submitted`target/maixcam-arm-l2`;does not include users`.vscode/settings.json`Secret, cache or source.
+- Additional target survey and validation of RPA1 startup; do not mix old`Initialize`/`biao`The protocol and the RPA1 diagnostic protocol do not extrapolate this fixed STEP result to a generic action interface or a broken chain restoration capability.
 
-## 2026-09-01 - 冻结MaixCam单网关运行与独立部署维护双平面
+## 2026-09-01 - Freezing MaixCam single gateway operation and independent deployment to maintain double plane
 
-- 目标：将电脑运行时只连接MaixCam、MaixCam通过两路UART统一控制ESP32底盘和TCP232/机械臂的架构，与电脑分别维护三端的部署路线正式写入项目基线。
-- 修改区域：`AGENTS.md`、项目入口、总体方案、网络方案、新增运行时与部署维护文档及目标计划；用户未提交的`.vscode/settings.json`保持只读。
-- 验证：L0；两平面拓扑、角色、控制路径、状态反馈、故障行为和实施顺序交叉检查一致，所有新增本地链接存在，秘密/IP检查和Git格式检查通过。
-- 硬件：未连接、写入、复位或驱动ESP32、MaixCam、TCP232、机械臂、CAN、电机或摄像头；只记录此前已经确认的真机事实。
-- 结论：正式运行命令统一采用`电脑 → MaixCam → ESP32/机械臂`；ESP32 Wi-Fi、MaixCam SSH/SCP和机械臂LAN2只属于部署维护平面，不形成第二运行控制所有者。
-- 提交状态：本条记录随目标提交推送到`target/single-gateway-runtime-deployment`；不包含用户`.vscode/settings.json`、秘密、设备备份、缓存或原始资料。
-- 后续：下一目标先定义共享消息外壳、状态语义、模拟器和测试向量，再依次实现ESP32 UART服务、MaixCam网关、机械臂通用服务和电脑客户端；L2/L3/L4按风险逐级验证。
+- Target: Only MaixCam, MaixCam, will be connected to the computer when it is running, and the ESP32 chassis and TCP232/mechanic arm structure will be centrally controlled by UART on both tracks, and the three-end deployment route will be formally written into the project baseline with the computer.
+- Modify Area:`AGENTS.md`, project portal, overall scheme, network scheme, add running time and deployment maintenance documents and target plans; not submitted by users`.vscode/settings.json`Keep reading only.
+- Validation: L0; double-platform expansion, role, control path, state feedback, consistent cross-check of failure behaviour and execution sequence, all new local links exist, secret/IP check and Git format check passed.
+- Hardware: Unconnected, written, duplicated or driven ESP 32, MaixCam, TCP 232, robot arm, CAN, electric or camera; record only previously confirmed real facts.
+- Conclusion: production runtime commands follow `computer → MaixCam → ESP32/robot arm`. ESP32 Wi-Fi, MaixCam SSH/SCP, and robot arm LAN2 belong to the maintenance plane and do not create a second runtime owner.
+- Submission status: This record will be sent as the target is submitted`target/single-gateway-runtime-deployment`;does not include users`.vscode/settings.json`Secret, device backup, cache or source.
+- The next goal is to define shared message shell, state semantics, simulators and test vectors, followed by ESP32 UART service, MaixCam gateway, robot arm general service and computer client; L2/L3/L4 is certified on a risk-by-risk basis.
+
+## 2026-09-01 - Convert repository documentation to English
+
+- Goal: make every Git-managed Markdown document English-only, including active architecture and subsystem documentation, collaboration rules, historical plans, and the factual log.
+- Modified scope: all tracked Markdown files plus the new English-migration goal plan; `.vscode/settings.json` remained user-owned, read-only, and unstaged.
+- Method: core architecture and safety documents were manually rewritten; a local offline model provided a first pass for historical records and secondary documents, followed by terminology normalization and structural checks. No repository content was sent to an external translation service.
+- Validation: L0; zero CJK and Unicode replacement characters, all relative links resolve, fenced code blocks are balanced, secret-pattern and address review is clean, and Git diff-format checks pass.
+- Hardware: no device was connected, written, reset, or moved. No source code, protocol schema, device configuration, backup, or raw-resource archive changed.
+- Commit status: this record is committed and pushed with `target/english-only-documentation`; the commit excludes user settings, credentials, caches, backups, and raw resources.
+- Follow-up: future edits should keep Markdown documentation in English. Historical records may receive style-only copy editing, but their factual outcomes must not change.

@@ -1,14 +1,12 @@
-# MaixCam源码
+# MaixCam Source
 
-本目录是MaixCam正式源码的本地可信源。设备文件系统只作为部署目标，设备上的有效修改必须回收到本目录。
+This directory is the version-controlled source of truth for MaixCam software. The device filesystem is only a deployment target; recover every valid device-side change into this directory.
 
-## 当前状态
+## Current Status
 
-- 已建立基于OpenSSH的无线诊断、SCP部署和终端通道。
-- `app/probe.py` 是无运动开发通道探针，不导入 `maix`，不初始化摄像头、UART、GPIO或机械臂链路。
-- `video/rtsp_server.py` 是H.264 RTSP命令行入口，`video_service.py` 封装可注入后端、摄像头所有权、启停回滚和结构化状态；它们不包含识别、ESP32或机械臂控制逻辑。
-- 真实视觉识别服务、ESP32串口和机械臂网关尚未迁移。
+- OpenSSH diagnostics, SCP deployment, and terminal access are available.
+- `app/probe.py` is a non-motion development probe. It does not import `maix` or initialize the camera, UART, GPIO, or robot-arm link.
+- `video/rtsp_server.py` is the H.264 RTSP CLI entry point. `video_service.py` owns the injectable backend, camera ownership, lifecycle rollback, and structured status. These modules contain no vision inference, ESP32 control, or arm control.
+- Production vision inference, the ESP32 UART adapter, and the generic robot-arm gateway are not yet implemented.
 
-开发与恢复流程见 [`../../docs/maixcam/development.md`](../../docs/maixcam/development.md)，视频链路见 [`../../docs/maixcam/video.md`](../../docs/maixcam/video.md)。
-
-运行时契约和本地重构边界见 [`../../docs/runtime-foundation.md`](../../docs/runtime-foundation.md)。
+See [MaixCam Development](../../docs/maixcam/development.md), [Video](../../docs/maixcam/video.md), and the [Runtime Foundation](../../docs/runtime-foundation.md).

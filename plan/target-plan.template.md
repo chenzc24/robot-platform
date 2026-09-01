@@ -1,72 +1,72 @@
-# 目标名称
+# Destination Name
 
-- 状态：`planned | in-progress | blocked | completed`
-- 负责人：`<human / agent / joint>`
-- 最高验证等级：`L0 | L1 | L2 | L3 | L4`
+- Status:`planned | in-progress | blocked | completed`
+- Responsible:`<human / agent / joint>`
+- Highest validation level:`L0 | L1 | L2 | L3 | L4`
 
-## 目标
+## Objective
 
-说明一个具体、可独立验收的工程结果。
+Describe a specific, independent acceptance result.
 
-## 工作区初始状态
+## Initial state of the workspace
 
-记录 `git status --short --branch` 输出：
+Records `git status --short --branch` Output:
 
 ```text
 <status>
 ```
 
-说明工作区是否干净；存在无关脏文件时，记录其归属以及继续工作为何安全。
+If you have a non-dirty file, you can record where you belong and why it's safe to continue working.
 
-## 可修改文件
+## Modifyable File
 
-- `<当前目标可编辑的路径>`
+- `<paths editable by this goal>`
 
-## 只读文件和目录
+## Read-only files and directories
 
-- `<可以检查但不得修改的路径>`
+- `<paths that may be inspected but not modified>`
 
-## 共享依赖
+## Shared Dependencies
 
-- `<协议、配置、生成物、文档或架构决策>`
+- `<protocols, configuration, generated artifacts, documents, or architecture decisions>`
 
-## 风险和安全门
+## Risk and safety door
 
-- 风险：`<软件、网络、固件、设备配置或真实运动风险>`
-- 设备：`<不需要 / ESP32 / MaixCam / TCP232 / 机械臂 / 全系统>`
-- 用户操作：`<连接、BOOT/RST、配置、示教、现场监护等>`
-- 备份和恢复：`<需要备份的内容及恢复路径>`
-- 运动确认：`<不适用，或L3/L4开始前必须确认的条件>`
+- Risk: `<software, network, firmware, device configuration, or real-motion risk>`
+- Hardware: `<none / ESP32 / MaixCam / TCP232 / robot arm / full system>`
+- User operations: `<connections, BOOT/RST, configuration, teaching, on-site supervision, and so on>`
+- Backup and recovery: `<content to back up and recovery path>`
+- Motion gate: `<not applicable, or conditions that must be confirmed before L3/L4>`
 
-## 预期工作
+## Expected work
 
-1. `<步骤>`
-2. `<步骤>`
-3. `<步骤>`
+1. `<step>`
+2. `<step>`
+3. `<step>`
 
-## 验证
+## Validation
 
 - `git diff --check`
 - `git status --short --branch`
-- `<覆盖受影响行为和直接依赖的最小确定性检查>`
+- `<minimum deterministic checks for affected behavior and direct dependencies>`
 
-说明所选验证为何覆盖当前影响面和风险。需要L2、L3或L4时，列出设备状态、参数、预期结果和停止条件。
+Description of how the selected validation covers current impacts and risks. When L2, L3 or L4 is required, list the device state, parameters, expected results and cessation conditions.
 
-## 实际结果
+## Actual results
 
-- `<完成后填写变更结果>`
-- `<完成后填写实际执行的验证>`
-- `<完成后填写未执行项和原因>`
+- `<actual change result>`
+- `<validation actually performed>`
+- `<checks not run and why>`
 
-## 未解决事项
+## Outstanding matters
 
-- `<剩余风险、阻塞或后续目标；没有则写“无”>`
+- `<remaining risk, blocker, or follow-up goal; write "none" if empty>`
 
-## 经验信号（供人工审阅）
+## Experience signal (for manual review)
 
-记录重复故障、被事实推翻的规则、验证缺口或可能复用的模式。常规工作留空；是否提炼经验由用户决定。
+Recording repeated failures, rules overturned by facts, verification gaps or patterns that may be reused... routine work left blank;
 
-## 提交意图
+## Intent to submit
 
 ```text
 <commit message>

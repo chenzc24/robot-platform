@@ -1,124 +1,116 @@
-# 三端部署与维护基线
+# Deployment and Maintenance Baseline
 
-- 状态：开发通道已分别建立，原子发布、版本回滚和统一发布清单尚未完成
-- 范围：电脑向ESP32、MaixCam和机械臂发布代码，配置TCP232，并完成启动、健康检查和恢复
-- 不包含：正常任务运行和设备业务命令；这些见 [`../runtime/README.md`](../runtime/README.md)
+- Status: individual development channels are available; atomic release, version rollback, and a unified release manifest are not complete
+- Scope: publishing code from the computer to ESP32, MaixCam, and the robot arm; configuring TCP232; startup, health checks, and recovery
+- Excludes: normal task commands and runtime behavior; see [Runtime Baseline](../runtime/README.md)
 
-## 1. 部署拓扑
+## 1. Deployment Topology
 
-部署维护平面允许电脑分别访问三个设备：
+The maintenance plane allows the computer to reach each target independently:
 
 ```text
-ESP32：  电脑 → Wi-Fi/WebREPL，首次配置和恢复使用USB
-MaixCam：电脑 → Wi-Fi/SSH/SCP，USB虚拟网卡作为网络恢复入口
-机械臂：电脑 → 有线LAN2 → DobotStudio Pro
-TCP232：电脑 → 厂商配置工具或配置页面，仅用于一次性参数核对
+ESP32:   computer → Wi-Fi/WebREPL; USB for first configuration and recovery
+MaixCam: computer → Wi-Fi/SSH/SCP; screen and USB virtual network for recovery
+Robot arm: computer → wired LAN2 → DobotStudio Pro
+TCP232:  computer → vendor configuration tool/page for one-time parameter checks
 ```
 
-这些通道不改变运行时只有MaixCam作为电脑设备网关的决策。维护入口可以存在，但不得成为第二个运行控制所有者。
+These maintenance paths do not change the runtime decision that MaixCam is the only computer-facing device gateway. A maintenance endpoint must never become a second runtime control owner.
 
-## 2. 本地仓库是唯一可信源
+## 2. Source of Truth
 
-- 正式源码先在本仓库修改、测试和审阅，再部署到设备。
-- 设备文件系统不是唯一代码源；现场有效修改必须回收到Git受控源码。
-- `ESP32/`、`Camera/` 和 `Robot Arm_Claws/` 是只读原始资料库，不直接部署为产品版本。
-- 热点、SSH、WebREPL和设备凭据只保存在Git忽略的本地配置。
-- 每次发布记录目标版本、设备、文件清单、验证结果和恢复版本。
+- Modify, test, and review production source in this repository before deploying it.
+- A device filesystem is not the source of truth; recover every valid field change into Git-managed source.
+- `ESP32/`, `Camera/`, and `Robot Arm_Claws/` are read-only raw-resource archives, not product releases.
+- Store hotspot, SSH, WebREPL, and device credentials only in Git-ignored local configuration.
+- Record the target version, device, file manifest, validation result, and recovery version for every release.
 
-## 3. ESP32部署
+## 3. ESP32 Deployment
 
 ```text
-VS Code本地源码
-  ├─ Wi-Fi/WebREPL：日常文件上传与复位
-  └─ USB/mpremote/esptool：首次配置、备份和恢复
+VS Code local source
+  ├── Wi-Fi/WebREPL: routine file upload and reset
+  └── USB/mpremote/esptool: initial setup, backup, and recovery
 ```
 
-边界：
+- WebREPL is a deployment and maintenance channel, not the chassis runtime protocol.
+- Entering the REPL can interrupt `main.py`. Close the session, reset the device, and restore the production service after deployment.
+- The service starts in safe idle and never restores old velocity, enable state, or ownership.
+- After reset, confirm version and state through the MaixCam-ESP32 non-motion handshake; do not interrupt the application by re-entering REPL merely to verify it.
+- Only single-file WebREPL maintenance and protected reset currently exist. Release manifests, atomic switching, and automatic rollback remain unfinished.
 
-- WebREPL是开发部署通道，不是底盘运行协议。
-- 进入REPL可能中断 `main.py`；部署完成后必须关闭会话、复位设备并恢复正式服务。
-- 正式服务首先进入安全空闲，不因部署前状态自动恢复速度、使能或控制权。
-- 设备重启后应通过MaixCam—ESP32无运动握手确认版本和状态；不能再次进入REPL做“确认”而中断应用。
-- 当前只完成单文件WebREPL维护和受保护复位，尚未完成批量清单、原子切换和自动回滚。
+Recovery order: confirm the current Wi-Fi address, attempt WebREPL maintenance, use USB for readback and single-file recovery, then restore known-good firmware. Never erase flash without a separate goal and confirmed backup.
 
-恢复顺序：当前Wi-Fi地址确认 → WebREPL维护 → USB读取和单文件恢复 → 已知固件恢复。未经单独目标和备份确认不擦除Flash。
-
-## 4. MaixCam部署
+## 4. MaixCam Deployment
 
 ```text
-VS Code本地源码 → SCP → /root/robot-platform/<release>
-                         ↓
-                      SSH启停、状态和日志
+VS Code local source → SCP → /root/robot-platform/<release>
+                              ↓
+                         SSH start/stop,
+                         status, and logs
 ```
 
-项目不依赖MaixVision、MaixCode或VS Code Remote-SSH作为运行和部署前提。VS Code任务只是对标准SSH/SCP命令的入口。
+MaixVision, MaixCode, and VS Code Remote-SSH are not deployment or runtime requirements. VS Code tasks are entry points for standard SSH/SCP commands.
 
-发布要求：
+Release requirements:
 
-- 上传到独立发布目录，不把设备上的临时修改当作源代码。
-- 上传前记录当前运行版本和UART/摄像头所有者。
-- 启动前验证摄像头、`/dev/ttyS0`和`/dev/ttyS2`的预期所有者。
-- 网关退出或启动失败时恢复此前的launcher/服务所有权。
-- 先通过本地L1和设备无运动L2，再允许网关接收运动命令。
-- 当前视频和机械臂诊断使用分离部署目录；统一网关的原子发布和自启动尚未实现。
+- Upload into a separate release directory; never treat temporary device edits as source.
+- Record the active version and UART/camera owners before upload.
+- Verify the intended owners of the camera, `/dev/ttyS0`, and `/dev/ttyS2` before startup.
+- Restore prior launcher/service ownership if the gateway exits or fails to start.
+- Pass local L1 and device-side non-motion L2 before enabling motion commands.
+- Video and arm diagnostics currently use separate deployment directories; atomic publication and auto-start of the unified gateway are not implemented.
 
-恢复入口依次为SSH、设备屏幕、USB虚拟网卡和官方镜像恢复。
+Recovery order: SSH, device screen, USB virtual network, then official image restoration.
 
-## 5. 机械臂部署
+## 5. Robot Arm Deployment
 
 ```text
-VS Code受控源码
-      ↓ 人工审阅/复制或导入
+VS Code-managed source
+      ↓ reviewed copy/import
 DobotStudio Pro
       ↓ LAN2
-机械臂控制器工程、示教点和配置
+controller project, taught points, and configuration
 ```
 
-LAN2用于：
+LAN2 is used to import, save, start, and debug the project; configure taught points, load, safety settings, and controller mode; bind the controller Run/Stop button to a project; and inspect faults and actual state.
 
-- 导入、保存、启动和调试机械臂项目。
-- 设置示教点、负载、安全参数和本体运行模式。
-- 将本体“运行/停止”按键配置为运行指定工程。
-- 查询故障和实际动作状态。
+After the project is saved and started, LAN2 can be unplugged and runtime data continues through MaixCam-TCP232-LAN1. RPA1 has passed PING and one fixed action with LAN2 physically disconnected.
 
-项目保存并启动后可以拔除LAN2，运行数据继续走MaixCam—TCP232—LAN1。当前已验证RPA1工程在拔除LAN2后仍能完成PING和一次固定动作。
+Do not infer automatic project start from cold boot. The current power-on sequence requires an on-site person to verify the initial pose, enable the arm, start the project using the configured controller button, and wait for MaixCam's non-motion handshake. Any future auto-start mode requires a separate vendor-supported safety-validation goal.
 
-冷启动不自动外推为工程已运行。当前每次上电流程为：人工确认自动程序初始点、使能机械臂、通过已配置的本体按键启动工程，再由MaixCam执行无运动握手。未来如启用任何自动启动方式，必须依据厂商支持单独建立安全验证目标。
+## 6. TCP232 One-Time Configuration
 
-## 6. TCP232一次性配置
-
-当前基线：
+Current baseline:
 
 ```text
-UART：115200 8N1，无校验
-网络：TCP Client
-目标：机械臂LAN1 192.168.5.1:5200
+UART:    115200 8N1, no parity
+Network: TCP Client
+Target:  robot arm LAN1 192.168.5.1:5200
 ```
 
-部署前只读核对实际配置。未经用户明确授权，不修改TCP232地址、工作模式、串口参数或机械臂目标；确认后的配置应保存截图或导出文件到受保护的本地资料位置，不提交秘密或设备备份。
+Read and verify the actual configuration before deployment. Do not change TCP232 addressing, mode, UART parameters, or target settings without explicit user authorization. Store exports or screenshots in a protected local resource location, not in Git.
 
-TCP232只转换字节，不部署业务程序。机械臂项目和MaixCam网关必须在两端实现相同的业务协议。
+TCP232 only transports bytes. The MaixCam gateway and robot-arm project must implement the same application protocol.
 
-## 7. 推荐发布顺序
+## 7. Recommended Release Order
 
-跨三端协议版本变化时按执行端到入口端发布：
+For a cross-device protocol-version change, publish from execution endpoints toward the user-facing endpoint:
 
-```text
-1. 停止自动任务并确认底盘停车、机械臂安全位和旧控制权释放。
-2. 本地运行协议向量、模拟器和全部相关测试。
-3. 经LAN2部署机械臂兼容版本，保持未运行或仅允许无运动握手。
-4. 经WebREPL部署ESP32兼容版本，复位到safe_idle并关闭REPL。
-5. 经SSH/SCP部署MaixCam网关版本，先禁用运动入口启动。
-6. 更新电脑控制后端和控制台。
-7. 分别完成ESP32和机械臂L2握手、版本及状态查询。
-8. 显式启用运行入口；另行执行L3/L4安全门后才验证运动。
-```
+1. Stop automatic tasks and confirm chassis stop, arm safe pose, and release of old ownership.
+2. Run local protocol vectors, simulators, and all relevant tests.
+3. Deploy a compatible arm project through LAN2; leave it stopped or permit only non-motion handshake.
+4. Deploy the compatible ESP32 version through WebREPL, reset to `safe_idle`, and close REPL.
+5. Deploy the MaixCam gateway through SSH/SCP with motion input disabled.
+6. Update the computer backend and console.
+7. Perform separate L2 version, state, and handshake checks for ESP32 and the arm.
+8. Explicitly enable the runtime endpoint. Motion requires a separate L3/L4 safety gate.
 
-如果协议支持双版本兼容，可使用滚动发布；否则三端必须在任务停止窗口内作为一个发布单元更新。
+Use rolling release only when the protocol explicitly supports both versions. Otherwise update all endpoints as one stopped-task release unit.
 
-## 8. 发布健康检查
+## 8. Release Health Check
 
-部署完成不等于运行可用。每端至少报告：
+Every endpoint reports at least:
 
 ```text
 software_version
@@ -130,24 +122,24 @@ link_state
 motion_enabled
 ```
 
-MaixCam汇总ESP32和机械臂状态后再向电脑报告系统快照。只有文件上传成功、进程存在或端口可连接不足以通过发布验收。
+MaixCam aggregates ESP32 and arm state before reporting the system snapshot. Successful upload, a running process, or an open port alone is not release acceptance.
 
-## 9. 回滚原则
+## 9. Rollback
 
-- 保留上一个已验证发布目录和对应配置模板。
-- 协议不兼容时按入口端到执行端停止，再按执行端到入口端回滚。
-- ESP32回滚后必须复位到安全空闲并重新握手。
-- MaixCam回滚时验证UART和摄像头所有权恢复。
-- 机械臂回滚通过LAN2执行，恢复项目、示教点引用和本体运行按键配置后重新做无运动PING。
-- 动作结果未知时先查询本体和现场状态，禁止通过重发命令“验证”。
+- Keep the previous validated release directory and matching configuration template.
+- For an incompatible protocol, stop from user-facing endpoint toward executors, then roll back from executors toward the endpoint.
+- An ESP32 rollback must end in safe idle and repeat its handshake.
+- A MaixCam rollback must restore UART and camera ownership.
+- Roll back the arm through LAN2, restore the project and taught-point references, confirm Run-button configuration, then repeat non-motion PING.
+- If an action result is unknown, inspect controller and physical state. Never resend the action merely to "verify" it.
 
-## 10. 当前成熟度与下一步
+## 10. Current Maturity
 
-| 部署对象 | 当前可用 | 仍需完成 |
+| Target | Available now | Still required |
 |---|---|---|
-| ESP32 | USB恢复、WebREPL单文件维护、受保护复位 | 发布清单、原子上传、版本查询、回滚、正式UART服务部署 |
-| MaixCam | SSH/SCP、独立视频和机械臂诊断目录、启停日志 | 统一网关发布目录、自启动、版本切换和统一资源恢复 |
-| 机械臂 | LAN2项目部署、LAN1诊断工程、无LAN2运行 | 通用业务工程、版本状态、标准启动检查和回滚验收 |
-| TCP232 | 当前链路参数已支持RPA1真机验证 | 配置导出归档和发布前自动只读核对 |
+| ESP32 | USB recovery, WebREPL single-file maintenance, protected reset | Release manifest, atomic upload, version query, rollback, production UART service deployment |
+| MaixCam | SSH/SCP, separate video and arm diagnostic directories, start/stop logs | Unified gateway release directory, auto-start, version switching, unified resource recovery |
+| Robot arm | LAN2 project deployment, LAN1 diagnostic project, operation without LAN2 | Generic task project, version status, standard startup checks, rollback acceptance |
+| TCP232 | Current parameters support RPA1 validation | Archived configuration export and automated read-only pre-release verification |
 
-下一项实现应先建立共享协议与模拟器，然后分别建设ESP32 UART服务和MaixCam单网关；不要先把三个设备的上传动作合并成一个会触发真机的“一键部署”。
+The next implementation goal should create the shared protocol and simulators, then the ESP32 UART service and MaixCam gateway. Do not begin with a three-device one-click deployment command that can trigger real hardware.

@@ -1,100 +1,100 @@
-# 打通MaixCam到机械臂LAN1链路并执行一次受控运动
+# Get Maixcam to the machine arm LAN1 link and carry out a controlled exercise.
 
-- 状态：`completed`
-- 负责人：Agent实施，用户现场监护并操作实体急停
-- 最高验证等级：`L3`
+- Status:`completed`
+- Responsible: Agent implemented, user on-site supervision and operational entities stopped
+- Highest validation level:`L3`
 
-## 目标
+## Objective
 
-按冻结架构建立 `MaixCam UART → PCB TCP232 → 机械臂LAN1` 的双向诊断闭环。先使用带版本、序列号、CRC和超时的 `PING/PONG` 代替旧裸字符串，再在用户明确授权的L3安全门下执行一次固定、低速、可回位的J1小幅动作。运动请求不携带角度、速度或示教点，机械臂项目每次启动最多接受一次。
+Establish the bidirectional diagnostic loop over the frozen `MaixCam UART → PCB TCP232 → robot arm LAN1` topology. First replace legacy raw strings with versioned `PING/PONG` framing, sequence, CRC, and timeout. Then, under an explicitly authorized L3 safety gate, execute one fixed low-speed J1 movement that returns to its starting pose. The request carries no angle, speed, or taught-point parameters, and the robot-arm project accepts it at most once.
 
-## 工作区初始状态
+## Initial state of the workspace
 
 ```text
 ## main...origin/main
  M .vscode/settings.json
 ```
 
-从同步的 `main` 创建 `target/maixcam-arm-l2`。`.vscode/settings.json` 是用户已有修改，本目标保持只读，不覆盖、不暂存、不提交。开始检查时MaixCam SSH和ESP32 WebREPL在线；MaixCam RTSP与本机视频中继未运行，与本目标无关，不自动启动。
+Synchronized from `main` Create `target/maixcam-arm-l2`.`.vscode/settings.json` is that the user has changed, this target is read-only, not overridden, not stored, not submitted. MaixCam SSH and ESP32 WebREPL are online at start of the check; MaixCam RTSP is not running, not related to this target, not automatically.
 
-## 可修改文件
+## Modifyable File
 
 - `protocol/`
 - `src/maixcam/arm/`
 - `src/robot_arm/diagnostics/`
-- `tests/protocol/`、`tests/maixcam/`、`tests/robot_arm/`
+- `tests/protocol/`, `tests/maixcam/`, `tests/robot_arm/`
 - `tools/maixcam/`
 - `.vscode/tasks.json`
 - `README.md`
 - `docs/overall-plan.md`
 - `docs/network/README.md`
-- `docs/maixcam/`、`docs/robot-arm/`
+- `docs/maixcam/`, `docs/robot-arm/`
 - `plan/2026-09-01-maixcam-arm-l2/plan.md`
 - `plan/log.md`
 
-## 只读文件和目录
+## Read-only files and directories
 
 - `.vscode/settings.json`
-- `ESP32/`、`Camera/`、`Robot Arm_Claws/`
-- `src/esp32/` 和ESP32设备文件系统
-- MaixCam现有视频程序及摄像头资源
-- 机械臂旧项目、示教点、IP、安全参数和既有运动配置
-- 本地秘密、SSH配置、设备备份和真实地址覆盖
+- `ESP32/`, `Camera/`, `Robot Arm_Claws/`
+- `src/esp32/` and ESP32 device file system
+- MaixCam's current video program and camera resources
+- Robot arm old projects, teaching points, IP, security parameters and established motor configuration
+- Local Secret, SSH Configuration, Device Backup and Real Address Overwrite
 
-## 共享依赖
+## Shared Dependencies
 
-- 架构基线：MaixCam是机械臂唯一运行网关；机械臂LAN1由MaixCam经UART/TCP232控制，LAN2仅用于维护和部署。
-- 旧相机资料使用 `/dev/ttyS0`、115200波特率访问机械臂路径；真机检查时必须确认该设备节点未被launcher或其他进程占用。
-- TCP232基线为115200 8N1、TCP Client、目标机械臂 `192.168.5.1:5200`；不在未导出当前配置前修改。
-- 机械臂旧示例收到 `Initialize` 或 `biao...` 会调用 `MovJ`，本目标禁止发送这些字符串并必须停止该项目。
-- `protocol/runtime-status.schema.json` 的结构化状态和错误码原则。
+- (b) MaixCam is controlled by UART/TCP232, and LAN2 is used only for maintenance and deployment.
+- Used camera data `/dev/ttyS0`, 115,200 pert access path to robot arm; the real-time check must confirm that the device node is not occupied by launcher or other processes.
+- TCP 232 baseline is 115200 8N1, TCP Client, target arm `192.168.5.1:5200`;no changes before exporting the current configuration.
+- Old example of robot arm received `Initialize` or `biao...` It's called. `MovJ`, this goal prohibits sending these strings and must stop the project.
+- `protocol/runtime-status.schema.json` Structured state and error code principles.
 
-## 风险和安全门
+## Risk and safety door
 
-- L2阶段机械臂诊断项目只接受 `PING` 并返回 `PONG`；该阶段已完成且机械臂无运动。
-- L3只增加固定 `STEP`：J1正向1°、等待1秒、J1反向1°回到原位；速度和加速度均为5%，平滑过渡关闭。请求不得携带运动参数，机械臂项目每次启动最多执行一次，MaixCam不自动重试。
-- 连接或启动前用户必须确认人员在现场、实体急停可操作、机械臂未使能且旧运动项目已停止。若本体可能因自动运行旧项目产生动作，则停止并升级为L3目标。
-- MaixCam写入前读取目标目录和串口占用，备份被替换的项目文件；部署到独立目录，不覆盖视频或视觉项目。
-- 不改变机械臂IP、TCP232工作模式/参数或安全配置；如果现值与基线不一致，停止并请求用户确认。
-- 诊断失败只报告断开、占用、CRC、序列号或超时，不发送探测性旧指令，不自动重试运动，不重启机械臂。动作中出现异常由现场人员立即操作实体急停；若第一段动作后失败，不自动发送补偿动作。
-- 恢复路径：停止MaixCam独立诊断进程并恢复launcher；机械臂诊断项目停止后保留原项目不变；MaixCam备份用于恢复被占用串口前状态。
+- The L2 stage robot arm diagnostic project will only be accepted `PING` And back `PONG`; the stage is completed and the robot arm is not moving.
+- L3 increases fixed. `STEP`: J1 is heading 1°, waiting for 1 second, J1 is heading back 1°; speed and acceleration are 5%, smooth transition is off. Request not to carry motion parameters, robot arm projects are initiated at most once, MaixCam does not retry automatically.
+- Prior to connection or startup, the user must confirm that the person is on the scene, that the entity is inoperable, that the robot arm is not functioning and that the old motion program has stopped. If the body is likely to generate action by automatically running the old project, stop and upgrade to L3.
+- MaixCam read the target directory and serial occupancy before writing, back up the replacement project file; deployed to a stand-alone directory, without covering video or visual items.
+- Do not change the robot arm IP, TCP 232 working model/parameters or security configuration; Stop and request user confirmation if present value is inconsistent with baseline.
+- The diagnosis failed only to report the disconnection, occupation, CRC, serial number or timeout, not sending an old detective command, not automatically retrying the motion, not restarting the arm of the machine. An anomaly occurred in the action of an immediate operator; if the first action fails, the compensatory action is not automatically sent.
+- (c) MaixCam's backup is used to restore the pre-occupy state.
 
-## 预期工作
+## Expected work
 
-1. 定义双端可实现的ASCII诊断帧、CRC、序列号、最大长度、超时和错误语义。
-2. 实现MaixCam可注入UART网关和独立L2探针，显式检查串口所有权并硬拒绝运动类命令。
-3. 实现机械臂LAN1无运动回显项目，并静态证明不包含运动API或示教点。
-4. 增加跨端向量、分片/粘包、CRC、超时、错误响应、串口占用和运动拒绝测试及VS Code任务。
-5. L1通过后只读检查MaixCam `/dev/ttyS0`、相关进程和TCP232/机械臂维护状态。
-6. 用户通过LAN2启动机械臂诊断项目后，部署MaixCam诊断目录并执行一次 `PING/PONG`、一次断链超时和恢复验证。
-7. 用户于2026-09-01明确确认现场急停可用、周围无人无障碍、底盘已固定、机械臂处于安全位且负载已确认，并授权执行上述固定动作。扩展协议、双端实现和测试后，部署并仅下发一次 `STEP`。
+1. Defines the ASCII diagnostic frame, CRC, serial number, maximum length, timeout and wrong semantic.
+2. MaixCam can be injected into the UART gateway and the independent L2 probe, explicitly checking the chain of ownership and forcibly rejecting sports orders.
+3. Make the robot arm LAN1 non-motion resonance project and static proof that it does not contain motion API or teaching points.
+4. Add cross vectors, fractions/ sticky packages, CRC, timeout, error response, serial occupancy and motion rejection of test and VS Code mission.
+5. L1 read-only check MaixCam `/dev/ttyS0`, processes and TCP 232/robot arm maintenance state.
+6. After users started the robot arm diagnostic program through LAN2, deployment of MaixCam diagnostic catalogue and implementation of one. `PING/PONG`A broken chain timed out and restored.
+7. Users clearly confirm at 2026-09-01 that the site is shut down, that the chassis is unobstructed, that the chassis is fixed, that the arm is secure and the load is confirmed, and that the above-mentioned fixed action is authorized. Extension protocol, once achieved and tested, is deployed and only issued once. `STEP`.
 
-## 验证
+## Validation
 
-- L0：VS Code JSON、文档、配置模板、正式源码ASCII和秘密扫描。
-- L1：协议、MaixCam网关、资源所有权、机械臂诊断解析器和安全源码测试；全部既有回归。
-- L2：MaixCam UART双向 `PING/PONG`、匹配序列号和往返时间；真机已通过，往返约163ms，全程机械臂无运动。
-- L3：用户现场监护下仅执行一次固定J1动作；确认正向1°、停1秒、反向1°回位，随后停止项目并失能。任何异常立即实体急停；未收到完成响应不得自动重试。
+- L0: VS Code JSON, Document, Configure Template, Official Source ASCII and Secret Scan.
+- L1: protocol, MaixCam gateway, resource ownership, robot arm diagnostic resolutioner and safety source code test; all retrogressive.
+- L2: MaixCam UART Two-way `PING/PONG`The machine has passed, about 163 ms, and the full robot arm is motionless.
+- L3: Only one fixed J1 move is performed under the user's on-site supervision; confirm that it is heading to 1°, stopping for one second, turning back to 1°, then suspending the project and failing to function. Any abnormal physical emergency stoppages; no automatic retry is allowed without a complete response.
 - `git diff --check`
 - `git status --short --branch`
 
-## 实际结果
+## Actual results
 
-- 建立 `RPA1` ASCII帧、CRC-16/CCITT-FALSE、序列号、96字节上限、分片/粘包恢复、超时和稳定错误码；L2只接受 `PING/PONG`。
-- MaixCam端形成POSIX UART传输、一次在途请求网关、L2/L3独立探针及launcher守护脚本。守护脚本验证supervisor和UART所有者身份，临时释放 `/dev/ttyS0`，退出时恢复launcher。
-- DobotStudio Pro 4.6机械臂端形成独立 `main.py`。L3扩展只接受无参数 `STEP`，硬编码J1正向1°、等待1秒、反向1°回位，速度和加速度5%、`cp=0`；每次项目运行最多消费一次，失败或响应丢失不重试。
-- L2真机 `PING/PONG` 成功，序列号1，往返163毫秒，机械臂无动作。
-- 用户完成L3安全确认后执行两次彼此独立的人工授权验证。第一次返回 `DONE`、往返3525毫秒，但用户未观察；系统拒绝直接重发。用户停止并重新运行机械臂项目、重新授权后，第二次返回 `DONE`、往返3221毫秒，用户确认链路打通。
-- 两次L3探针退出后launcher supervisor均保持运行；最终 `/dev/ttyS0` 所有者为 `/maixapp/apps/launcher/launcher`。未修改机械臂IP、TCP232参数、安全参数、示教点、底盘或视频服务。
-- L0/L1最终验证通过：协议10项、ESP32 30项、MaixCam 40项、机械臂7项、开发工具23项，共110项；31个Python源文件检查、52个VS Code任务、JSON、Bash语法、工作区校验和 `git diff --check` 通过。
+- Create `RPA1` ASCII frame, CRC-16/CCIT-FALSE, Serial number, 96 byte cap, fraction/ sticky package restoration, timeout and stabilization error codes; L2 accepted only `PING/PONG`.
+- MaixCam has formed a POSIX UART transmission, an on-line request gateway, L2/L3 independent probe and launcher guard script. Protect scripts to identify subvisor and UART owners, temporarily release `/dev/ttyS0`, restore launcher.
+- DobotStudio Pro 4.6 robot arm forms independent `main.py`.L3 extension accepted only without parameters `STEP`, hard-coding J1 is heading 1°, waiting for 1 second, reverse 1°, speed and acceleration 5%,`cp=0`; maximum consumption per project running, failure or response loss without retrying.
+- L2 is real. `PING/PONG` Success, Serial 1, 163 milliseconds, robot arm motionless.
+- Users complete L3 security confirmation and perform two separate manual validations. First return `DONE`, 3525 milliseconds to and from, but not observed by, the system refuses to reissue directly. The user stops and reruns the robot arm project, returns again after reauthorization `DONE`3221 milliseconds, user confirmed link.
+- After the L3 exit, launcher supervisor remains active; eventually `/dev/ttyS0` The owner is `/maixapp/apps/launcher/launcher`...does not modify robot arm IP, TCP 232 parameters, security parameters, taught points, chassis or video services.
+- L0/L1 Final validation: protocol 10, ESSP32 30, MaixCam 40, robot arm 7, development tool 23, 110; 31 Python file checking, 52 VS Code missions, JSON, Bash syntax, validation of workspace `git diff --check` Pass.
 
-## 未解决事项
+## Outstanding matters
 
-- 未通过物理拔线执行真机断链超时测试；本地网关超时与错误路径测试已通过。后续若验证真机断链，必须单独建立目标并把动作结果标记为未知，禁止自动重试。
-- 本目标只验证固定一次动作，不是通用机械臂业务协议。任意轨迹、状态查询、队列、取消、恢复和控制台集成需另建目标。
-- MaixCam视频在本目标开始时未运行，与机械臂链路无关；本目标未启动或修改视频服务。
+- (b) The local gateway timeout and error path test has been passed. If the real machine is subsequently broken, a separate target must be set and action results marked as unknown, and automatic retry is prohibited.
+- This target only validates a fixed action, not a generic robot arm operating protocol. Any trajectory, status queries, queues, cancellations, recovery and control table integration needs to have another target.
+- MaixCam video is not operational at the start of this target, not related to robot arm links; this target is not active or modified for video services.
 
-## 提交意图
+## Intent to submit
 
 ```text
 feat: validate maixcam arm lan1 link

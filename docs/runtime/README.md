@@ -1,61 +1,61 @@
-# 单网关运行时基线
+# Single-Gateway Runtime Baseline
 
-- 状态：架构决策已确认，通用运行协议和三端服务尚未完成
-- 范围：电脑、MaixCam、ESP32-S3、TCP232和Magician 6机械臂的正常任务运行
-- 不包含：源码发布、固件恢复、示教和设备参数配置；这些见 [`../deployment/README.md`](../deployment/README.md)
+- Status: architecture confirmed; the generic runtime protocol and three resident device services are not yet complete
+- Scope: normal operation of the computer, MaixCam, ESP32-S3, TCP232, and Magician 6 robot arm
+- Excludes: source deployment, firmware recovery, teaching, and device parameter configuration; see [Deployment and Maintenance](../deployment/README.md)
 
-## 1. 运行时拓扑
+## 1. Runtime Topology
 
-正常任务运行时，MaixCam是电脑唯一直接访问的设备节点：
+During normal operation, MaixCam is the only device node directly accessed by the computer:
 
 ```text
-电脑控制后端
-视觉识别、状态计算、任务编排、统一控制台
+Computer backend
+vision inference, state calculation, task orchestration, unified console
           │
-          │ Wi-Fi：视频、命令、状态
+          │ Wi-Fi: video, commands, status
           ▼
-MaixCam统一网关
+MaixCam unified gateway
     ├── UART2 /dev/ttyS2
     │       ↕
     │    ESP32 UART1
     │       ↓
-    │   安全状态机 → CAN → 底盘
+    │   safety state machine → CAN → chassis
     │
     └── UART0 /dev/ttyS0
             ↕
           TCP232
-            ↕ 有线TCP
-       机械臂LAN1服务
+            ↕ wired TCP
+       robot arm LAN1 service
             ↓
-       Dobot动作执行
+       Dobot action execution
 ```
 
-运行时只有电脑和MaixCam必须加入局域网。ESP32可以关闭或不依赖Wi-Fi，机械臂LAN2可以断开；ESP32、MaixCam、TCP232和机械臂仍必须正常供电并运行各自的本地服务。
+Only the computer and MaixCam must join the LAN at runtime. ESP32 does not depend on Wi-Fi, and robot arm LAN2 may be disconnected. ESP32, MaixCam, TCP232, and the robot arm must still be powered and running their local services.
 
-## 2. 职责边界
+## 2. Responsibility Boundaries
 
-| 节点 | 运行时职责 | 不承担的职责 |
+| Node | Runtime responsibilities | Explicit exclusions |
 |---|---|---|
-| 电脑 | 接收视频、视觉推理、高层状态计算、任务编排、向MaixCam下发任务 | 不直接控制CAN，不作为唯一急停或本地联锁 |
-| MaixCam | 电脑唯一设备网关、视频输出、命令校验与分发、状态汇总、跨设备任务门禁 | 不透明转发任意运动参数，不代替ESP32和机械臂本体安全 |
-| ESP32 | UART命令接收、底盘控制权、TTL/心跳、速度限幅、CAN执行、状态反馈 | 不依赖电脑或Wi-Fi保持停车能力，不控制机械臂 |
-| TCP232 | MaixCam UART与机械臂LAN1 TCP的透明字节转换 | 不解析业务协议，不判断动作是否完成 |
-| 机械臂 | LAN1服务、命令解析、本体状态机、Dobot API执行、动作结果反馈 | 不直接接受电脑第二控制源，不依赖LAN2承载运行数据 |
+| Computer | Receive video, run vision inference, compute high-level state, orchestrate tasks, send tasks to MaixCam | Does not control CAN directly and is not the sole emergency-stop or interlock layer |
+| MaixCam | Sole computer-facing device gateway, video output, command validation and routing, status aggregation, cross-device task gates | Does not transparently forward arbitrary motion parameters or replace local device safety |
+| ESP32 | Receive UART commands, own chassis control, enforce TTL/heartbeat and speed limits, execute CAN commands, report status | Does not depend on the computer or Wi-Fi for safe stopping and does not control the arm |
+| TCP232 | Transparent byte transport between MaixCam UART and robot arm LAN1 TCP | Does not parse the application protocol or decide whether an action completed |
+| Robot arm | Host the LAN1 service, parse commands, own its action state machine, call the Dobot API, report results | Does not accept a second computer runtime owner and does not use LAN2 for runtime data |
 
-## 3. 四条运行通道
+## 3. Runtime Channels
 
-| 通道 | 方向 | 传输 | 当前状态 |
+| Channel | Direction | Transport | Current status |
 |---|---|---|---|
-| 视频 | MaixCam → 电脑 | RTSP/H.264，经FFmpeg/MediaMTX提供本地RTSP、HLS和WebRTC | 已通过真机连续视频验证 |
-| 电脑命令与综合状态 | 电脑 ↔ MaixCam | 受控局域网中的持久双向应用连接；首版采用有边界的结构化消息 | 尚未实现 |
-| 底盘命令与状态 | MaixCam ↔ ESP32 | UART，115200基线，带帧边界、序列号、TTL、校验和心跳 | 旧接收骨架存在，正式协议未实现或真机验证 |
-| 机械臂命令与状态 | MaixCam ↔ TCP232 ↔ 机械臂LAN1 | UART 115200 8N1 + TCP透明传输 + 机械臂项目 | RPA1诊断与固定动作已通过；通用任务协议未实现 |
+| Video | MaixCam → computer | RTSP/H.264; FFmpeg/MediaMTX exposes local RTSP, HLS, and WebRTC | Passed continuous real-device video validation |
+| Commands and aggregate status | Computer ↔ MaixCam | Persistent bidirectional application connection with framed structured messages | Not implemented |
+| Chassis commands and status | MaixCam ↔ ESP32 | UART at a 115200 baseline, with framing, sequence, TTL, checksum, and heartbeat | Legacy receiver skeleton exists; formal protocol not implemented or validated |
+| Arm commands and status | MaixCam ↔ TCP232 ↔ arm LAN1 | UART 115200 8N1, transparent TCP transport, and a robot-arm project | RPA1 diagnostics and one fixed action passed; generic task protocol not implemented |
 
-视频和命令必须是独立通道。视频丢帧不能阻塞停车，命令连接正常也不能被解释为视觉结果有效。
+Video and control are independent channels. A dropped video frame must not block a stop command, and a healthy command connection must not imply that vision output is valid.
 
-## 4. 统一消息与设备命令
+## 4. Unified Envelope and Device-Specific Commands
 
-“统一指令”只统一消息外壳和生命周期，不要求三个设备解释相同的业务字符串。统一外壳至少包含：
+"Unified commands" means a common message envelope and lifecycle, not one raw string interpreted by every device. The envelope includes at least:
 
 ```text
 schema_version
@@ -68,15 +68,9 @@ ttl_ms
 payload
 ```
 
-设备链路根据传输条件增加长度、帧终止符和CRC。真实运动消息还必须携带或关联控制会话，接收端拒绝：
+Byte-oriented device links also require a length, frame terminator, and CRC. A receiver rejects unknown versions or targets, invalid or out-of-range values, duplicate/expired/out-of-order commands, commands without ownership, commands illegal in the current state, oversized frames, checksum failures, and incomplete frames.
 
-- 未知版本、目标或命令类型。
-- 非法、非有限或越界参数。
-- 重复、过期或乱序命令。
-- 未取得控制权或设备状态不允许的命令。
-- 超过固定长度、校验失败或无法完整解析的帧。
-
-命令集按目标分开：
+Device command sets remain separate:
 
 ```text
 chassis: acquire / heartbeat / velocity / stop / disable / status
@@ -84,89 +78,80 @@ arm:     ping / initialize / execute_named_action / cancel / status
 system:  snapshot / fault / estop_state
 ```
 
-MaixCam必须解析电脑消息、检查系统状态，再转换为ESP32或机械臂协议；禁止把电脑提供的任意字符串或未校验轨迹直接透传到执行设备。
+MaixCam parses and validates each computer message, checks system state, and converts it to the ESP32 or robot-arm protocol. It must never pass arbitrary strings or unchecked trajectories directly to an actuator.
 
-## 5. 命令生命周期与反馈
+## 5. Command Lifecycle
 
-每个可追踪命令使用同一序列号形成闭环：
+Every traceable command keeps one sequence number through this lifecycle:
 
 ```text
 RECEIVED → ACCEPTED → RUNNING → DONE
                 └────────────→ FAULT / REJECTED / UNKNOWN
 ```
 
-- `RECEIVED`：链路层收到完整消息。
-- `ACCEPTED`：目标设备完成校验并承诺处理。
-- `RUNNING`：动作已经开始；仅用于真实执行状态。
-- `DONE`：目标设备报告成功完成，不是MaixCam写出字节即完成。
-- `FAULT`：目标明确报告失败。
-- `REJECTED`：命令未执行，例如状态、参数、TTL或控制权不满足。
-- `UNKNOWN`：链路中断且无法确认动作是否执行或完成；禁止自动重试非幂等动作。
+- `RECEIVED`: a complete frame arrived.
+- `ACCEPTED`: the target validated and committed to handling it.
+- `RUNNING`: physical execution has started.
+- `DONE`: the target device reported successful completion; writing bytes is not completion.
+- `FAULT`: the target explicitly reported failure.
+- `REJECTED`: the command was not executed because state, parameters, TTL, or ownership were invalid.
+- `UNKNOWN`: a link failed and execution or completion cannot be determined. Never auto-retry a non-idempotent command in this state.
 
-电脑只有在收到与原序列号匹配的终态后才能推进任务。TCP连接成功、UART写入成功、TCP232已连接或旧协议返回“运行中”均不能代替动作完成反馈。
+The computer advances a task only after receiving a matching terminal state. A connected TCP socket, a successful UART write, an online TCP232, or a legacy "running" response is not proof of completion.
 
-## 6. 三端常驻服务
+## 6. Resident Services
 
 ### 6.1 MaixCam
 
-MaixCam常驻网关需要协调：
+The resident gateway coordinates video and camera ownership, the computer command/status session, ESP32 UART, arm UART/TCP232, queues, sequence matching, timeouts, status aggregation, and local task gates between chassis stop and arm motion.
 
-- 视频服务和摄像头所有权。
-- 电脑命令/状态会话。
-- ESP32 UART适配器。
-- 机械臂UART/TCP232适配器。
-- 命令队列、序列号、响应匹配和超时。
-- 底盘停车与机械臂动作之间的本地门禁。
-
-MaixPy默认通信监听器可能占用 `/dev/ttyS0`。现有视频后端已释放默认监听器；最终网关仍须对摄像头、UART0和UART2实施明确的单一所有权，不能依赖多个互不知情的进程争抢设备节点。
+MaixPy's default communication listener may own `/dev/ttyS0`. The existing video backend removes that listener, but the final gateway must explicitly enforce single ownership of the camera, UART0, and UART2. Independent processes must not race for device nodes.
 
 ### 6.2 ESP32
 
-ESP32常驻底盘服务需要在开机安全空闲后初始化UART、状态机和CAN。UART命令失联、心跳过期或解析异常时在本地停车；Wi-Fi和WebREPL不参与运行控制。
+The resident chassis service starts in safe idle, then initializes UART, its state machine, and CAN. It stops locally on UART loss, heartbeat expiry, or parse failure. Wi-Fi and WebREPL do not participate in runtime control.
 
-当前历史程序只接收、打印MaixCam字符串并回复裸 `ok`，没有形成命令到安全底盘动作的正式映射，因此不能直接作为本架构的底盘运行服务。
+The legacy program only prints MaixCam strings and returns raw `ok`; it does not safely map commands to chassis motion and cannot serve as the production runtime service.
 
-### 6.3 机械臂
+### 6.3 Robot Arm
 
-机械臂控制器运行DobotStudio项目，在LAN1创建TCP服务并等待TCP232输入。工程运行后LAN2可以拔除，已通过无运动PING和一次固定低速动作验证。
+The controller runs a DobotStudio project that hosts a LAN1 TCP service and waits for TCP232 input. Once the project is running, LAN2 can be unplugged; non-motion PING and one fixed low-speed action have passed in that state.
 
-冷启动不假定自动运行工程。当前安全启动基线为：人工确认初始点和工作区、机械臂使能、通过已配置的本体运行按键启动指定工程、MaixCam以无运动握手确认服务就绪。未收到就绪反馈前拒绝动作。
+Do not assume cold-boot auto-start. The current safe sequence is to verify the initial pose and workspace, enable the arm, start the configured project with the controller's run button, and require a non-motion readiness handshake from MaixCam before accepting an action.
 
-## 7. 正常启动顺序
+## 7. Normal Startup
 
-```text
-1. 底盘保持架空/限位或处于任务约定的安全区域，机械臂处于安全初始点。
-2. ESP32、MaixCam、TCP232和机械臂上电。
-3. ESP32进入safe_idle并启动UART服务，不自动恢复旧速度。
-4. 人工使能机械臂并启动已配置的LAN1工程。
-5. MaixCam取得UART所有权，分别完成ESP32和机械臂无运动握手。
-6. MaixCam启动电脑命令/状态入口和视频服务。
-7. 电脑连接MaixCam并取得完整状态快照。
-8. 所有必需状态为READY后，电脑显式取得任务控制权。
-```
+1. Restrain the chassis or place it in the agreed safe area, and place the arm at its safe initial pose.
+2. Power ESP32, MaixCam, TCP232, and the robot arm.
+3. ESP32 enters `safe_idle`, starts UART, and does not restore an old velocity.
+4. An on-site person enables the arm and starts the configured LAN1 project.
+5. MaixCam acquires UART ownership and performs non-motion handshakes with ESP32 and the arm.
+6. MaixCam starts its computer command/status endpoint and video service.
+7. The computer connects and obtains a complete status snapshot.
+8. After every required component is `READY`, the computer explicitly acquires task control.
 
-任何缺失状态都保持安全空闲，不因为某条链路稍后恢复而自动重放旧命令。
+A missing state keeps the system idle. Link recovery never replays an old command automatically.
 
-## 8. 故障与本地安全
+## 8. Fault Handling and Local Safety
 
-| 故障 | 本地行为 |
+| Fault | Required local behavior |
 |---|---|
-| 电脑或Wi-Fi断开 | MaixCam停止接受该会话的新任务；ESP32按本地UART心跳规则停车 |
-| MaixCam进程退出 | ESP32 UART心跳超时停车；机械臂不接收新任务，当前动作状态按实际协议标记 |
-| MaixCam—ESP32 UART断开 | ESP32停车并报告/保持故障；MaixCam拒绝后续联合任务 |
-| MaixCam—机械臂链路断开 | MaixCam进入FAULT，当前非幂等动作标记UNKNOWN，不自动重试 |
-| 视频断开 | 停止依赖视觉的新决策；不能用“最后一帧”继续自动任务 |
-| 设备重启 | 清除控制权、队列和旧序列状态，重新完成无运动握手 |
+| Computer or Wi-Fi disconnects | MaixCam accepts no new tasks from that session; ESP32 stops under its UART heartbeat policy |
+| MaixCam process exits | ESP32 stops after UART heartbeat timeout; the arm receives no new task; in-flight action status follows the real protocol evidence |
+| MaixCam-ESP32 UART disconnects | ESP32 stops and retains/reports fault; MaixCam rejects chassis-dependent tasks |
+| MaixCam-arm link disconnects | MaixCam enters `FAULT`; an uncertain non-idempotent action becomes `UNKNOWN` and is not retried |
+| Video disconnects | Stop vision-dependent decisions; never continue from the last frame |
+| A device restarts | Clear ownership, queues, and old sequence state, then repeat non-motion handshakes |
 
-实体急停、本体限位和ESP32本地停车不依赖电脑、Wi-Fi、SSH、WebREPL或MaixCam软件急停。
+The physical emergency stop, robot limits, and ESP32 local stop must not depend on the computer, Wi-Fi, SSH, WebREPL, or a MaixCam software stop.
 
-## 9. 实施顺序
+## 9. Implementation Order
 
-1. 定义共享消息外壳、状态语义、跨端测试向量和模拟器。
-2. 实现ESP32 UART安全底盘服务，并先完成L1和无运动L2。
-3. 实现MaixCam ESP32适配器和电脑命令/状态网关。
-4. 将RPA1诊断扩展为机械臂通用的有界任务服务，不开放任意轨迹透传。
-5. 实现电脑端MaixCam客户端、视觉结果输入和任务状态机。
-6. 依次进行L2连接、L3单设备运动和L4多设备联锁验证。
+1. Define the shared envelope, state semantics, cross-device vectors, and simulators.
+2. Implement the ESP32 UART safety service and pass L1 plus non-motion L2.
+3. Implement the MaixCam ESP32 adapter and computer command/status gateway.
+4. Extend RPA1 diagnostics into a bounded generic arm task service without arbitrary trajectory pass-through.
+5. Implement the computer-side MaixCam client, vision input, and task state machine.
+6. Progress through L2 connectivity, L3 single-device motion, and L4 interlock validation.
 
-在前一步的失败、重连和超时测试通过前，不进入下一层真实运动验证。
+Do not begin a higher-risk motion stage until failure, reconnect, and timeout behavior of the preceding layer has passed.

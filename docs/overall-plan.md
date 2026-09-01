@@ -14,7 +14,7 @@
 
 ## 2. Two-Plane Architecture
 
-Detailed runtime and deployment rules are in [Runtime Baseline](runtime/README.md) and [Deployment Baseline](deployment/README.md).
+Detailed runtime and deployment rules are in [Runtime Baseline](runtime/README.md) and [Deployment Baseline](deployment/README.md). The current deployable offline candidate and machine-day gates are in [Offline Runtime Integration](integration/offline-runtime-candidate.md).
 
 ### 2.1 Runtime Plane
 

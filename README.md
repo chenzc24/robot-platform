@@ -14,6 +14,7 @@ See the [overall plan](docs/overall-plan.md), [runtime baseline](docs/runtime/RE
 
 Subsystem and operating documentation:
 
+- [Offline runtime integration candidate](docs/integration/offline-runtime-candidate.md)
 - [ESP32 MicroPython development](docs/esp32/development.md)
 - [Computer-to-ESP32 chassis TCP link](docs/esp32/chassis-tcp.md)
 - [Daily development session and troubleshooting](docs/development-session.md)

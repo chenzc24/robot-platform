@@ -21,6 +21,6 @@ chassis.* → direct ESP32 TCP session
 arm.*     → injected MaixCam arm session
 ```
 
-It validates target/name agreement and exact payload keys, requires an injected admission callback for motion, preserves correlation IDs, and reports `automatic_retry=false`. It is not yet a persistent console server or GUI, and the MaixCam arm-session endpoint remains to be implemented.
+It validates target/name agreement and exact payload keys, requires an injected admission callback for motion, preserves correlation IDs, and reports `automatic_retry=false`. `maixcam_arm_client.py` now provides the matching one-request-at-a-time NDJSON client for the MaixCam arm endpoint. Both are L1 candidates only; there is no GUI, persistent aggregate state store, or deployed endpoint yet.
 
 No credential, host address, or runtime port is hard-coded in these modules. Real values belong in ignored local configuration.

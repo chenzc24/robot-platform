@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "chassis": {
+    "direct_tcp_v2": true,
+    "can_command_write": true,
+    "can_command_acknowledgement": false,
+    "measured_chassis_feedback": false
+  },
+  "arm": {
+    "lan1_rpa2": true,
+    "motion_default_enabled": false,
+    "controller_api_return_terminal": true,
+    "measured_terminal_position": false,
+    "network_cancel": false
+  }
+}

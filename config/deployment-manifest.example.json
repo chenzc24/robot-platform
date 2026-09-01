@@ -1,0 +1,49 @@
+{
+  "release_id": "replace-with-git-commit-or-tag",
+  "protocols": {
+    "chassis": "RCP/TCP-v2",
+    "computer_to_maixcam": "control-envelope-v1",
+    "arm": "RPA2"
+  },
+  "esp32": {
+    "mode": "tcp_v2_l2",
+    "motion_permitted": false,
+    "can_constructed": false,
+    "files": [
+      "protocol/chassis_tcp_v2.py",
+      "src/esp32/app/chassis_motion_tcp_service.py",
+      "src/esp32/app/chassis_motion_tcp_server.py",
+      "src/esp32/app/chassis_runtime_factory.py",
+      "src/esp32/app/control_lease.py",
+      "src/esp32/app/main.py"
+    ]
+  },
+  "maixcam": {
+    "motion_commands_permitted": false,
+    "files": [
+      "protocol/control_envelope.py",
+      "protocol/motion_link.py",
+      "src/maixcam/arm/arm_motion_gateway.py",
+      "src/maixcam/arm/command_service.py",
+      "src/maixcam/arm/command_runtime.py",
+      "src/maixcam/arm/arm_command_server.py",
+      "src/maixcam/arm/run_arm_command_service.sh"
+    ]
+  },
+  "robot_arm": {
+    "motion_enabled": false,
+    "files": [
+      "protocol/motion_link.py",
+      "src/robot_arm/runtime/arm_motion_service.py",
+      "src/robot_arm/runtime/main.py",
+      "src/robot_arm/runtime/var.py",
+      "src/robot_arm/runtime/point.json",
+      "src/robot_arm/runtime/prj.json"
+    ]
+  },
+  "rollback": {
+    "esp32": "replace-with-readback-or-validated-release",
+    "maixcam": "replace-with-previous-release-directory",
+    "robot_arm": "replace-with-previous-dobotstudio-project"
+  }
+}

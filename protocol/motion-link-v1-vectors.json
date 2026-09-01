@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "vectors": [
+    {
+      "name": "rpa2_ping",
+      "marker": "RPA2",
+      "type": "PING",
+      "sequence": 1,
+      "ttl_ms": 1000,
+      "payload": "",
+      "frame": "RPA2|PING|1|1000||4256\n"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # Deployment and Maintenance Baseline
 
-- Status: individual development channels are available; atomic release, version rollback, and a unified release manifest are not complete
+- Status: individual development channels are available; an offline, motion-disabled release-manifest template now exists, but atomic release and real rollback acceptance remain incomplete
 - Scope: publishing code from the computer to ESP32, MaixCam, and the robot arm; configuring TCP232; startup, health checks, and recovery
 - Excludes: normal task commands and runtime behavior; see [Runtime Baseline](../runtime/README.md)
 
@@ -37,7 +37,7 @@ VS Code local source
 - Entering the REPL can interrupt `main.py`. Close the session, reset the device, and restore the production service after deployment.
 - The service starts in safe idle and never restores old velocity, enable state, or ownership.
 - After reset, confirm version and state through the dedicated computer-ESP32 TCP handshake; do not interrupt the application by re-entering REPL merely to verify it.
-- Only single-file WebREPL maintenance and protected reset currently exist. Release manifests, atomic switching, and automatic rollback remain unfinished.
+- Only single-file WebREPL maintenance and protected reset currently exist. The candidate [deployment manifest template](../../config/deployment-manifest.example.json) freezes a motion-disabled L2 file set; atomic switching and automatic rollback remain unfinished.
 
 Recovery order: confirm the current Wi-Fi address, attempt WebREPL maintenance, use USB for readback and single-file recovery, then restore known-good firmware. Never erase flash without a separate goal and confirmed backup.
 
@@ -142,4 +142,4 @@ The computer aggregates independently reported ESP32 and arm state into the syst
 | Robot arm | LAN2 project deployment, LAN1 diagnostic project, operation without LAN2 | Generic task project, version status, standard startup checks, rollback acceptance |
 | TCP232 | Current parameters support RPA1 validation | Archived configuration export and automated read-only pre-release verification |
 
-The next implementation goals are the ESP32 TCP chassis service/computer client and the MaixCam generic arm gateway. Do not begin with a three-device one-click deployment command that can trigger real hardware.
+The current offline candidate supplies the ESP32 TCP listener, computer/MaixCam arm contract, and default-deny arm project. See [Offline Runtime Integration](../integration/offline-runtime-candidate.md). Do not begin with a three-device one-click deployment command that can trigger real hardware.

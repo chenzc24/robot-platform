@@ -1,6 +1,6 @@
 # Direct Chassis and Arm-Gateway Runtime Baseline
 
-- Status: direct computer-to-ESP32 chassis boundary confirmed; non-motion TCP hardware proof passed; motion-capable TCP service foundation passes local L1 only; generic arm endpoint is not yet integrated
+- Status: direct computer-to-ESP32 chassis boundary confirmed; non-motion TCP hardware proof passed; the v2 L2 listener and computer-to-MaixCam arm endpoint pass local L1 only; neither candidate is deployed
 - Scope: normal operation of the computer, MaixCam, ESP32-S3, TCP232, and Magician 6 robot arm
 - Excludes: source deployment, firmware recovery, teaching, and device parameter configuration; see [Deployment and Maintenance](../deployment/README.md)
 
@@ -40,9 +40,9 @@ The computer, MaixCam, and ESP32 must join the LAN at runtime. Robot arm LAN2 ma
 | Channel | Direction | Transport | Current status |
 |---|---|---|---|
 | Video | MaixCam → computer | RTSP/H.264; FFmpeg/MediaMTX exposes local RTSP, HLS, and WebRTC | Passed continuous real-device video validation |
-| Chassis commands and status | Computer ↔ ESP32 | Dedicated persistent TCP service with bounded newline-delimited messages, sequence, TTL, ownership, and heartbeat | Bounded non-motion RCP1/TCP handshake passed on real hardware; RCP/TCP v2 service/client pass local L1 but are not listener-bound, deployed, or startup-integrated |
-| Arm commands and status | Computer ↔ MaixCam | Persistent bidirectional application connection with framed structured messages | Generic endpoint not implemented |
-| Arm commands and status | MaixCam ↔ TCP232 ↔ arm LAN1 | UART 115200 8N1, transparent TCP transport, and a robot-arm project | RPA1 diagnostics and one fixed action passed; generic task protocol not implemented |
+| Chassis commands and status | Computer ↔ ESP32 | Dedicated persistent TCP service with bounded newline-delimited messages, sequence, TTL, ownership, and heartbeat | RCP1/TCP passed once on hardware; v2 service/client/listener pass L1 and the listener is explicitly no-CAN/non-motion |
+| Arm commands and status | Computer ↔ MaixCam | Persistent bidirectional NDJSON control envelope | L1 endpoint/client/simulator exist; default admission rejects all motion |
+| Arm commands and status | MaixCam ↔ TCP232 ↔ arm LAN1 | UART 115200 8N1, RPA2 CRC frames, and a robot-arm project | RPA1 diagnostics and one fixed action passed; RPA2 service passes L1 and defaults to motion-disabled |
 
 Video and control are independent channels. A dropped video frame must not block a stop command, and a healthy command connection must not imply that vision output is valid.
 
@@ -118,7 +118,7 @@ ControlLease + SafeMecanumChassis
 MotorBus + MicroPython CAN
 ```
 
-`ChassisMotionTcpRuntime` polls one injected connection and all local deadlines. It deliberately does not bind a listener, create CAN, modify `main.py`, or start at boot. The default credential verifier denies every login and `motion_permitted` defaults to false.
+`ChassisMotionTcpRuntime` polls one injected connection and all local deadlines. `ChassisMotionTcpServer` now binds one client only when ignored local configuration selects `tcp_v2_l2`; that mode creates `NoMotionChassis`, never creates CAN, and keeps `motion_permitted=false`. The default credential verifier denies every login and the default application entry remains safe idle.
 
 ### 6.3 Robot Arm
 
@@ -157,8 +157,8 @@ The physical emergency stop, robot limits, and ESP32 local stop must not depend 
 1. Define the shared envelope, state semantics, cross-device vectors, and simulators.
 2. Implement the ESP32 TCP safety service and computer client; pass L1 plus non-motion hardware validation. RCP1/TCP v1 hardware proof and the separate RCP/TCP v2 local foundation now satisfy the software portion of this step.
 3. Bind and deploy v2 with motion disabled for L2 evidence, then add reviewed CAN composition and bounded motion under a separate L3 goal.
-4. Extend RPA1 diagnostics into a bounded generic arm task service without arbitrary trajectory pass-through.
-5. Implement the computer-side MaixCam arm client, vision input, and cross-device task state machine.
+4. Deploy the locally-tested RPA2 arm service and computer/MaixCam endpoint in their default-deny mode, without arbitrary trajectory pass-through.
+5. Add authenticated arm-session admission, vision input, and cross-device task state only after their non-motion L2 evidence is complete.
 6. Progress through L2 connectivity, L3 single-device motion, and L4 interlock validation.
 
 Do not begin a higher-risk motion stage until failure, reconnect, and timeout behavior of the preceding layer has passed.

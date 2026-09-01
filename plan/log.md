@@ -230,3 +230,14 @@ entry format:
 - Hardware: no device, real socket, Wi-Fi session, WebREPL, CAN, motor, MaixCam process, TCP232, robot API, deployment target, or local credential was accessed or changed.
 - Commit status: implementation commit `96371b7` was committed and pushed on `target/direct-chassis-motion-v2`; this factual status update follows as a log-only commit.
 - Follow-up: implement a bounded listener and ignored local credential loading, deploy v2 with motion and CAN disabled for L2, then create a separate on-site L3 goal for reviewed CAN composition, heartbeat stopping, and low-speed motion. Integrate the arm-only MaixCam session separately.
+
+## 2026-09-01 - Build the offline runtime integration candidate
+
+- Goal: turn resource-backed ESP32, MaixCam, and arm facts into one locally tested candidate while preserving direct computer-to-ESP32 chassis control and the separate computer-to-MaixCam-to-arm route.
+- Modified scope: added the computer/MaixCam NDJSON envelope, RPA2 framing and vectors, the MaixCam arm endpoint/client/simulator/UART restoration launcher, a default-deny DobotStudio LAN1 project, an ESP32 no-CAN v2 listener composition, local configuration/release templates, tests, and linked architecture/deployment/runbook documentation. Raw resources, the primary worktree, user-owned `.vscode/settings.json`, device state, credentials, and all hardware remained untouched.
+- Resource evidence: the ESP32 archive supplied the CAN wiring, motor mapping, speed-mode frame format, and mecanum geometry; Camera examples supplied MaixCam UART devices and the arm LAN1 TCP server shape. These facts are preserved as evidence, not copied raw archives.
+- Safety: ESP32 `tcp_v2_l2` composes `NoMotionChassis`, with `motion_permitted=false` and no CAN construction. The arm project has `MOTION_ENABLED=false` and null policy bounds; MaixCam motion admission is false by default. Unknown arm outcomes are never retried. CAN acknowledgement, physical feedback, arm terminal position, and network cancellation are declared unavailable.
+- Validation: L1; 172 local tests passed (28 protocol, 52 ESP32, 44 MaixCam, 9 robot arm, 16 console, 23 development tools). Selected sources compiled; JSON, local links, English-only changed documentation, secret review, workspace validation, shell syntax, and diff formatting passed.
+- Hardware: no device, process, endpoint, credential, file upload, CAN bus, TCP232, arm controller, video service, or motion system was accessed or changed.
+- Commit status: this record will be committed and pushed on `target/offline-runtime-integration`; user settings, secrets, caches, backups, and raw resources are excluded.
+- Follow-up: deploy each endpoint only in its default-deny L2 mode, capture rollback/readback evidence, then create a new L3 goal after the arm policy and controller terminal/cancel semantics are known.

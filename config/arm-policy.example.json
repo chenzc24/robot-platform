@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "motion_enabled": false,
+  "safe_initial_pose": null,
+  "joint_min_deg": null,
+  "joint_max_deg": null,
+  "pose_min": null,
+  "pose_max": null,
+  "user_frame": null,
+  "tool_frame": null,
+  "payload_kg": null,
+  "gripper_model": null,
+  "gripper_min_mm": 0,
+  "gripper_max_mm": 70,
+  "max_accel_pct": 20,
+  "max_speed_pct": 20,
+  "terminal_position_supported": false,
+  "network_cancel_supported": false
+}

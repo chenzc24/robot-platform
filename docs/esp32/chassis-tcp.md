@@ -84,13 +84,13 @@ Committed safety defaults remain:
 ```text
 credential verifier: absent, therefore authentication denied
 motion_permitted: false
-socket listener: not constructed
-CAN and MotorBus: not constructed
-startup integration: absent
+socket listener: available only in the explicit `tcp_v2_l2` composition
+CAN and MotorBus: not constructed by `tcp_v2_l2`
+startup integration: available only when local ignored `device_config.py` selects `tcp_v2_l2`
 ```
 
 An authenticated session must explicitly acquire a `250..2000 ms` lease and renew it with `HEARTBEAT`. Velocity contains a separate `100..500 ms` hold. Either deadline can stop and disable locally. Disconnect, malformed authenticated input, short write, or execution failure also attempts stop and disable before the session is closed.
 
 The first credential is a local pre-shared value checked by an injected verifier. It is never included in committed configuration, responses, status, or logs. It is access control on the controlled WPA-protected LAN, not TLS and not a physical safety mechanism.
 
-The next device step is not movement. A separate goal must bind a listener and deploy v2 with `motion_permitted=false`, then prove authentication rejection/acceptance, `PING`, `STATUS`, heartbeat expiry, disconnect cleanup, and rollback without CAN initialization. CAN composition and movement remain L3.
+The first device step remains non-motion: deploy `tcp_v2_l2` with a local credential and `motion_permitted=false`, then prove authentication rejection/acceptance, `PING`, `STATUS`, heartbeat expiry, disconnect cleanup, and rollback without CAN initialization. The new listener composes `NoMotionChassis`, so it cannot construct CAN or send a motor command. CAN composition and movement remain a separate L3 goal.

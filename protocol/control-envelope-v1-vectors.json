@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "vectors": [
+    {
+      "name": "arm_ping_command",
+      "message": {
+        "version": 1,
+        "kind": "command",
+        "message_id": "console-1",
+        "sequence": 1,
+        "target": "arm",
+        "name": "arm.ping",
+        "ttl_ms": 1000,
+        "payload": {}
+      },
+      "frame": "{\"kind\":\"command\",\"message_id\":\"console-1\",\"name\":\"arm.ping\",\"payload\":{},\"sequence\":1,\"target\":\"arm\",\"ttl_ms\":1000,\"version\":1}\n"
+    }
+  ]
+}

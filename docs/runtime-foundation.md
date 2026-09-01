@@ -80,7 +80,7 @@ New main entrance:
 
 - `Robot: Local preflight`: Unequipped syntax, workspace, contract and all unit tests.
 - `Robot: Run all local tests`ESP32, MaixCam and shared compact test.
-- `Robot: Check live links`: Users run manually later, checking only ESP32 WebREPL port and MaixCam SSH.
+- `Robot: Check live links`: users run manually later; maintenance checks cover ESP32 WebREPL and MaixCam SSH, while the production ESP32 TCP port is reported separately and must not be inferred from WebREPL health.
 - `MaixCam Video: Start development session`: Upload, start, computer relay and actual frame detection; still manual exit before running `num`.
 - `MaixCam Video: Status`, `Show recent log`, `PC relay status`Declining.
 - `Robot: Stop PC services`: Stop only FFmpeg and MediaMTX, not device RTSP.

@@ -15,7 +15,7 @@ Robot arm: computer → wired LAN2 → DobotStudio Pro
 TCP232:  computer → vendor configuration tool/page for one-time parameter checks
 ```
 
-These maintenance paths do not change the runtime decision that MaixCam is the only computer-facing device gateway. A maintenance endpoint must never become a second runtime control owner.
+These maintenance paths are distinct from the runtime decision that ESP32 is the direct chassis endpoint and MaixCam is the arm/video endpoint. WebREPL and SSH must never become second runtime control owners.
 
 ## 2. Source of Truth
 
@@ -36,7 +36,7 @@ VS Code local source
 - WebREPL is a deployment and maintenance channel, not the chassis runtime protocol.
 - Entering the REPL can interrupt `main.py`. Close the session, reset the device, and restore the production service after deployment.
 - The service starts in safe idle and never restores old velocity, enable state, or ownership.
-- After reset, confirm version and state through the MaixCam-ESP32 non-motion handshake; do not interrupt the application by re-entering REPL merely to verify it.
+- After reset, confirm version and state through the dedicated computer-ESP32 TCP handshake; do not interrupt the application by re-entering REPL merely to verify it.
 - Only single-file WebREPL maintenance and protected reset currently exist. Release manifests, atomic switching, and automatic rollback remain unfinished.
 
 Recovery order: confirm the current Wi-Fi address, attempt WebREPL maintenance, use USB for readback and single-file recovery, then restore known-good firmware. Never erase flash without a separate goal and confirmed backup.
@@ -101,9 +101,9 @@ For a cross-device protocol-version change, publish from execution endpoints tow
 2. Run local protocol vectors, simulators, and all relevant tests.
 3. Deploy a compatible arm project through LAN2; leave it stopped or permit only non-motion handshake.
 4. Deploy the compatible ESP32 version through WebREPL, reset to `safe_idle`, and close REPL.
-5. Deploy the MaixCam gateway through SSH/SCP with motion input disabled.
-6. Update the computer backend and console.
-7. Perform separate L2 version, state, and handshake checks for ESP32 and the arm.
+5. Deploy the MaixCam arm/video gateway through SSH/SCP with arm motion input disabled.
+6. Update the computer backend and console for both independent sessions.
+7. Perform separate L2 version, state, and handshake checks for ESP32 TCP and the arm gateway.
 8. Explicitly enable the runtime endpoint. Motion requires a separate L3/L4 safety gate.
 
 Use rolling release only when the protocol explicitly supports both versions. Otherwise update all endpoints as one stopped-task release unit.
@@ -122,7 +122,7 @@ link_state
 motion_enabled
 ```
 
-MaixCam aggregates ESP32 and arm state before reporting the system snapshot. Successful upload, a running process, or an open port alone is not release acceptance.
+The computer aggregates independently reported ESP32 and arm state into the system snapshot. Successful upload, a running process, or an open port alone is not release acceptance.
 
 ## 9. Rollback
 
@@ -137,9 +137,9 @@ MaixCam aggregates ESP32 and arm state before reporting the system snapshot. Suc
 
 | Target | Available now | Still required |
 |---|---|---|
-| ESP32 | USB recovery, WebREPL single-file maintenance, protected reset | Release manifest, atomic upload, version query, rollback, production UART service deployment |
-| MaixCam | SSH/SCP, separate video and arm diagnostic directories, start/stop logs | Unified gateway release directory, auto-start, version switching, unified resource recovery |
+| ESP32 | USB recovery, WebREPL single-file maintenance, protected reset | Release manifest, atomic upload, version query, rollback, production TCP service deployment |
+| MaixCam | SSH/SCP, separate video and arm diagnostic directories, start/stop logs | Unified arm/video gateway release directory, auto-start, version switching, unified resource recovery |
 | Robot arm | LAN2 project deployment, LAN1 diagnostic project, operation without LAN2 | Generic task project, version status, standard startup checks, rollback acceptance |
 | TCP232 | Current parameters support RPA1 validation | Archived configuration export and automated read-only pre-release verification |
 
-The next implementation goal should create the shared protocol and simulators, then the ESP32 UART service and MaixCam gateway. Do not begin with a three-device one-click deployment command that can trigger real hardware.
+The next implementation goals are the ESP32 TCP chassis service/computer client and the MaixCam generic arm gateway. Do not begin with a three-device one-click deployment command that can trigger real hardware.

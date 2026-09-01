@@ -13,11 +13,11 @@ Read these files in order before starting work:
 
 Baseline device responsibilities:
 
-- ESP32-S3: receives production runtime commands over the MaixCam UART link and owns chassis motion, CAN, motors, sensors, and low-level safety. Wi-Fi is for development and maintenance only.
-- MaixCam: owns vision, video, the computer-facing runtime endpoint, command routing to ESP32 and the robot arm, and aggregated status.
+- ESP32-S3: receives production chassis commands directly from the computer over the trusted LAN TCP service and owns chassis motion, CAN, motors, sensors, heartbeat stop, and low-level safety. WebREPL remains development and maintenance only.
+- MaixCam: owns vision capture, video, the computer-facing robot-arm endpoint, command routing to the robot arm, and arm/video status.
 - Robot arm LAN1: controlled by MaixCam through UART/TCP232.
 - Robot arm LAN2: used by the computer for maintenance, teaching, deployment, and fault diagnosis.
-- Computer: owns VS Code development, deployment, vision inference, the unified console, logging, and high-level task orchestration. During normal operation it communicates only with MaixCam.
+- Computer: owns VS Code development, deployment, vision inference, the unified console, logging, and high-level task orchestration. During normal operation it communicates directly with ESP32 for chassis control and with MaixCam for video and robot-arm tasks.
 
 Update the overall plan and obtain user confirmation before changing these boundaries.
 

@@ -4,17 +4,18 @@ This project unifies development and control of an ESP32-S3 mobile chassis, a Ma
 
 ## Current Architecture
 
-- Computer: development, deployment, debugging, vision inference, logging, and high-level task orchestration. During normal operation it communicates only with MaixCam.
-- MaixCam: video, the computer-facing command/status endpoint, command validation and routing, status aggregation, and the sole runtime gateway to ESP32 and the robot arm.
-- ESP32-S3: receives runtime commands over MaixCam UART and owns chassis motion, CAN, motors, sensors, and low-level safety. Wi-Fi is for development and maintenance only.
+- Computer: development, deployment, debugging, vision inference, logging, high-level task orchestration, direct ESP32 chassis control, and MaixCam arm/video control.
+- MaixCam: video, vision capture, the robot-arm command/status endpoint, and the UART/TCP232 gateway to robot-arm LAN1. It no longer routes chassis commands.
+- ESP32-S3: receives production chassis commands directly from the computer over a dedicated Wi-Fi/TCP runtime service and owns CAN, motors, sensors, heartbeat stop, and low-level safety. WebREPL remains maintenance-only.
 - Robot arm: receives runtime commands on LAN1 through MaixCam and TCP232. LAN2 is reserved for computer maintenance, deployment, and teaching.
-- Network: only the computer and MaixCam must join the LAN during normal operation. ESP32 also joins the 2.4 GHz development hotspot when WebREPL maintenance is required.
+- Network: the computer, MaixCam, and ESP32 join the controlled LAN during normal operation. Robot-arm LAN1 remains behind MaixCam/TCP232, and LAN2 remains a maintenance path.
 
 See the [overall plan](docs/overall-plan.md), [runtime baseline](docs/runtime/README.md), and [deployment baseline](docs/deployment/README.md).
 
 Subsystem and operating documentation:
 
 - [ESP32 MicroPython development](docs/esp32/development.md)
+- [Computer-to-ESP32 chassis TCP link](docs/esp32/chassis-tcp.md)
 - [Daily development session and troubleshooting](docs/development-session.md)
 - [Shared runtime foundation](docs/runtime-foundation.md)
 - [MaixCam-to-arm LAN1 diagnostics and controlled L3 validation](docs/robot-arm/lan1-diagnostic.md)
@@ -28,7 +29,7 @@ Use the flat CLI from the repository root for routine connection management:
 .\robot disconnect
 ```
 
-`connect` only starts a missing MaixCam video service or computer-side relay. It does not deploy code, enter the ESP32 REPL, or reset a device. See [the development-session guide](docs/development-session.md) for maintenance commands and protection rules.
+`connect` currently starts only a missing MaixCam video service or computer-side relay and reports ESP32 WebREPL as a maintenance check. It does not start the new ESP32 runtime service, deploy code, enter the ESP32 REPL, or reset a device. See [the development-session guide](docs/development-session.md) for maintenance commands and protection rules.
 
 ## Development Workflow
 

@@ -90,7 +90,7 @@ Restoring priority:
 ## 6. Not yet accessed
 
 - Visual recognition, calibration and image overloading; see base RTSP video link [`video.md`](video.md).
-- MaixCam's UART link to ESP32.
+- The retired MaixCam UART link to ESP32; chassis runtime now uses the direct computer-to-ESP32 TCP service.
 - MaixCam's UART link to TCP232/Mechanic arm LAN1.
 - Unified console status and video interface.
 

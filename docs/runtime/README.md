@@ -1,44 +1,37 @@
-# Single-Gateway Runtime Baseline
+# Direct Chassis and Arm-Gateway Runtime Baseline
 
-- Status: architecture confirmed; the generic runtime protocol and three resident device services are not yet complete
+- Status: direct computer-to-ESP32 chassis boundary confirmed; non-motion TCP foundation in progress; motion service and generic arm service are not yet complete
 - Scope: normal operation of the computer, MaixCam, ESP32-S3, TCP232, and Magician 6 robot arm
 - Excludes: source deployment, firmware recovery, teaching, and device parameter configuration; see [Deployment and Maintenance](../deployment/README.md)
 
 ## 1. Runtime Topology
 
-During normal operation, MaixCam is the only device node directly accessed by the computer:
+During normal operation, the computer maintains separate bounded sessions with ESP32 for chassis control and MaixCam for video and robot-arm control:
 
 ```text
 Computer backend
 vision inference, state calculation, task orchestration, unified console
-          │
-          │ Wi-Fi: video, commands, status
-          ▼
-MaixCam unified gateway
-    ├── UART2 /dev/ttyS2
-    │       ↕
-    │    ESP32 UART1
-    │       ↓
-    │   safety state machine → CAN → chassis
+    ├── Wi-Fi/TCP ──→ ESP32 safety state machine ──→ CAN ──→ chassis
+    │                     ↑ commands/status
     │
-    └── UART0 /dev/ttyS0
-            ↕
-          TCP232
-            ↕ wired TCP
-       robot arm LAN1 service
-            ↓
-       Dobot action execution
+    └── Wi-Fi ──────→ MaixCam video and arm gateway
+                           │ UART0 /dev/ttyS0
+                           ▼
+                         TCP232
+                           │ wired TCP
+                           ▼
+                    robot arm LAN1 service
 ```
 
-Only the computer and MaixCam must join the LAN at runtime. ESP32 does not depend on Wi-Fi, and robot arm LAN2 may be disconnected. ESP32, MaixCam, TCP232, and the robot arm must still be powered and running their local services.
+The computer, MaixCam, and ESP32 must join the LAN at runtime. Robot arm LAN2 may be disconnected. ESP32, MaixCam, TCP232, and the robot arm must still be powered and running their local services.
 
 ## 2. Responsibility Boundaries
 
 | Node | Runtime responsibilities | Explicit exclusions |
 |---|---|---|
-| Computer | Receive video, run vision inference, compute high-level state, orchestrate tasks, send tasks to MaixCam | Does not control CAN directly and is not the sole emergency-stop or interlock layer |
-| MaixCam | Sole computer-facing device gateway, video output, command validation and routing, status aggregation, cross-device task gates | Does not transparently forward arbitrary motion parameters or replace local device safety |
-| ESP32 | Receive UART commands, own chassis control, enforce TTL/heartbeat and speed limits, execute CAN commands, report status | Does not depend on the computer or Wi-Fi for safe stopping and does not control the arm |
+| Computer | Receive video, run vision inference, orchestrate tasks, own one direct ESP32 chassis session and one MaixCam arm/video session | Does not control CAN or arm LAN1 directly and is not the sole emergency-stop or interlock layer |
+| MaixCam | Video output, robot-arm command validation/routing, arm status, and arm task gates | Does not route chassis commands or replace local device safety |
+| ESP32 | Receive direct TCP chassis commands, own chassis control, enforce ownership/TTL/heartbeat and speed limits, execute CAN commands, report status | WebREPL is maintenance-only; safe stopping cannot depend on the computer remaining online; no arm control |
 | TCP232 | Transparent byte transport between MaixCam UART and robot arm LAN1 TCP | Does not parse the application protocol or decide whether an action completed |
 | Robot arm | Host the LAN1 service, parse commands, own its action state machine, call the Dobot API, report results | Does not accept a second computer runtime owner and does not use LAN2 for runtime data |
 
@@ -47,8 +40,8 @@ Only the computer and MaixCam must join the LAN at runtime. ESP32 does not depen
 | Channel | Direction | Transport | Current status |
 |---|---|---|---|
 | Video | MaixCam → computer | RTSP/H.264; FFmpeg/MediaMTX exposes local RTSP, HLS, and WebRTC | Passed continuous real-device video validation |
-| Commands and aggregate status | Computer ↔ MaixCam | Persistent bidirectional application connection with framed structured messages | Not implemented |
-| Chassis commands and status | MaixCam ↔ ESP32 | UART at a 115200 baseline, with framing, sequence, TTL, checksum, and heartbeat | Legacy receiver skeleton exists; formal protocol not implemented or validated |
+| Chassis commands and status | Computer ↔ ESP32 | Dedicated persistent TCP service with bounded newline-delimited messages, sequence, TTL, ownership, and heartbeat | Bounded non-motion RCP1/TCP handshake passed on real hardware; resident motion service not implemented |
+| Arm commands and status | Computer ↔ MaixCam | Persistent bidirectional application connection with framed structured messages | Generic endpoint not implemented |
 | Arm commands and status | MaixCam ↔ TCP232 ↔ arm LAN1 | UART 115200 8N1, transparent TCP transport, and a robot-arm project | RPA1 diagnostics and one fixed action passed; generic task protocol not implemented |
 
 Video and control are independent channels. A dropped video frame must not block a stop command, and a healthy command connection must not imply that vision output is valid.
@@ -68,7 +61,7 @@ ttl_ms
 payload
 ```
 
-Byte-oriented device links also require a length, frame terminator, and CRC. A receiver rejects unknown versions or targets, invalid or out-of-range values, duplicate/expired/out-of-order commands, commands without ownership, commands illegal in the current state, oversized frames, checksum failures, and incomplete frames.
+Byte-oriented device links require framing and integrity checks appropriate to their transport. TCP chassis messages use bounded newline-delimited JSON and rely on TCP integrity; UART arm messages retain explicit checksum requirements. A receiver rejects unknown versions or targets, invalid or out-of-range values, duplicate/expired/out-of-order commands, commands without ownership, commands illegal in the current state, oversized frames, and incomplete frames.
 
 Device command sets remain separate:
 
@@ -78,7 +71,7 @@ arm:     ping / initialize / execute_named_action / cancel / status
 system:  snapshot / fault / estop_state
 ```
 
-MaixCam parses and validates each computer message, checks system state, and converts it to the ESP32 or robot-arm protocol. It must never pass arbitrary strings or unchecked trajectories directly to an actuator.
+ESP32 parses and validates direct chassis messages. MaixCam parses and validates robot-arm messages. Neither endpoint accepts arbitrary strings or unchecked actuator parameters. The computer combines their reported states for cross-device task gates but does not weaken either device's local checks.
 
 ## 5. Command Lifecycle
 
@@ -103,15 +96,15 @@ The computer advances a task only after receiving a matching terminal state. A c
 
 ### 6.1 MaixCam
 
-The resident gateway coordinates video and camera ownership, the computer command/status session, ESP32 UART, arm UART/TCP232, queues, sequence matching, timeouts, status aggregation, and local task gates between chassis stop and arm motion.
+The resident gateway coordinates video and camera ownership, the computer arm command/status session, arm UART/TCP232, queues, sequence matching, timeouts, and arm status. It no longer owns an ESP32 UART or chassis command route.
 
-MaixPy's default communication listener may own `/dev/ttyS0`. The existing video backend removes that listener, but the final gateway must explicitly enforce single ownership of the camera, UART0, and UART2. Independent processes must not race for device nodes.
+MaixPy's default communication listener may own `/dev/ttyS0`. The existing video backend removes that listener, but the final gateway must explicitly enforce single ownership of the camera and UART0. Independent processes must not race for device nodes.
 
 ### 6.2 ESP32
 
-The resident chassis service starts in safe idle, then initializes UART, its state machine, and CAN. It stops locally on UART loss, heartbeat expiry, or parse failure. Wi-Fi and WebREPL do not participate in runtime control.
+The resident chassis service starts in safe idle, opens its dedicated TCP runtime port, and initializes the state machine and CAN only in a separately validated motion mode. It stops locally on client disconnect, heartbeat expiry, command expiry, parse failure, or ownership loss. WebREPL does not participate in runtime control.
 
-The legacy program only prints MaixCam strings and returns raw `ok`; it does not safely map commands to chassis motion and cannot serve as the production runtime service.
+The legacy program's Wi-Fi/WebREPL bootstrap and PS2 loop do not expose a production TCP chassis service. WebREPL execution is not a substitute for the resident endpoint.
 
 ### 6.3 Robot Arm
 
@@ -123,11 +116,11 @@ Do not assume cold-boot auto-start. The current safe sequence is to verify the i
 
 1. Restrain the chassis or place it in the agreed safe area, and place the arm at its safe initial pose.
 2. Power ESP32, MaixCam, TCP232, and the robot arm.
-3. ESP32 enters `safe_idle`, starts UART, and does not restore an old velocity.
+3. ESP32 enters `safe_idle`, starts its TCP endpoint, and does not restore an old velocity, owner, or client session.
 4. An on-site person enables the arm and starts the configured LAN1 project.
-5. MaixCam acquires UART ownership and performs non-motion handshakes with ESP32 and the arm.
-6. MaixCam starts its computer command/status endpoint and video service.
-7. The computer connects and obtains a complete status snapshot.
+5. MaixCam acquires arm UART ownership and performs a non-motion handshake with the arm.
+6. MaixCam starts its arm command/status endpoint and video service.
+7. The computer connects independently to ESP32 and MaixCam and obtains complete status snapshots.
 8. After every required component is `READY`, the computer explicitly acquires task control.
 
 A missing state keeps the system idle. Link recovery never replays an old command automatically.
@@ -136,9 +129,9 @@ A missing state keeps the system idle. Link recovery never replays an old comman
 
 | Fault | Required local behavior |
 |---|---|
-| Computer or Wi-Fi disconnects | MaixCam accepts no new tasks from that session; ESP32 stops under its UART heartbeat policy |
-| MaixCam process exits | ESP32 stops after UART heartbeat timeout; the arm receives no new task; in-flight action status follows the real protocol evidence |
-| MaixCam-ESP32 UART disconnects | ESP32 stops and retains/reports fault; MaixCam rejects chassis-dependent tasks |
+| Computer or hotspot disconnects | ESP32 stops under its local TCP heartbeat policy; MaixCam accepts no new arm tasks from that session |
+| ESP32 TCP client disconnects | ESP32 stops locally, clears ownership and old sequence state, and requires a fresh handshake |
+| MaixCam process exits | The arm receives no new task; in-flight action status follows the real protocol evidence; ESP32 chassis safety remains independent |
 | MaixCam-arm link disconnects | MaixCam enters `FAULT`; an uncertain non-idempotent action becomes `UNKNOWN` and is not retried |
 | Video disconnects | Stop vision-dependent decisions; never continue from the last frame |
 | A device restarts | Clear ownership, queues, and old sequence state, then repeat non-motion handshakes |
@@ -148,10 +141,10 @@ The physical emergency stop, robot limits, and ESP32 local stop must not depend 
 ## 9. Implementation Order
 
 1. Define the shared envelope, state semantics, cross-device vectors, and simulators.
-2. Implement the ESP32 UART safety service and pass L1 plus non-motion L2.
-3. Implement the MaixCam ESP32 adapter and computer command/status gateway.
+2. Implement the ESP32 TCP safety service and computer client; pass L1 plus non-motion hardware validation.
+3. Add authenticated ownership, heartbeat stop, and bounded motion commands under a separate L3 goal.
 4. Extend RPA1 diagnostics into a bounded generic arm task service without arbitrary trajectory pass-through.
-5. Implement the computer-side MaixCam client, vision input, and task state machine.
+5. Implement the computer-side MaixCam arm client, vision input, and cross-device task state machine.
 6. Progress through L2 connectivity, L3 single-device motion, and L4 interlock validation.
 
 Do not begin a higher-risk motion stage until failure, reconnect, and timeout behavior of the preceding layer has passed.

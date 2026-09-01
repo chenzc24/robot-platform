@@ -1,0 +1,49 @@
+{
+  "protocol": "RCP1/TCP",
+  "version": 1,
+  "encoding": "ascii-json-line",
+  "vectors": [
+    {
+      "type": "HELLO",
+      "sequence": 1,
+      "ttl_ms": 1000,
+      "payload": {"client": "console"},
+      "frame": "{\"version\":1,\"sequence\":1,\"type\":\"HELLO\",\"ttl_ms\":1000,\"payload\":{\"client\":\"console\"}}\n"
+    },
+    {
+      "type": "WELCOME",
+      "sequence": 1,
+      "ttl_ms": 0,
+      "payload": {"service": "chassis", "motion_enabled": false},
+      "frame": "{\"version\":1,\"sequence\":1,\"type\":\"WELCOME\",\"ttl_ms\":0,\"payload\":{\"service\":\"chassis\",\"motion_enabled\":false}}\n"
+    },
+    {
+      "type": "PING",
+      "sequence": 2,
+      "ttl_ms": 1000,
+      "payload": {},
+      "frame": "{\"version\":1,\"sequence\":2,\"type\":\"PING\",\"ttl_ms\":1000,\"payload\":{}}\n"
+    },
+    {
+      "type": "PONG",
+      "sequence": 2,
+      "ttl_ms": 0,
+      "payload": {"protocol": 1},
+      "frame": "{\"version\":1,\"sequence\":2,\"type\":\"PONG\",\"ttl_ms\":0,\"payload\":{\"protocol\":1}}\n"
+    },
+    {
+      "type": "STATUS",
+      "sequence": 3,
+      "ttl_ms": 1000,
+      "payload": {},
+      "frame": "{\"version\":1,\"sequence\":3,\"type\":\"STATUS\",\"ttl_ms\":1000,\"payload\":{}}\n"
+    },
+    {
+      "type": "STATE",
+      "sequence": 3,
+      "ttl_ms": 0,
+      "payload": {"service": "safe_idle", "motion_enabled": false},
+      "frame": "{\"version\":1,\"sequence\":3,\"type\":\"STATE\",\"ttl_ms\":0,\"payload\":{\"service\":\"safe_idle\",\"motion_enabled\":false}}\n"
+    }
+  ]
+}

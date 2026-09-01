@@ -83,7 +83,7 @@ Coverage includes safe-idle fallback, stop from disabled, drive rejection while 
 
 - MicroPython CAN, real CAN, and motor-driver feedback.
 - PS2 input, 250 ms link-loss stopping, and control arbitration.
-- MaixCam UART runtime control, sensors, homing, and servos.
+- Computer-facing TCP motion control, authentication, heartbeat-driven local stop, sensors, homing, and servos.
 - Real motor enable/disable, stop, fault, and link-loss behavior.
 
 L1 results do not replace L2 connectivity validation or the L3 motion safety gate.

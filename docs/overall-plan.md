@@ -1,6 +1,6 @@
 # Unified Robot Development and Control Plan
 
-- Version: 1.1
+- Version: 1.2
 - Baseline date: 2026-09-01
 - Devices: ESP32-S3 chassis, MaixCam, Magician 6 robot arm, and development computer
 
@@ -20,20 +20,18 @@ Detailed runtime and deployment rules are in [Runtime Baseline](runtime/README.m
 
 ```text
 Computer: vision inference, task orchestration, unified console
-                         │
-                         │ Wi-Fi: video, commands, status
-                         ▼
-                   MaixCam gateway
-              ┌──────────┴──────────┐
-              │ UART2               │ UART0
-              ▼                     ▼
-           ESP32-S3              TCP232
-              │ CAN                 │ wired TCP
-              ▼                     ▼
-            chassis          robot arm LAN1
+              ├── Wi-Fi/TCP: chassis commands/status ──→ ESP32-S3 ── CAN ──→ chassis
+              │
+              └── Wi-Fi: video and arm commands/status ─→ MaixCam
+                                                            │ UART0
+                                                            ▼
+                                                          TCP232
+                                                            │ wired TCP
+                                                            ▼
+                                                     robot arm LAN1
 ```
 
-Only the computer and MaixCam must join the runtime LAN. ESP32 does not depend on Wi-Fi, and arm LAN2 may be disconnected.
+The computer, MaixCam, and ESP32 must join the runtime LAN. Arm LAN2 may be disconnected after the robot-arm project is deployed and started.
 
 ### 2.2 Deployment and Maintenance Plane
 
@@ -50,9 +48,9 @@ Maintenance endpoints never become a second runtime control owner.
 
 | Node | Primary responsibilities | Exclusions |
 |---|---|---|
-| Computer | VS Code, deployment, vision inference, unified console, logs, task orchestration | No direct production commands to ESP32 or arm; not the final emergency stop or real-time interlock |
-| MaixCam | Video, sole computer runtime endpoint, validation/routing, status aggregation, ESP32 and arm gateway | No unchecked motion pass-through; does not replace local safety |
-| ESP32-S3 | UART runtime input, chassis motion, CAN, motors, sensors, heartbeat stop, status | No Wi-Fi runtime dependency; no arm control |
+| Computer | VS Code, deployment, vision inference, unified console, logs, task orchestration, direct ESP32 chassis session, MaixCam arm/video session | No direct CAN or robot-arm LAN1 access; not the final emergency stop or real-time interlock |
+| MaixCam | Video, vision capture, robot-arm validation/routing, arm status, UART0/TCP232 gateway | No chassis command routing; no unchecked arm pass-through; does not replace local safety |
+| ESP32-S3 | Wi-Fi/TCP runtime input, chassis motion, CAN, motors, sensors, heartbeat stop, status | WebREPL is not runtime control; no arm control |
 | TCP232 | Transparent UART-to-arm-LAN1 TCP transport | No application state machine |
 | Robot arm | Motion execution, controller state, taught points, controller safety | No runtime dependency on hotspot or LAN2 |
 
@@ -78,7 +76,7 @@ See [Network Baseline](network/README.md) for detailed addressing, failure behav
 
 - USB: initial firmware, Wi-Fi bootstrap, backup, and recovery.
 - WebREPL: routine file synchronization and soft reset on a trusted development LAN.
-- Production runtime: MaixCam-ESP32 UART, with velocity, stop, status, heartbeat, and fault handling.
+- Production runtime: dedicated computer-to-ESP32 Wi-Fi/TCP service with ownership, velocity, stop, status, heartbeat, and fault handling. WebREPL uses a separate maintenance port and lifecycle.
 
 ### MaixCam
 
@@ -95,13 +93,13 @@ See [Network Baseline](network/README.md) for detailed addressing, failure behav
 ## 5. Control and Data Flow
 
 ```text
-Chassis: computer → Wi-Fi → MaixCam → UART → ESP32 → CAN/motors
+Chassis: computer → Wi-Fi/TCP → ESP32 → CAN/motors
 Video:   MaixCam → Wi-Fi → computer vision and console
 Arm:     computer → Wi-Fi → MaixCam → UART → TCP232 → LAN1
-Status:  ESP32/arm → MaixCam → Wi-Fi → computer
+Status:  ESP32 → Wi-Fi/TCP → computer; arm → MaixCam → Wi-Fi → computer
 ```
 
-MaixCam validates and converts device-specific commands and enforces cross-device gates such as requiring confirmed chassis stop before an arm task. ESP32 retains final limits, ownership, heartbeat, and stop behavior. The arm retains controller limits and body safety.
+The computer orchestrator combines independently reported chassis and arm state and enforces cross-device gates such as requiring confirmed chassis stop before an arm task. ESP32 validates chassis commands and retains final limits, ownership, heartbeat, and stop behavior. MaixCam validates robot-arm tasks, and the arm retains controller limits and body safety.
 
 The first high-level task sequence is:
 
@@ -145,16 +143,17 @@ Service-health state in `protocol/runtime-status.schema.json` remains distinct f
 4. L2 connectivity and L3 low-speed single-device validation.
 5. Unified console and L4 coordinated interlock validation.
 
-Completed evidence as of 2026-09-01 includes ESP32 USB/WebREPL maintenance, PS2-CAN chassis operation, MaixCam SSH/SCP, continuous RTSP video, and MaixCam-UART-TCP232-arm LAN1 PING plus one fixed low-speed action. These facts do not prove the generic gateway, generic arm service, or coordinated system.
+Completed evidence as of 2026-09-01 includes ESP32 USB/WebREPL maintenance, PS2-CAN chassis operation, a bounded direct computer-to-ESP32 TCP non-motion handshake, MaixCam SSH/SCP, continuous RTSP video, and MaixCam-UART-TCP232-arm LAN1 PING plus one fixed low-speed action. The attempted MaixCam-ESP32 UART downlink did not pass, and the user confirmed direct computer-to-ESP32 TCP as the replacement runtime boundary. The TCP proof covers only `HELLO`, `PING`, and `STATUS`; these facts do not yet prove the resident chassis motion service, generic arm service, or coordinated system.
 
 ## 10. Frozen First-Version Decisions
 
 1. Daily development uses VS Code.
 2. The first development LAN is a 2.4 GHz phone hotspot.
-3. ESP32 owns chassis control and low-level safety; its Wi-Fi is maintenance-only.
-4. MaixCam is the sole computer-facing runtime node and gateway for ESP32 and the arm.
+3. ESP32 owns chassis control and low-level safety; its dedicated Wi-Fi/TCP service is the chassis runtime endpoint, while WebREPL is maintenance-only.
+4. MaixCam is the computer-facing video and robot-arm gateway and does not route chassis commands.
 5. Arm LAN1 is for runtime control; LAN2 is for computer maintenance.
 6. Tailscale is a possible future maintenance path, never a real-time safety link.
 7. Raw vendor-resource directories are excluded from Git.
+8. The unified console may hold independent chassis and arm sessions, but each device still permits only one authorized runtime owner.
 
 Update this document and obtain user confirmation before changing these decisions.

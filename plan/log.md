@@ -209,3 +209,13 @@ entry format:
 - Hardware: no device was connected, written, reset, or moved. No source code, protocol schema, device configuration, backup, or raw-resource archive changed.
 - Commit status: this record is committed and pushed with `target/english-only-documentation`; the commit excludes user settings, credentials, caches, backups, and raw resources.
 - Follow-up: future edits should keep Markdown documentation in English. Historical records may receive style-only copy editing, but their factual outcomes must not change.
+
+## 2026-09-01 - Establish the direct computer-to-ESP32 TCP runtime foundation
+
+- Goal: replace the failed MaixCam-to-ESP32 UART runtime boundary with a direct computer-to-ESP32 Wi-Fi/TCP chassis endpoint and prove a bounded application-level link without motion.
+- Modified scope: architecture entry points and active runtime/network/deployment/subsystem documents; RCP1/TCP v1 codec, vectors, ESP32 responder/probe, computer client/probe, tests, workspace validation, and this goal record. The user-owned `.vscode/settings.json` remained read-only and unstaged.
+- Local validation: 16 protocol, 39 ESP32, 6 console, 23 development-tool, 40 MaixCam, and 7 robot-arm tests passed, for 131 total. Python syntax, workspace policy, JSON, Markdown relative links, changed-scope English, secret review, and Git diff formatting passed.
+- Hardware validation: after the user confirmed the current L3 safety gate, the legacy chassis instance was interrupted and disabled. Three isolated non-startup files were uploaded and verified byte-for-byte. One real TCP session returned `WELCOME`, `PONG`, and `STATE` for sequences `1,2,3`; both ends reported three handled requests, safe idle, motion disabled, and complete.
+- Safety and restoration: no motion/CAN/MotorBus command was sent. The one-client server exited, a protected reset was sent, WebREPL returned online, and the temporary runtime port was closed. The reset socket did not confirm closure before its timeout, and PS2 operation after reset was not exercised.
+- Commit status: committed on `target/computer-esp32-tcp-runtime` and synchronized with its origin branch; the commit excludes user settings, credentials, caches, backups, and raw resources.
+- Follow-up: implement authenticated ownership, heartbeat-driven local stop, bounded chassis commands, CAN composition, resident startup, and reconnect behavior under a separate L3 goal before claiming production chassis control.

@@ -2,7 +2,7 @@
 
 ## 1. Current boundary
 
-At this stage, only MaixCam's video link to the computer is set up, without a unified console, visual recognition, ESP32 communication or robot arm control.
+At this stage, only MaixCam's video link to the computer is set up, without a unified console, visual recognition, or generic robot-arm control. ESP32 chassis communication is now an independent direct computer-to-ESP32 TCP path.
 
 ```text
 MaixCam GC4653

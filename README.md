@@ -4,13 +4,17 @@
 
 ## 当前架构
 
-- 电脑：统一开发、部署、调试、日志和任务编排。
-- ESP32-S3：底盘运动、CAN、电机、传感器和底层安全。
-- MaixCam：图像处理、视频服务以及机械臂运行控制网关。
+- 电脑：统一开发、部署、调试、视觉推理、日志和高层任务编排；正常运行时只连接MaixCam。
+- MaixCam：视频服务、电脑通信、命令校验与分发、状态汇总，以及ESP32和机械臂的唯一运行网关。
+- ESP32-S3：通过MaixCam UART接收运行命令，负责底盘运动、CAN、电机、传感器和底层安全；Wi-Fi只用于开发维护。
 - 机械臂：通过 LAN1 接收 MaixCam 经 TCP232 转发的控制；LAN2 供电脑维护和示教。
-- 开发网络：电脑、ESP32 和 MaixCam 连接同一个 2.4 GHz 手机热点。
+- 网络：运行时只有电脑和MaixCam必须加入局域网；开发维护时ESP32也连接同一个2.4 GHz热点。
 
 完整方案见 [docs/overall-plan.md](docs/overall-plan.md)。
+
+正常任务的消息、状态、常驻服务和安全边界见 [docs/runtime/README.md](docs/runtime/README.md)。
+
+三端源码发布、启动、健康检查和恢复路径见 [docs/deployment/README.md](docs/deployment/README.md)。
 
 ESP32 MicroPython开发环境见 [docs/esp32/development.md](docs/esp32/development.md)。
 

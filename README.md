@@ -12,6 +12,8 @@ This project unifies development and control of an ESP32-S3 mobile chassis, a Ma
 
 See the [overall plan](docs/overall-plan.md), [runtime baseline](docs/runtime/README.md), and [deployment baseline](docs/deployment/README.md).
 
+The proposed computer application layout, controls, safety gates, and interface bindings are defined in the [unified control console UI design](docs/console/control-console-ui.md).
+
 Subsystem and operating documentation:
 
 - [Offline runtime integration candidate](docs/integration/offline-runtime-candidate.md)

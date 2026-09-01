@@ -128,6 +128,8 @@ Service-health state in `protocol/runtime-status.schema.json` remains distinct f
 
 ## 8. First Console Scope
 
+The implementation-ready layout and control specification is in [Unified Control Console UI](console/control-console-ui.md).
+
 - Link and device status for ESP32, MaixCam, and the arm.
 - Chassis manual control, limits, and stop.
 - Video, recognition results, and basic camera settings.

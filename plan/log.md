@@ -241,3 +241,13 @@ entry format:
 - Hardware: no device, process, endpoint, credential, file upload, CAN bus, TCP232, arm controller, video service, or motion system was accessed or changed.
 - Commit status: implementation commit `d501a2f` was committed and pushed on `target/offline-runtime-integration`; this factual submission update follows as a log-only commit. User settings, secrets, caches, backups, and raw resources are excluded.
 - Follow-up: deploy each endpoint only in its default-deny L2 mode, capture rollback/readback evidence, then create a new L3 goal after the arm policy and controller terminal/cancel semantics are known.
+
+## 2026-09-01 - Define the unified control console UI
+
+- Goal: define an implementation-ready modern desktop console for camera preview and future overlays, direct ESP32 chassis control, MaixCam-routed robot-arm control, command evidence, and persistent fault handling.
+- Modified scope: added `docs/console/control-console-ui.md`, linked it from the README and overall plan, and added this isolated goal plan/log. Runtime code, protocols, tests, configuration, raw resources, credentials, and all other worktrees remained read-only.
+- Design result: the reference layout gives video the dominant left workspace, stacks independent chassis and arm panels on the right, and places the command journal and active faults across the bottom. It binds only currently available candidate calls, labels unavailable physical feedback explicitly, and keeps hardware motion locked.
+- Validation: L0; the workspace validator reported no errors, changed Markdown is English-only, relative links resolve, the interactive mockup was rendered and inspected at desktop and narrow widths, and Git diff formatting passed.
+- Hardware: no device, socket, local relay, credential, process, deployment target, CAN bus, motor, TCP232, or robot-arm API was accessed or changed.
+- Commit status: intended for `target/control-console-ui-design`; the in-conversation mockup remains outside the repository, while the durable design specification is version controlled.
+- Follow-up: obtain user approval for the layout and five explicit UI decisions, then implement the PySide6 shell, simulator adapters, state store, worker wrappers, and PyAV video path under a separate L1 goal.

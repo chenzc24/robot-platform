@@ -1,6 +1,6 @@
 # Computer-ESP32 Chassis TCP Link
 
-- Protocol: [RCP1/TCP v1](../../protocol/chassis-tcp-v1.md)
+- Protocols: [RCP1/TCP v1](../../protocol/chassis-tcp-v1.md) and [RCP/TCP v2](../../protocol/chassis-tcp-v2.md)
 - Runtime port baseline: `8765`, configured locally rather than scattered through application code
 - Current safety boundary: session, liveness, and safe-state query only; no motion type exists
 - Current validation: local L1 and one bounded real-device non-motion exchange passed on 2026-09-01
@@ -67,3 +67,30 @@ The later production service must add, test, and validate together:
 - resident startup and rollback.
 
 That revision requires a fresh L3 goal. A successful non-motion TCP handshake does not authorize movement.
+
+## 5. Local RCP/TCP v2 Foundation
+
+RCP/TCP v2 is now implemented locally as a separate motion-capable revision. It does not modify v1 or convert the v1 hardware proof into motion evidence.
+
+The v2 source consists of:
+
+- `protocol/chassis_tcp_v2.py`: strict MicroPython-compatible JSON framing and validation;
+- `src/esp32/app/chassis_motion_tcp_service.py`: injected authentication, ownership lease, heartbeat, bounded velocity, stop, disable, release, status, duplicate handling, and local watchdogs;
+- `src/console/chassis_motion_tcp_client.py`: one-request-at-a-time client with lifecycle correlation and no automatic retry;
+- `src/console/motion_router.py`: computer-side routing that sends chassis commands directly to ESP32 and arm commands only to the MaixCam arm session.
+
+Committed safety defaults remain:
+
+```text
+credential verifier: absent, therefore authentication denied
+motion_permitted: false
+socket listener: not constructed
+CAN and MotorBus: not constructed
+startup integration: absent
+```
+
+An authenticated session must explicitly acquire a `250..2000 ms` lease and renew it with `HEARTBEAT`. Velocity contains a separate `100..500 ms` hold. Either deadline can stop and disable locally. Disconnect, malformed authenticated input, short write, or execution failure also attempts stop and disable before the session is closed.
+
+The first credential is a local pre-shared value checked by an injected verifier. It is never included in committed configuration, responses, status, or logs. It is access control on the controlled WPA-protected LAN, not TLS and not a physical safety mechanism.
+
+The next device step is not movement. A separate goal must bind a listener and deploy v2 with `motion_permitted=false`, then prove authentication rejection/acceptance, `PING`, `STATUS`, heartbeat expiry, disconnect cleanup, and rollback without CAN initialization. CAN composition and movement remain L3.

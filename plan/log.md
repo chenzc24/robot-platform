@@ -219,3 +219,14 @@ entry format:
 - Safety and restoration: no motion/CAN/MotorBus command was sent. The one-client server exited, a protected reset was sent, WebREPL returned online, and the temporary runtime port was closed. The reset socket did not confirm closure before its timeout, and PS2 operation after reset was not exercised.
 - Commit status: committed on `target/computer-esp32-tcp-runtime` and synchronized with its origin branch; the commit excludes user settings, credentials, caches, backups, and raw resources.
 - Follow-up: implement authenticated ownership, heartbeat-driven local stop, bounded chassis commands, CAN composition, resident startup, and reconnect behavior under a separate L3 goal before claiming production chassis control.
+
+## 2026-09-01 - Integrate direct chassis motion over RCP/TCP v2
+
+- Goal: replace the superseded MaixCam-to-ESP32 UART motion route with a local direct computer-to-ESP32 TCP motion foundation while retaining MaixCam as the video and robot-arm gateway.
+- Modified scope: new RCP/TCP v2 contract/codec/vectors, injected ESP32 motion service and connection runtime, non-retrying computer client, flat dual-session router, 26 tests, three runtime documents, and the isolated goal plan/log.
+- Parallel ownership: work ran in `E:\Device Network - direct-chassis-motion` from the real-device-validated commit `344a428`. The primary worktree, user `.vscode/settings.json`, `target/motion-services-v1`, device files, and raw resources remained read-only and unstaged.
+- Validation: L1; 157 repository tests passed (14 console, 23 development, 51 ESP32, 40 MaixCam, 22 protocol, and 7 robot-arm), all 73 repository Python files compiled, JSON and workspace checks passed, Markdown links resolved, formal source remained ASCII, and secret/unsafe-default/diff checks passed.
+- Safety: v2 defaults to no credential verifier and `motion_permitted=false`; malformed authenticated input, disconnect, short write, execution failure, hold expiry, and lease expiry attempt both stop and disable; identical duplicates replay cached responses without re-execution; unknown state-changing outcomes are never automatically retried.
+- Hardware: no device, real socket, Wi-Fi session, WebREPL, CAN, motor, MaixCam process, TCP232, robot API, deployment target, or local credential was accessed or changed.
+- Commit status: this record will be committed and pushed with `target/direct-chassis-motion-v2` after final review.
+- Follow-up: implement a bounded listener and ignored local credential loading, deploy v2 with motion and CAN disabled for L2, then create a separate on-site L3 goal for reviewed CAN composition, heartbeat stopping, and low-speed motion. Integrate the arm-only MaixCam session separately.

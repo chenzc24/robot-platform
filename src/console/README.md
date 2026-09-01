@@ -9,3 +9,18 @@ python src/console/chassis_tcp_probe.py --host <current-esp32-ip>
 ```
 
 Motion control, authentication, control leasing, heartbeat stop, reconnect policy, and console integration require a separate safety goal.
+
+## Direct Chassis Motion Foundation
+
+`chassis_motion_tcp_client.py` implements the local RCP/TCP v2 computer session. It supports authenticated `HELLO`, `PING`, `STATUS`, lease acquisition, heartbeat, enable, bounded velocity, stop, disable, and release. It sends one request at a time and never automatically retries a state-changing request whose outcome becomes unknown.
+
+`motion_router.py` is the first flat dual-session routing layer:
+
+```text
+chassis.* → direct ESP32 TCP session
+arm.*     → injected MaixCam arm session
+```
+
+It validates target/name agreement and exact payload keys, requires an injected admission callback for motion, preserves correlation IDs, and reports `automatic_retry=false`. It is not yet a persistent console server or GUI, and the MaixCam arm-session endpoint remains to be implemented.
+
+No credential, host address, or runtime port is hard-coded in these modules. Real values belong in ignored local configuration.

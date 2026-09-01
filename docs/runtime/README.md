@@ -1,6 +1,6 @@
 # Direct Chassis and Arm-Gateway Runtime Baseline
 
-- Status: direct computer-to-ESP32 chassis boundary confirmed; non-motion TCP foundation in progress; motion service and generic arm service are not yet complete
+- Status: direct computer-to-ESP32 chassis boundary confirmed; non-motion TCP hardware proof passed; motion-capable TCP service foundation passes local L1 only; generic arm endpoint is not yet integrated
 - Scope: normal operation of the computer, MaixCam, ESP32-S3, TCP232, and Magician 6 robot arm
 - Excludes: source deployment, firmware recovery, teaching, and device parameter configuration; see [Deployment and Maintenance](../deployment/README.md)
 
@@ -40,7 +40,7 @@ The computer, MaixCam, and ESP32 must join the LAN at runtime. Robot arm LAN2 ma
 | Channel | Direction | Transport | Current status |
 |---|---|---|---|
 | Video | MaixCam → computer | RTSP/H.264; FFmpeg/MediaMTX exposes local RTSP, HLS, and WebRTC | Passed continuous real-device video validation |
-| Chassis commands and status | Computer ↔ ESP32 | Dedicated persistent TCP service with bounded newline-delimited messages, sequence, TTL, ownership, and heartbeat | Bounded non-motion RCP1/TCP handshake passed on real hardware; resident motion service not implemented |
+| Chassis commands and status | Computer ↔ ESP32 | Dedicated persistent TCP service with bounded newline-delimited messages, sequence, TTL, ownership, and heartbeat | Bounded non-motion RCP1/TCP handshake passed on real hardware; RCP/TCP v2 service/client pass local L1 but are not listener-bound, deployed, or startup-integrated |
 | Arm commands and status | Computer ↔ MaixCam | Persistent bidirectional application connection with framed structured messages | Generic endpoint not implemented |
 | Arm commands and status | MaixCam ↔ TCP232 ↔ arm LAN1 | UART 115200 8N1, transparent TCP transport, and a robot-arm project | RPA1 diagnostics and one fixed action passed; generic task protocol not implemented |
 
@@ -106,6 +106,20 @@ The resident chassis service starts in safe idle, opens its dedicated TCP runtim
 
 The legacy program's Wi-Fi/WebREPL bootstrap and PS2 loop do not expose a production TCP chassis service. WebREPL execution is not a substitute for the resident endpoint.
 
+The local v2 foundation now separates four responsibilities:
+
+```text
+chassis_tcp_v2 codec
+        ↓
+ChassisMotionTcpService: authentication, lease, commands, lifecycle, watchdogs
+        ↓ injected interfaces
+ControlLease + SafeMecanumChassis
+        ↓ later L3 integration
+MotorBus + MicroPython CAN
+```
+
+`ChassisMotionTcpRuntime` polls one injected connection and all local deadlines. It deliberately does not bind a listener, create CAN, modify `main.py`, or start at boot. The default credential verifier denies every login and `motion_permitted` defaults to false.
+
 ### 6.3 Robot Arm
 
 The controller runs a DobotStudio project that hosts a LAN1 TCP service and waits for TCP232 input. Once the project is running, LAN2 can be unplugged; non-motion PING and one fixed low-speed action have passed in that state.
@@ -141,8 +155,8 @@ The physical emergency stop, robot limits, and ESP32 local stop must not depend 
 ## 9. Implementation Order
 
 1. Define the shared envelope, state semantics, cross-device vectors, and simulators.
-2. Implement the ESP32 TCP safety service and computer client; pass L1 plus non-motion hardware validation.
-3. Add authenticated ownership, heartbeat stop, and bounded motion commands under a separate L3 goal.
+2. Implement the ESP32 TCP safety service and computer client; pass L1 plus non-motion hardware validation. RCP1/TCP v1 hardware proof and the separate RCP/TCP v2 local foundation now satisfy the software portion of this step.
+3. Bind and deploy v2 with motion disabled for L2 evidence, then add reviewed CAN composition and bounded motion under a separate L3 goal.
 4. Extend RPA1 diagnostics into a bounded generic arm task service without arbitrary trajectory pass-through.
 5. Implement the computer-side MaixCam arm client, vision input, and cross-device task state machine.
 6. Progress through L2 connectivity, L3 single-device motion, and L4 interlock validation.

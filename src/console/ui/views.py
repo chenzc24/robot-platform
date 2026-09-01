@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtGui import QColor, QPainter, QPen, QTransform
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -54,6 +54,7 @@ class VideoPlaceholder(QWidget):
         self._rotation_degrees = 90
         self._connected = False
         self._frozen = False
+        self._image = None
 
     def set_state(self, video):
         self._frame_id = video.frame_id
@@ -61,6 +62,11 @@ class VideoPlaceholder(QWidget):
         self._rotation_degrees = video.rotation_degrees
         self._connected = video.link == LinkState.ONLINE
         self._frozen = video.frozen
+        self.update()
+
+    def set_frame(self, frame):
+        """Display a copied decoder frame owned by the GUI thread."""
+        self._image = frame.image
         self.update()
 
     def paintEvent(self, _event):
@@ -95,6 +101,15 @@ class VideoPlaceholder(QWidget):
         tip_y = int(rect.height() * 0.53)
         painter.drawLine(shoulder_x, shoulder_y, elbow_x, elbow_y)
         painter.drawLine(elbow_x, elbow_y, tip_x, tip_y)
+
+        if self._image is not None and not self._image.isNull():
+            rotated = self._image.transformed(QTransform().rotate(-self._rotation_degrees))
+            scaled = rotated.scaled(
+                rect.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            painter.drawImage((rect.width() - scaled.width()) // 2, (rect.height() - scaled.height()) // 2, scaled)
 
         if self._overlays_visible:
             target = rect.adjusted(int(rect.width() * 0.72), int(rect.height() * 0.48), -int(rect.width() * 0.13), -int(rect.height() * 0.24))
@@ -131,7 +146,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self, controller=None, parent=None):
         super().__init__(parent)
-        self.controller = controller or ConsoleController(self)
+        self.controller = controller or ConsoleController(parent=self)
         self.setWindowTitle("Robot Console - Simulator")
         self.setMinimumSize(1000, 620)
         self.resize(1440, 900)
@@ -530,6 +545,7 @@ class MainWindow(QMainWindow):
         self.controller.state_changed.connect(self._apply_state)
         self.controller.event_added.connect(self._append_event)
         self.controller.faults_changed.connect(self._apply_faults)
+        self.controller.video_frame_ready.connect(self.video_canvas.set_frame)
 
     def _scenario_changed(self):
         self.controller.set_scenario(self.scenario_combo.currentData())
@@ -637,10 +653,11 @@ class MainWindow(QMainWindow):
         )
         self.chassis_motion_value.setText("Enabled" if chassis.motion_enabled else "Locked")
         self.chassis_connect_button.setText("Disconnect" if chassis.link != LinkState.OFFLINE else "Connect")
-        self.chassis_acquire_button.setEnabled(chassis.link == LinkState.ONLINE and chassis.lease_owner is None)
-        self.chassis_enable_button.setEnabled(chassis.lease_owner == "console" and not chassis.motion_enabled)
-        self.chassis_disable_button.setEnabled(chassis.motion_enabled)
-        self.chassis_release_button.setEnabled(chassis.lease_owner is not None)
+        simulator_mode = state.environment == Environment.SIMULATOR
+        self.chassis_acquire_button.setEnabled(simulator_mode and chassis.link == LinkState.ONLINE and chassis.lease_owner is None)
+        self.chassis_enable_button.setEnabled(simulator_mode and chassis.lease_owner == "console" and not chassis.motion_enabled)
+        self.chassis_disable_button.setEnabled(simulator_mode and chassis.motion_enabled)
+        self.chassis_release_button.setEnabled(simulator_mode and chassis.lease_owner is not None)
         self.chassis_unlock.blockSignals(True)
         self.chassis_unlock.setChecked(chassis.manual_unlocked)
         self.chassis_unlock.blockSignals(False)
@@ -730,6 +747,12 @@ class MainWindow(QMainWindow):
         assert state.arm.manual_unlocked is False
         assert self.joint_execute_button.isEnabled() is False
         assert self.video_canvas.minimumWidth() > 0
+
+    def closeEvent(self, event):
+        runtime = getattr(self.controller, "runtime", None)
+        if runtime is not None:
+            runtime.close()
+        super().closeEvent(event)
 
 
 def _stylesheet():

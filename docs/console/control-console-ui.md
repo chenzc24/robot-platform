@@ -5,7 +5,7 @@
 - Recommended toolkit: Python 3.11+ and PySide6
 - First validation mode: local simulators; real motion remains locked
 
-Phase A is implemented as a local PySide6 simulator shell. It provides the approved layout, immutable state model, command journal, fault center, and deterministic fault scenarios. It has no RTSP decoder, real network session, device adapter, or hardware motion path; those remain separate later goals.
+Phase A is implemented as a local PySide6 simulator shell. It provides the approved layout, immutable state model, command journal, fault center, and deterministic fault scenarios. Phase B adds local-only worker foundations: ignored configuration loading, independent FIFO client sessions, copied PyAV frames, and Hardware-mode connection/status wiring. It does not contact endpoints during automated tests and does not admit hardware motion.
 
 ## 1. Purpose
 
@@ -353,10 +353,13 @@ Only after a separate L3 safety gate, deploy and validate one device at low spee
 
 ### Phase B: current interface adapters, L1
 
-- worker-thread wrappers for the existing chassis and arm clients;
-- connection manager, bounded polling, heartbeat scheduler, and no-retry behavior;
-- direct RTSP decode worker, clockwise rotation, frame metrics, and snapshots;
-- settings template with ignored local overrides.
+- worker-thread wrappers for the existing chassis and arm clients, with a separate FIFO owner for each session;
+- explicit connection, safe `PING`/`STATUS`, disconnect, terminal fault propagation, and no automatic retry;
+- direct RTSP decode worker that copies RGB frames into Qt-owned images, applies the UI display rotation, and supports configured local snapshots;
+- secret-free settings template with ignored local overrides;
+- Hardware-mode UI wiring for configuration-gated connection/status/preview only. No lease, heartbeat, enable, velocity, arm primitive, or chassis software-stop call is admitted.
+
+Bounded polling, any motion admission, deployed endpoint tests, and heartbeat scheduling remain later work. They must not be inferred from this L1 foundation.
 
 ### Phase C: hardware connectivity, L2
 

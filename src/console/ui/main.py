@@ -2,9 +2,13 @@
 
 import argparse
 import sys
+from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
 
+from .controller import ConsoleController
+from .runtime import RuntimeCoordinator
+from .runtime_config import RuntimeConfigError, load_runtime_config
 from .views import MainWindow
 
 
@@ -15,13 +19,30 @@ def parse_args(argv):
         action="store_true",
         help="Construct the window, verify its safe defaults, and exit.",
     )
+    parser.add_argument(
+        "--config",
+        default="config/console.local.json",
+        help="Optional ignored local runtime configuration JSON.",
+    )
     return parser.parse_args(argv)
+
+
+def _load_optional_runtime(path):
+    config_path = Path(path)
+    if not config_path.is_file():
+        return None
+    return RuntimeCoordinator(load_runtime_config(config_path))
 
 
 def main(argv=None):
     args = parse_args(argv if argv is not None else sys.argv[1:])
     application = QApplication.instance() or QApplication(["robot-console"])
-    window = MainWindow()
+    try:
+        runtime = _load_optional_runtime(args.config)
+    except RuntimeConfigError as error:
+        print("Local console configuration is invalid: %s" % error, file=sys.stderr)
+        return 2
+    window = MainWindow(ConsoleController(runtime=runtime))
     if args.smoke_test:
         window.run_smoke_assertions()
         window.close()

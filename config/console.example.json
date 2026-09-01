@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "chassis": {
+    "host": "",
+    "port": 0,
+    "client_id": "console",
+    "credential_env": "ROBOT_CHASSIS_CREDENTIAL",
+    "connect_timeout_seconds": 3.0
+  },
+  "arm": {
+    "host": "",
+    "port": 0,
+    "session_id": "console",
+    "connect_timeout_seconds": 3.0
+  },
+  "video": {
+    "rtsp_url": "",
+    "connect_timeout_seconds": 3.0,
+    "snapshot_directory": ""
+  }
+}

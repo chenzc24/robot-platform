@@ -17,6 +17,7 @@ from .models import (
     LinkState,
     VideoState,
 )
+from .runtime import SessionFault, SessionResult
 
 
 SCENARIOS = (
@@ -38,14 +39,25 @@ class ConsoleController(QObject):
     state_changed = Signal(object)
     event_added = Signal(object)
     faults_changed = Signal(object)
+    video_frame_ready = Signal(object)
 
-    def __init__(self, parent=None):
+    def __init__(self, runtime=None, parent=None):
         super().__init__(parent)
+        if runtime is not None and not all(hasattr(runtime, name) for name in ("connect_chassis", "connect_arm", "connect_video")):
+            raise TypeError("runtime must provide console runtime operations")
         self.state = ConsoleState()
         self.events: List[EventRecord] = []
         self._faults: Dict[str, FaultRecord] = {}
         self._next_id = 1
         self._active_arm_command = None
+        self.runtime = runtime
+        if self.runtime is not None:
+            self.runtime.chassis_state_changed.connect(self._on_hardware_chassis_state)
+            self.runtime.arm_state_changed.connect(self._on_hardware_arm_state)
+            self.runtime.video_state_changed.connect(self._on_hardware_video_state)
+            self.runtime.result_ready.connect(self._on_hardware_result)
+            self.runtime.fault_raised.connect(self._on_hardware_fault)
+            self.runtime.frame_ready.connect(self._on_hardware_frame)
 
     @staticmethod
     def now_ms():
@@ -106,6 +118,10 @@ class ConsoleController(QObject):
         environment = Environment(environment)
         if environment == self.state.environment:
             return
+        if self.state.environment == Environment.HARDWARE and self.runtime is not None:
+            self.runtime.disconnect_chassis()
+            self.runtime.disconnect_arm()
+            self.runtime.disconnect_video()
         self._faults.clear()
         self._active_arm_command = None
         self._replace(
@@ -138,6 +154,8 @@ class ConsoleController(QObject):
         return False
 
     def connect_video(self):
+        if self.state.environment == Environment.HARDWARE:
+            return self._connect_hardware("video")
         if not self._simulator_only("Video", "video.connect"):
             return False
         if self.state.scenario == "video_stale":
@@ -169,6 +187,11 @@ class ConsoleController(QObject):
         return True
 
     def disconnect_video(self):
+        if self.state.environment == Environment.HARDWARE:
+            if self.runtime is None:
+                return False
+            self.runtime.disconnect_video()
+            return True
         self._replace(video=replace(self.state.video, link=LinkState.OFFLINE, fps=0.0, last_frame_age_ms=None))
         self._record("Video", "video.disconnect", Lifecycle.DONE, "disconnected")
 
@@ -186,6 +209,10 @@ class ConsoleController(QObject):
         self._record("Video", "video.rotate", Lifecycle.DONE, "%d_degrees" % rotation)
 
     def snapshot(self):
+        if self.state.environment == Environment.HARDWARE:
+            if self.runtime is not None and self.runtime.save_snapshot():
+                return True
+            return False
         self._record("Video", "video.snapshot", Lifecycle.REJECTED, "decoder_not_implemented")
         self._raise_fault(
             "snapshot_unavailable",
@@ -195,6 +222,8 @@ class ConsoleController(QObject):
         )
 
     def connect_chassis(self):
+        if self.state.environment == Environment.HARDWARE:
+            return self._connect_hardware("chassis")
         if not self._simulator_only("ESP32", "chassis.connect"):
             return False
         if self.state.scenario == "chassis_disconnect":
@@ -220,6 +249,11 @@ class ConsoleController(QObject):
         return True
 
     def disconnect_chassis(self):
+        if self.state.environment == Environment.HARDWARE:
+            if self.runtime is None:
+                return False
+            self.runtime.disconnect_chassis()
+            return True
         self._replace(chassis=ChassisState(reported_state="disconnected"))
         self._record("ESP32", "chassis.disconnect", Lifecycle.DONE, "disconnected")
 
@@ -295,6 +329,8 @@ class ConsoleController(QObject):
         return True
 
     def connect_arm(self):
+        if self.state.environment == Environment.HARDWARE:
+            return self._connect_hardware("arm")
         if not self._simulator_only("MaixCam", "arm.connect"):
             return False
         arm = replace(
@@ -311,6 +347,11 @@ class ConsoleController(QObject):
         return True
 
     def disconnect_arm(self):
+        if self.state.environment == Environment.HARDWARE:
+            if self.runtime is None:
+                return False
+            self.runtime.disconnect_arm()
+            return True
         self._active_arm_command = None
         self._replace(arm=ArmState())
         self._record("MaixCam", "arm.disconnect", Lifecycle.DONE, "disconnected")
@@ -389,10 +430,21 @@ class ConsoleController(QObject):
         return True
 
     def recheck(self):
+        if self.state.environment == Environment.HARDWARE:
+            if self.runtime is None:
+                self._simulator_only("Console", "status.recheck")
+                return False
+            if self.state.chassis.link == LinkState.ONLINE:
+                self.runtime.request_chassis_status()
+            if self.state.arm.gateway == LinkState.ONLINE:
+                self.runtime.request_arm_status()
+            self._record("Console", "status.recheck", Lifecycle.ACCEPTED, "hardware_status_requested")
+            return True
         self._record("Console", "status.recheck", Lifecycle.DONE, "simulator_status")
         if self.state.scenario == "normal":
             for code in ("video_stale", "chassis_link_lost", "hardware_adapter_unavailable", "snapshot_unavailable"):
                 self._clear_fault(code)
+        return True
 
     def tick(self):
         """Advance visual-only simulator metrics; no device I/O occurs here."""
@@ -412,3 +464,82 @@ class ConsoleController(QObject):
             changed = True
         if changed:
             self._replace(video=video, chassis=chassis, arm=arm)
+
+    def _connect_hardware(self, target):
+        if self.runtime is None:
+            self._simulator_only(target.title(), "%s.connect" % target)
+            return False
+        operations = {
+            "chassis": self.runtime.connect_chassis,
+            "arm": self.runtime.connect_arm,
+            "video": self.runtime.connect_video,
+        }
+        accepted = operations[target]()
+        if accepted:
+            labels = {"chassis": ("ESP32", "chassis.connect"), "arm": ("MaixCam", "arm.connect"), "video": ("Video", "video.connect")}
+            label, command = labels[target]
+            self._record(label, command, Lifecycle.ACCEPTED, "hardware_connection_requested")
+        return accepted
+
+    def _on_hardware_chassis_state(self, state):
+        if self.state.environment != Environment.HARDWARE:
+            return
+        if state == "online":
+            chassis = replace(self.state.chassis, link=LinkState.ONLINE, authenticated=True, heartbeat_age_ms=None, reported_state="status pending")
+            self._replace(chassis=chassis)
+            self.runtime.request_chassis_status()
+        elif state == "connecting":
+            self._replace(chassis=replace(self.state.chassis, link=LinkState.DEGRADED, reported_state="connecting"))
+        else:
+            self._replace(chassis=ChassisState(reported_state="disconnected"))
+
+    def _on_hardware_arm_state(self, state):
+        if self.state.environment != Environment.HARDWARE:
+            return
+        if state == "online":
+            arm = replace(self.state.arm, gateway=LinkState.ONLINE, uart_lan1=LinkState.UNKNOWN, controller=LinkState.UNKNOWN, last_status_age_ms=None)
+            self._replace(arm=arm)
+            self.runtime.request_arm_status()
+        elif state == "connecting":
+            self._replace(arm=replace(self.state.arm, gateway=LinkState.DEGRADED))
+        else:
+            self._replace(arm=ArmState())
+
+    def _on_hardware_video_state(self, state):
+        if self.state.environment != Environment.HARDWARE:
+            return
+        mapping = {"online": LinkState.ONLINE, "connecting": LinkState.DEGRADED, "offline": LinkState.OFFLINE}
+        link = mapping.get(state, LinkState.UNKNOWN)
+        self._replace(video=replace(self.state.video, link=link, fps=0.0 if link != LinkState.ONLINE else self.state.video.fps))
+
+    def _on_hardware_result(self, result):
+        if self.state.environment != Environment.HARDWARE or not isinstance(result, SessionResult):
+            return
+        self._record(result.target, result.command, result.lifecycle, result.code)
+        if result.target == "ESP32" and result.command == "status" and result.lifecycle == Lifecycle.DONE:
+            self._replace(chassis=replace(self.state.chassis, reported_state="status received", heartbeat_age_ms=0))
+        if result.target == "MaixCam" and result.command == "status" and result.lifecycle == Lifecycle.DONE:
+            self._replace(arm=replace(self.state.arm, uart_lan1=LinkState.UNKNOWN, controller=LinkState.UNKNOWN, last_status_age_ms=0))
+
+    def _on_hardware_fault(self, fault):
+        if self.state.environment != Environment.HARDWARE or not isinstance(fault, SessionFault):
+            return
+        severity = "unknown" if fault.state_changing else "fault"
+        self._record(fault.target, "runtime.%s" % fault.code, Lifecycle.UNKNOWN if fault.state_changing else Lifecycle.FAULT, fault.code)
+        self._raise_fault(fault.code, severity, fault.target.lower(), fault.detail)
+
+    def _on_hardware_frame(self, frame):
+        if self.state.environment != Environment.HARDWARE:
+            return
+        self._replace(
+            video=replace(
+                self.state.video,
+                link=LinkState.ONLINE,
+                frame_id=frame.frame_id,
+                fps=frame.fps,
+                last_frame_age_ms=0,
+                resolution=(frame.image.width(), frame.image.height()),
+                decode_latency_ms=frame.decode_latency_ms,
+            )
+        )
+        self.video_frame_ready.emit(frame)

@@ -12,6 +12,7 @@
 !.env.example
 *.local.yaml
 *.local.yml
+config/console.local.json
 secrets.*
 !/src/esp32/app/secrets.example.py
 /src/esp32/app/secrets.py

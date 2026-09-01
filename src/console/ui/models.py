@@ -43,6 +43,8 @@ class VideoState:
     frame_id: int = 0
     fps: float = 0.0
     last_frame_age_ms: Optional[int] = None
+    resolution: Optional[Tuple[int, int]] = None
+    decode_latency_ms: Optional[int] = None
 
 
 @dataclass(frozen=True)

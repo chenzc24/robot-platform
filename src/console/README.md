@@ -25,9 +25,11 @@ It validates target/name agreement and exact payload keys, requires an injected 
 
 No credential, host address, or runtime port is hard-coded in these modules. Real values belong in ignored local configuration.
 
-## Simulator control console
+## Unified control console
 
-Phase A adds a PySide6 desktop shell in `ui/`. It implements the approved video-first layout, independent chassis and arm controls, command journal, persistent fault list, and deterministic simulator scenarios. It deliberately owns no device socket, MediaMTX process, RTSP decoder, credential, or hardware transport.
+Phase A adds a PySide6 desktop shell in `ui/`. It implements the approved video-first layout, independent chassis and arm controls, command journal, persistent fault list, and deterministic simulator scenarios.
+
+Phase B adds local runtime foundations without admitting hardware motion: separate FIFO background sessions for the existing direct ESP32 and MaixCam-arm clients, a copied-frame PyAV RTSP worker, and a secret-free local configuration loader. No connection starts automatically and no action is retried automatically. In `Hardware` mode, the console may request an explicit connection, `PING`/`STATUS`, a disconnection, preview frames, and a local snapshot; lease, enable, velocity, arm movement, and chassis software stop remain disabled or rejected.
 
 Launch it from the repository root:
 
@@ -35,6 +37,8 @@ Launch it from the repository root:
 $env:PYTHONPATH = "$PWD/src/console"
 python -m ui
 ```
+
+To prepare an optional local runtime configuration, copy `config/console.example.json` to the ignored `config/console.local.json`, then fill only endpoint values that have been separately approved for an L2 non-motion test. Credentials remain environment variables and must not be added to either JSON file. The default launch does not require this file; without it, `Hardware` mode displays no real connection.
 
 Run the non-interactive GUI construction check with:
 
@@ -44,4 +48,4 @@ $env:QT_QPA_PLATFORM = "offscreen"
 python -m ui --smoke-test
 ```
 
-`Simulator` is the only active environment in this phase. Its motion values, lifecycle transitions, and faults are synthetic and visibly recorded as such. `Hardware` mode resets every session and refuses every connection or motion request because worker-backed adapters are not implemented yet. The chassis software-stop control is not a physical emergency stop and must not be used as one.
+`Simulator` values, lifecycle transitions, and faults are synthetic and visibly recorded as such. The chassis software-stop control is not a physical emergency stop and must not be used as one. Opening an L2 connection or any L3 motion path requires a separate approved hardware goal and the applicable safety gate.

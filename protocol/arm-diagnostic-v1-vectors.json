@@ -1,0 +1,31 @@
+{
+  "protocol": "RPA1",
+  "max_frame_bytes": 96,
+  "vectors": [
+    {
+      "name": "ping_sequence_1",
+      "fields": {"type": "PING", "sequence": 1, "payload": ""},
+      "frame": "RPA1|PING|1||E881\n"
+    },
+    {
+      "name": "pong_sequence_42",
+      "fields": {"type": "PONG", "sequence": 42, "payload": ""},
+      "frame": "RPA1|PONG|42||781F\n"
+    },
+    {
+      "name": "fixed_step_sequence_1001",
+      "fields": {"type": "STEP", "sequence": 1001, "payload": ""},
+      "frame": "RPA1|STEP|1001||002E\n"
+    },
+    {
+      "name": "fixed_step_done_sequence_1001",
+      "fields": {"type": "DONE", "sequence": 1001, "payload": ""},
+      "frame": "RPA1|DONE|1001||620D\n"
+    },
+    {
+      "name": "error_motion_disabled",
+      "fields": {"type": "ERROR", "sequence": 7, "payload": "motion_disabled"},
+      "frame": "RPA1|ERROR|7|motion_disabled|22BC\n"
+    }
+  ]
+}

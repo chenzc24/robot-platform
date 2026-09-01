@@ -95,3 +95,9 @@ device-backups/maixcam/2026-08-31-maixcam-6c7d-preconfig/
 - 统一控制台状态和视频接口。
 
 这些功能应分别建立目标并先完成模拟或无运动验证；任何可能触发底盘或机械臂运动的测试必须升级到L3/L4安全门。
+
+机械臂LAN1诊断程序、一次性固定动作、UART0占用保护和VS Code入口见
+[`../robot-arm/lan1-diagnostic.md`](../robot-arm/lan1-diagnostic.md)。该入口只在用户
+确认机械臂诊断项目已运行且相应L2/L3现场安全条件满足后执行；它临时暂停Maix
+launcher，释放 `/dev/ttyS0`，完成单次请求后在退出处理器中恢复launcher。运动
+请求不自动重试，结果不明时必须先人工确认机械臂实际状态。

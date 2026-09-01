@@ -327,6 +327,23 @@
       "problemMatcher": []
     },
     {
+      "label": "Robot: Run CLI tests",
+      "type": "process",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "${workspaceFolder}\\tests\\dev",
+        "-p",
+        "test_*.py",
+        "-v"
+      ],
+      "options": {"env": {"PYTHONDONTWRITEBYTECODE": "1"}},
+      "problemMatcher": []
+    },
+    {
       "label": "Robot: Validate workspace",
       "type": "process",
       "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
@@ -340,7 +357,8 @@
       "dependsOn": [
         "ESP32: Run safety tests",
         "MaixCam: Run runtime tests",
-        "Protocol: Run contract tests"
+        "Protocol: Run contract tests",
+        "Robot: Run CLI tests"
       ],
       "problemMatcher": []
     },
@@ -422,6 +440,38 @@
       "dependsOrder": "sequence",
       "dependsOn": ["MaixCam Video: Stop PC relay"],
       "problemMatcher": []
+    },
+    {
+      "label": "Robot: Connect",
+      "type": "process",
+      "command": "${workspaceFolder}\\robot.cmd",
+      "args": ["connect"],
+      "problemMatcher": [],
+      "presentation": {"reveal": "always", "panel": "dedicated", "clear": true}
+    },
+    {
+      "label": "Robot: Status",
+      "type": "process",
+      "command": "${workspaceFolder}\\robot.cmd",
+      "args": ["status"],
+      "problemMatcher": [],
+      "presentation": {"reveal": "always", "panel": "dedicated", "clear": true}
+    },
+    {
+      "label": "Robot: Details",
+      "type": "process",
+      "command": "${workspaceFolder}\\robot.cmd",
+      "args": ["details"],
+      "problemMatcher": [],
+      "presentation": {"reveal": "always", "panel": "dedicated", "clear": true}
+    },
+    {
+      "label": "Robot: Disconnect",
+      "type": "process",
+      "command": "${workspaceFolder}\\robot.cmd",
+      "args": ["disconnect"],
+      "problemMatcher": [],
+      "presentation": {"reveal": "always", "panel": "dedicated", "clear": true}
     }
   ],
   "inputs": [

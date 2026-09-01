@@ -18,6 +18,17 @@ ESP32与MaixCam的日常启动、结束、排障和问题登记见 [docs/develop
 
 共享状态契约、模块边界、保护原语和VS Code入口见 [docs/runtime-foundation.md](docs/runtime-foundation.md)。
 
+日常连接可在仓库根目录直接使用扁平CLI：
+
+```powershell
+.\robot status
+.\robot connect
+.\robot details
+.\robot disconnect
+```
+
+`connect`只确保缺失的MaixCam视频服务和电脑中继运行，不部署代码、不登录ESP32 REPL、不复位设备。维护命令和保护规则见 [docs/development-session.md](docs/development-session.md)。
+
 ## 开发工作流
 
 本项目采用精简定制的计划—实施—验证—日志—提交闭环：

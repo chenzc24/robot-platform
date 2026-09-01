@@ -85,6 +85,15 @@ start.sh / stop.sh / status.sh          PID归属验证与运行入口
 - `MaixCam Video: Status`、`Show recent log`、`PC relay status`：分层诊断。
 - `Robot: Stop PC services`：只停止电脑侧FFmpeg和MediaMTX，不停止设备RTSP。
 
+扁平日常入口新增：
+
+- `Robot: Connect`：发现两台设备，启动缺失的MaixCam RTSP和电脑中继，健康服务保持不动。
+- `Robot: Status`：只读三级摘要。
+- `Robot: Details`：展开全部检查、错误码和下一步建议。
+- `Robot: Disconnect`：只停止电脑中继。
+
+这些任务调用仓库根目录的 `robot.cmd`。同一CLI还提供受保护的 `ps/logs/stop/restart/kill/reboot`维护命令，但不提供任意PID强杀；ESP32重启在安全运行时真机验收前保持锁定。
+
 本轮不添加电机使能、底盘速度或机械臂动作快捷入口。
 
 ## 6. 验收边界

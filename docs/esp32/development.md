@@ -1,124 +1,124 @@
-# ESP32 MicroPython开发环境
+# ESP32 MicroPython Development Environment
 
-- 状态：USB恢复通道、手机热点自动接入和WebREPL已完成L2验证
-- 运行方式：MicroPython
-- IDE：VS Code + Python + Pylance
-- 不需要：ESP-IDF SDK、ESP-IDF VS Code扩展、C/C++迁移
+- Status: USB restore channel, mobile phone hotspot automatic access and WebREPL completed L2 validation
+- Run by: MicroPython
+- IDE: VS Code + Python + Pylance
+- Not required: ESP-IDF SDK, ESP-IDF VS Code Extension, C/C++ Migration
 
-## 1. 工具边界
+## Instrument boundaries
 
-| 工具 | 作用 | 是否写设备 |
+| Tools | Role | Whether to write devices |
 |---|---|---|
-| VS Code / Pylance | 编辑和检查Python源码 | 否 |
-| `mpremote` | USB枚举、文件、REPL、运行和软复位 | 视具体命令而定 |
-| `esptool` | 芯片信息、固件检查、固件烧录 | 读取命令不写；烧录命令会写 |
-| `webrepl.html` | Windows上的官方WebREPL终端和单文件传输 | 上传时写设备文件系统 |
-| MicroPython | ESP32上的固件和Python运行时 | 运行于设备 |
+| VS Code / Pylance | Edit and check Python source code | Yes |
+| `mpremote` | USB enumerator, file, REPL, run and softback | Depending on the specific order. |
+| `esptool` | Chip Information, Firmware Check, Firmware Burning | reading commands not written; burn commands Write |
+| `webrepl.html` | Official WebREPL terminal and single file transfer on Windows | Write device file system during upload |
+| MicroPython | Firmware and Python on ESP32 | Run on Device |
 
-ESP-IDF位于MicroPython固件底层。只有编译自定义MicroPython固件或增加C/C++原生模块时才安装ESP-IDF；日常Python开发不需要它。
+ESP-IDF is at the bottom of MicroPython firmware. ESP-IDF is only installed when a self-defined MicroPython firmware or C/C++ original module is added; daily Python development does not require it.
 
-## 2. 本机环境
+## 2. Local environment
 
-项目固定使用Python 3.12虚拟环境：
+Project fixes Python 3.12 virtual environment:
 
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 ```
 
-当前直接依赖：
+Directly dependent:
 
 ```text
 mpremote 1.29.0
 esptool 5.3.1
 ```
 
-基线建立时COM3至COM6均为蓝牙虚拟串口；首次真机联调新增了目标设备COM7。
+At the time the baseline was established, COM3 to COM6 were both a bluetooth virtual link; the first real machine connection added target device COM7.
 
-首次真机联调后，目标设备固定识别为COM7上的WCH CH340串口桥。MicroPython运行时信息：
+The target device is identified as the WCH CH340 crossing on COM7 after the first real-time connection. MicroPython running time information:
 
 ```text
-MicroPython 1.27.0（2026-05-11）
+MicroPython 1.27.0 (2026-05-11)
 Board: ESP32_GENERIC_S3-SPIRAM_OCT
 Runtime: MicroPython / GIL
 ```
 
-设备文件系统已只读备份到本机忽略目录 `device-backups/esp32/20260831-111429/`：22个文件，共125684字节。根目录和 `SmartHybridChasisDemo/` 各有一套相同的11个程序文件，逐文件SHA-256一致。根目录 `robot_config.py` 当前为 `RUN_MODE="ps2"`；根目录 `main.py` 会初始化CAN和电机并进入PS2控制循环，因此任何后续复位仍须保持底盘安全。
+The device file system has read only backups to ignore directories `device-backups/esp32/20260831-111429/`22 files totalling 125684 bytes. `SmartHybridChasisDemo/` Each has the same set of 11 program files, one by one SHA-256. `robot_config.py` Current `RUN_MODE="ps2"`; root directories `main.py` The initialization of the CAN and the electrics and their entry into the PS2 control cycle, so any subsequent reset must remain chassis secure.
 
-开发网络已通过2.4 GHz手机热点验证。ESP32能在重启后自动取得DHCP地址并启动WebREPL；本轮地址为 `10.114.1.97`，该地址不是固定配置，热点重新分配后应以手机客户端列表或串口 `WLAN.ifconfig()` 为准。电脑与ESP32之间的ICMP和TCP 8266均已验证。
+The development network has been validated through 2.4 GHz mobile hotspots. ESP32 can automatically access the DHCP address and activate WebREPL after restart; this round address is `10.114.1.97`, the address is not a fixed configuration, the hotspot should be redistributed using a list of mobile clients or a serial entry `WLAN.ifconfig()` Yes. ICMP and TCP 8266 between the computer and ESP32 have been validated.
 
-WebREPL客户端来自官方仓库：
+WebREPL client from the official repository:
 
 ```text
 https://github.com/micropython/webrepl.git
 commit 1e09d9a1d90fe52aba11d1e659afbc95a50cf088
 ```
 
-新电脑可以安装到本地忽略目录：
+The new computer can be installed in a local ignore directory:
 
 ```powershell
 git clone https://github.com/micropython/webrepl.git .tools\webrepl
 git -C .tools\webrepl checkout 1e09d9a1d90fe52aba11d1e659afbc95a50cf088
 ```
 
-`.venv/` 和 `.tools/` 不进入Git。
+`.venv/` and `.tools/` Not into Git.
 
-## 3. VS Code任务
+## 3. VS Code mission
 
-通过 `Terminal → Run Task` 使用任务。
+Pass. `Terminal → Run Task` Use task.
 
-### 无设备任务
+### Unequipped Tasks
 
 - `ESP32: Check Python sources`
 - `ESP32: Run safety tests`
 - `ESP32: Tool versions`
 - `ESP32: Inspect local firmware image`
 
-### USB读取任务
+### USB Read Job
 
 - `ESP32: List USB devices`
 - `ESP32: Read chip info (USB, no write)`
-- `ESP32: USB file tree`（使用 `mpremote fs tree -vh`）
+- `ESP32: USB file tree`Use `mpremote fs tree -vh`)
 - `ESP32: USB download one file`
 
-### USB写入或运行任务
+### USB write or run jobs
 
 - `ESP32: USB upload one file`
 - `ESP32: USB soft reset`
 - `ESP32: USB REPL`
 
-### Wi-Fi任务
+### Wi-Fi Task
 
 - `ESP32: Open WebREPL browser client`
 
-该任务打开固定版本的官方 `webrepl.html`。在页面中输入当前设备地址，例如 `ws://10.114.1.97:8266/`，再手动输入本机保存的WebREPL密码。页面同时提供交互终端和单文件上传；它只允许一个活动连接，上传前应关闭其他WebREPL连接。
+The task opens a fixed version of the official `webrepl.html`. Enter the current device address on the page, for example `ws://10.114.1.97:8266/`, manually enter the WebREPL password. The page provides both interactive terminals and single file uploads; it allows only one active connection, which should be closed before uploading.
 
-固定版本的 `webrepl_cli.py` 在Windows交互模式下依赖Unix `termios`，而且会在状态行回显已输入的密码，因此不作为VS Code任务暴露。脚本仍保留在本机官方工具目录，后续只有在上游修复或增加不泄密的薄封装后才用于日常命令行部署。
+Fixed version `webrepl_cli.py` Dependence on Unix in Windows Interactive Mode `termios`, and will rediscover the password entered in the status line, so it will not be exposed as a VS Code mission. Scripts will remain in the official tool catalogue of this machine, and will be used for routine command line deployment only after repairing or adding undisclosed thin packages upstream.
 
-## 4. 为什么没有“一键刷固件”任务
+## 4. Why isn't there a "one-key fixer" mission?
 
-本基线故意不提供擦除和写入Flash的VS Code任务。在第一次连接真实设备前，以下信息尚未确认：
+This baseline deliberately does not provide a VS Code mission to erase and write to Flash. Before the first connection to the real device, the following information has not been confirmed:
 
-- 实际ESP32-S3板型、Flash容量和串口。
-- 当前设备文件系统内容和可恢复备份。
-- `MicroPython1.27.bin` 的准确镜像类型及烧录地址。
-- BOOT/RST进入下载模式的方法。
+- Actual ESP32-S3 plate, Flash capacity and serial.
+- Current device file system content and recoverable backup.
+- `MicroPython1.27.bin` The exact mirror type and burn address.
+- How BOOT/RST enters download mode.
 
-完成备份和只读识别后，再根据验证结果增加一个参数明确、需要人工确认的烧录任务。禁止把 `erase-flash` 作为普通开发快捷操作。
+Upon completion of backup and read-only recognition, add one parameter based on the verification, clear, manual confirmation of the burn job. `erase-flash` As a general development shortcut.
 
-已使用 `esptool image-info` 对本地 `ESP32/MicroPython1.27.bin` 进行只读检查：首个镜像头识别为ESP32-S3、8 MB Flash、DIO、80 MHz，校验和与哈希有效，构建信息为ESP-IDF `v5.4.2-dirty`。该结果尚不能单独证明完整合并镜像的目标烧录地址，因此仍不创建写Flash任务。
+Used `esptool image-info` Local `ESP32/MicroPython1.27.bin` Conduct a read-only check: First mirror identified as ESP32-S3, 8 MB Flash, DIO, 80 MHz, valid check and Hashi, build information as ESP-IDF `v5.4.2-dirty`...the result cannot yet independently prove the target burn address of the complete combined mirror, and therefore does not create the Flash job.
 
-## 5. 已完成的首次真机接入
+## 5. First real-time access completed
 
-1. COM7已确认是目标ESP32-S3，USB芯片信息和MicroPython运行时已读取。
-2. 原设备文件系统已完成只读备份，本地固件镜像只做了格式检查，没有刷写或擦除Flash。
-3. `network_boot.py`、本机忽略的 `secrets.py` 和新的 `boot.py` 已按可恢复顺序上传。
-4. ESP32硬复位后自动连接热点、恢复WebREPL，并通过局域网登录和只读REPL探针。
-5. 验证结束后再次硬复位，让设备重新进入原有PS2启动流程；复位后的网络引导和WebREPL端口正常。本轮没有发送运动命令，也没有替换或进入设备上的 `main.py` 再做运行态检查。
+1. COM7 has been identified as target ESP32-S3, USB chip information and MicroPython was read while running.
+2. Original device file system completed read-only backup, local firmware images were only formatted and did not brush or erase Flash.
+3. `network_boot.py`It's ignored. `secrets.py` And new `boot.py` It's uploaded in recoverable order.
+4. ESP32 automatically connects hotspots, restores WebREPL, logs in through local area networks and reads only the REPL probe.
+5. Once validation has been completed, reset the device into the original PS2 start-up process; Reset the network guide and the WebREPL port is normal. This round does not send a motion command, nor does it replace or enter the device `main.py` And then run a check.
 
-以上属于L2设备联调。WebREPL进入交互REPL时可能中断正在运行的 `main.py`，完成调试后必须复位并确认应用恢复。任何可能触发底盘动作的程序必须另行进入L3目标，并执行人工运动安全门。
+The above is L2 device connection. WebREPL may interrupt running when entering interactive REPL `main.py`Once debugging has been completed, repositioning must be confirmed. Any program that could trigger a chassis action must enter the L3 target separately and implement manual motion security doors.
 
-## 6. 源码和秘密配置
+## Source code and secret configuration
 
 ```text
 src/esp32/
@@ -131,40 +131,40 @@ src/esp32/
     └── secrets.example.py
 ```
 
-使用时在本地复制：
+Copy locally when used:
 
 ```text
 device_config.example.py → device_config.py
 secrets.example.py       → secrets.py
 ```
 
-`device_config.py` 和 `secrets.py` 被Git忽略。热点名称、密码和WebREPL密码不得写入示例、VS Code任务、日志或提交。
+`device_config.py` and `secrets.py` Ignored by Git. Hotspot name, password and WebREPL password cannot be written to an example, VS Code job, log or submission.
 
-设备启动顺序为：
+The device starts in the following order:
 
 ```text
 boot.py → network_boot.start()
-        → 读取本地secrets.py
-        → 限时连接Wi-Fi
-        → 启动WebREPL
-        → 无论网络成功或失败都继续进入设备原有main.py
+        Read localsecrets.py
+        Time-bound Wi-Fi connection
+        ♪ Start WebREPL
+        {\cHFFFFFF}{\cH00FFFF} Continue to access the device, whether it succeeds or fails.py
 ```
 
-网络模块不初始化CAN、电机、UART或舵机。Wi-Fi失败会在约20秒后超时，不会阻止底盘应用继续启动。设备上的原始 `boot.py` 可从忽略目录中的完整备份恢复。
+The network module does not initialize CAN, Electro, UART or rudder. Wi-Fi failure will be timed out in about 20 seconds, and will not prevent chassis applications from continuing to start. `boot.py` Restore from the complete backup in the ignore directory.
 
-## 7. 正式控制与WebREPL分离
+## 7. Separation of formal controls from WebREPL
 
 ```text
-开发部署：VS Code → WebREPL → ESP32文件系统/REPL
-正式控制：统一控制台 → 控制协议 → ESP32底盘服务
+Development and deployment: VS Code → WebREPL → ESP32 file system/REPL
+Formal control: Unified console Control Protocol ESP32 chassis service
 ```
 
-WebREPL不是底盘正式控制协议。发布模式应关闭或限制WebREPL，关闭后不能影响底盘心跳、停车、状态和控制服务。
+WebREPL is not an official chassis control protocol. Release mode should shut down or restrict WebREPL, without affecting the chassis heartbeat, parking, status and control services.
 
-## 8. 现有底盘程序的版本化状态
+## 8. Version status of existing chassis programs
 
-设备备份中的11个底盘Python文件已原样保存到 `src/esp32/legacy/chassis_2026_08_31/`，并逐文件验证SHA-256。该目录只用于追溯和选择性迁移，不能直接部署。
+Eleven chassis Python files from device backup saved to the original `src/esp32/legacy/chassis_2026_08_31/`, and document by document SHA-256. The directory is only for retroactive and selective migration and cannot be deployed directly.
 
-静态审计见 [`legacy-chassis-audit.md`](legacy-chassis-audit.md)。其中未知运行模式自动执行运动示例、失能后仍允许写入非零速度、导入即初始化硬件和循迹失联不停车属于后续迁移前的阻断项。
+I'll see you in a static audit. [`legacy-chassis-audit.md`](legacy-chassis-audit.md)...with examples of unknown operating mode auto-executing motion that is allowed to write at non-zero speed after failure, import of initialised hardware and reconnected parking is a block before subsequent migration.
 
-第一批选择性迁移已建立默认 `SAFE_IDLE` 和硬件无关底盘状态机，设计及12项假MotorBus回归测试见 [`chassis-safety.md`](chassis-safety.md)。随后迁移的正式MotorBus通过10项假CAN帧和回滚测试，见 [`motor-can.md`](motor-can.md)。两部分合计22项测试，均尚未连接真实CAN或部署设备。
+Default established for the first selective migration `SAFE_IDLE` It's got nothing to do with hardware. Design and 12 fake MotoBus regression tests. [`chassis-safety.md`](chassis-safety.md)...and then the official MotoBus moved through 10 fake CAN frames and rollback tests. [`motor-can.md`](motor-can.md)... two parts of a total of 22 tests that have not yet been connected to real CAN or deployment device.

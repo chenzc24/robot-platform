@@ -1,25 +1,25 @@
-# 重构本地运行时基础与VS Code入口
+# Reset local runtime base and VS Code portal
 
-- 状态：`completed`
-- 负责人：Agent本地实施，用户稍后另行真机验收
-- 最高验证等级：`L1`
+- Status:`completed`
+- Responsible: Agent is locally implemented, and the user will verify later Take it.
+- Highest validation level:`L1`
 
-## 目标
+## Objective
 
-在不连接、部署或驱动任何真实设备的前提下，将当前ESP32和MaixCam占位程序整理为可扩展的英文源码基础：保留已验证安全核心，增加模块边界、结构化状态与错误反馈、资源所有权和控制租约等保护原语，并扩充安全的VS Code检查、测试、状态和日志入口。
+If you do not connect, deploy or drive any real device, organize the current ESP32 and MaixCam slots into an extended English source base: retain validated security cores, add module boundaries, structured state and error feedback, resource ownership and control lease protections, and expand secure VS Code checks, tests, status and log portals.
 
-`src/esp32/legacy/` 是字节级历史快照，中英混合内容保持原样。项目设计和操作文档可继续使用中文；新增运行代码、注释、docstring、日志键、状态和错误码统一使用英文。
+`src/esp32/legacy/` It's a byte history snapshot, and the Chinese and English hybrid content is kept as it is. Project design and operation documents can continue to use Chinese; add new running codes, notes, logs, status and error codes in English.
 
-## 工作区初始状态
+## Initial state of the workspace
 
 ```text
 ## main...origin/main
  M .vscode/settings.json
 ```
 
-`.vscode/settings.json` 是用户已有的MicroPython按钮修改，属于本目标只读路径。本目标通过 `.vscode/tasks.json` 扩充可调用入口，不覆盖、暂存或提交该设置文件。
+`.vscode/settings.json` is the existing MicroPython button modified by the user, which is a read-only path to this target. This goal is adopted. `.vscode/tasks.json` Expand the callable access, do not overwrite, save or submit the settings.
 
-## 可修改文件
+## Modifyable File
 
 - `src/esp32/app/`
 - `src/maixcam/app/`
@@ -33,77 +33,77 @@
 - `README.md`
 - `docs/overall-plan.md`
 - `docs/runtime-foundation.md`
-- `docs/esp32/`、`docs/maixcam/` 中与本地运行时边界直接相关的文档
-- `src/esp32/README.md`、`src/maixcam/README.md`
+- `docs/esp32/`, `docs/maixcam/` document directly related to local running borders
+- `src/esp32/README.md`, `src/maixcam/README.md`
 - `plan/2026-08-31-runtime-foundation-refactor/plan.md`
 - `plan/log.md`
-- Git忽略的Python缓存目录（仅本地安全清理）
+- Python cache directory ignored by Git
 
-## 只读文件和目录
+## Read-only files and directories
 
 - `.vscode/settings.json`
 - `src/esp32/legacy/`
-- `ESP32/`、`Camera/`、`Robot Arm_Claws/`
-- 本地 `secrets.py`、`device_config.py`和所有真实凭据
-- MaixCam、ESP32、TCP232和机械臂设备文件系统与当前进程
+- `ESP32/`, `Camera/`, `Robot Arm_Claws/`
+- Local `secrets.py`, `device_config.py`And all the real evidence.
+- MaixCam, ESP 32, TCP 232 and Mechanical Arm Device File System and Current Process
 
-## 共享依赖
+## Shared Dependencies
 
-- ESP32 `SafeMecanumChassis` 和 `MotorBus` 的现有22项回归测试。
-- MaixCam RTSP已验证的1280×720、20 fps、2 Mbps默认参数和UART0默认监听器释放规则。
-- `protocol/runtime-status.schema.json` 将成为ESP32、MaixCam和后续控制台的共享状态契约。
-- 不在本目标中确定机械臂命令协议、UART引脚、TCP232参数或底盘远程运动协议。
+- ESP32 `SafeMecanumChassis` and `MotorBus` There are currently 22 regression tests.
+- MaixCam RTSP verified 1280 x 720, 20 fps, 2 Mbps default parameters and UART0 default release rules.
+- `protocol/runtime-status.schema.json` It's going to be a shared status contract for ESP 32, MaixCam and the successor console.
+- No robot arm command protocol is established in this target, UART leads, TCP 232 parameters or chassis remote motion protocol.
 
-## 风险和安全门
+## Risk and safety door
 
-- 风险：跨ESP32和MaixCam的共享状态契约发生变化；本地代码结构变更但未经真机验证。
-- 设备：不需要；禁止SSH、SCP、WebREPL、mpremote、上传、复位、摄像头启停和CAN访问。
-- 用户操作：本轮无；稍后另建L2/L3目标验证。
-- 备份和恢复：Git保留当前受控版本；现有设备备份和设备部署均不改动。
-- 运动确认：不适用，本轮不运行真实运动代码。
+- Risk: Change in the shared status contract across ESP32 and MaixCam; change in local code structure but not verified by a genuine machine.
+- Device: Not required; prohibition on uploading, reset, camera launch and Can access.
+- User Operations: None in current cycle; additional L2/L3 target validation later.
+- Backup and recovery: Git keeps the currently controlled version; no changes are made to the existing backup and deployment of device.
+- Movement confirmed: Not applicable, current round does not run real motion code.
 
-## 预期工作
+## Expected work
 
-1. 定义轻量、MicroPython兼容的运行时状态与错误契约。
-2. 保留ESP32安全状态机与CAN帧实现，增加应用生命周期、状态快照、传输计数和独立控制租约保护原语。
-3. 将MaixCam RTSP占位程序拆分为CLI、可注入视频服务、资源所有权和结构化状态，保留原有参数和启停脚本入口。
-4. 增加契约、安全、状态、资源与故障回滚测试。
-5. 新增不产生运动的VS Code本地检查、组合测试、连接状态、日志和媒体状态入口。
-6. 更新模块边界、状态契约、未部署边界和后续真机验收要求。
+1. Defines light, MicroPython compatible running-time state and wrong contract.
+2. Keep the ESP32 safe-state machine and the CAN frame in place, increase the application life cycle, state snapshot, transfer count and independent control of the original language of the lease.
+3. Split MaixCam RTSP into CLI, inject video services, resource ownership and structured state, retain original parameters and stop script entry.
+4. Add contract, security, state, resources and failure rollback tests.
+5. Add non-motion VS Code local check, group test, connect status, log and media status portal.
+6. Update modular boundary, status contract, non-deployment boundary and subsequent machine acceptance requirements.
 
-## 验证
+## Validation
 
-- 新增与既有Python单元测试，包括故障注入和结构化状态契约。
-- Python静态编译、PowerShell解析和VS Code JSON解析。
-- 新增正式源码的非ASCII扫描，排除只读 `legacy/`、本地秘密值和用户 `.vscode/settings.json`。
-- 秘密、凭据、当前DHCP地址、缓存和原始资料扫描。
+- Add new tests with existing Python modules, including failure injection and structured state contracts.
+- Python static, PowerShell and VS Code JSON.
+- New official source non-ASCII scan, exclude read-only `legacy/`local secret values and users `.vscode/settings.json`.
+- Secret, according to the certificate, current DHCP address, cache and source scan.
 - `git diff --check`
 - `git status --short --branch`
 
-L1覆盖本地契约、模块、故障保护与工具入口。MaixPy实际资源、MicroPython导入、设备部署和行为一律记为未执行，待用户上机时另建目标。
+L1 covers local contracts, modules, trouble protection and tool portals. MaixPy's actual resources, MicroPython imports, device deployment and behaviour are recorded as not being performed, and a different target is set when users are on board.
 
-## 实际结果
+## Actual results
 
-- 新增版本化运行时状态Schema，并由ESP32和MaixCam两套轻量实现共同遵守；事件、设备、子系统和错误码在发出前验证命名规则。
-- ESP32入口拆为应用生命周期、状态输出和控制租约；底盘状态机与MotorBus增加可观测快照和发送计数，默认入口仍不初始化运动硬件。
-- MaixCam视频入口拆为CLI、可注入服务、MaixPy后端和资源所有权；启停脚本增加PID归属、启动就绪事件、超时和只读状态检查。
-- VS Code形成41个任务入口，新增统一本地预检、三组测试、工作区验证、实时链路检查、视频状态/日志/电脑中继状态和开发会话组合任务；用户的 `.vscode/settings.json` 保持原样。
-- 新增运行时边界文档，并同步总体、ESP32和MaixCam文档。所有本轮正式源码、注释、事件和错误码均为英文，中文保留在设计与安全文档中。
-- L1共52项测试通过：共享协议4项、ESP32 30项、MaixCam 18项；18个正式Python源文件通过无缓存编译，本地秘密和设备覆盖文件未被读取；Bash语法、PowerShell解析、VS Code JSON、共享Schema和源码语言检查通过。
-- 本轮没有连接、上传、重启或驱动任何真实设备，现有设备部署版本未改变。
+- Add a new version of the running-time status Schema, and achieve common compliance with the ESP32 and MaixCam sets; Events, devices, subsystems and error codes validate naming rules before sending them out.
+- The ESP32 portal is broken down to an application life cycle, state output and control lease; the chassis status machine and MotorBus add visible snapshots and send count, and the default entrance still does not initiate motor hardware.
+- MaixCam video portal is split to CLI, available for infusion services, MaixPy backend and resource ownership;
+- VS Code forms 41 task portals, adds a single local precheck, three sets of tests, working area validation, real-time link checking, video status/ log/computer relay and development session combination tasks; for users `.vscode/settings.json` Keep it as it is.
+- Add a running-time boundary document, and sync it with the overall, ESS32 and MaixCam documents. All current round official source codes, notes, events and error codes are in English, and Chinese is reserved for design and security documents.
+- L1 has passed 52 tests: 4 sharing protocols, ESSP32 30 and MaixCam 18; 18 official Python-source files are compiled without caches and local secret and device cover files are not read; Bash syntax, PowerShell resolution, VS Code JSON, shared Schema and source language check passed.
+- This round is not connected, upload, restart or drive any real device, and the current device deployment version remains unchanged.
 
-## 未解决事项
+## Outstanding matters
 
-- 新模块尚未在MicroPython 1.27.0或MaixCam真机上导入、部署和启停；用户上机后需另建L2目标逐设备验证，不能把本地通过写成真机通过。
-- ESP32 `ControlLease` 尚未连接底盘本地停车/失能；机械臂协议、UART/TCP232和统一任务状态仍不在本目标范围。
-- MaixCam画面顺时针90°旋转、视觉识别和最终控制台仍需后续目标。
-- 4个Git忽略的历史 `__pycache__` 目录仍在本机；删除操作被当前本机执行策略拒绝。它们不会进入Git，新的本地预检和测试均设置为不生成字节码缓存。
+- The new module has not yet been imported, deployed and activated on MicroPython 1.27.0 or MaixCam;
+- ESP32 `ControlLease` (a) Local parking/deactivating has not yet been connected to the chassis;
+- MaixCam rotates by 90 degrees, visual recognition and final console still need follow-up.
+- 4 Git ignored history `__pycache__` The directory is still on-line; the deletion operation was rejected by the current local execution strategy. They will not enter Git, and new local prechecks and tests are set to do not generate bytes caches.
 
-## 经验信号（供人工审阅）
+## Experience signal (for manual review)
 
-- 候选信号：Python编译缓存可能保留已删除本地配置的字节码，后续可考虑把“清理缓存且禁止测试再生成缓存”固化为人工维护规则。本目标只记录事实，不创建经验文档。
+- Candidate signal: Python compiles caches that may retain deleted local configuration bytes, and can then consider consolidating "cleaning caches and prohibiting testing to generate caches" into manual maintenance rules. This target only records facts, does not create empirical documents.
 
-## 提交意图
+## Intent to submit
 
 ```text
 refactor: establish modular device runtime foundation

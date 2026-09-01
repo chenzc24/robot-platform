@@ -1,80 +1,80 @@
-# 整理网络方案文档
+# Organisation
 
-- 状态：`completed`
-- 负责人：Agent实施，用户确认方案
-- 最高验证等级：`L0`
+- Status:`completed`
+- Responsible: Agent implemented, user confirmation scheme
+- Highest validation level:`L0`
 
-## 目标
+## Objective
 
-将已经确认的电脑、ESP32、MaixCam、TCP232和机械臂网络方案独立写入 `docs/network/`，形成后续配置与联调的唯一详细网络基线。
+Independently write identified computers, ESSP 32, MaixCam, TCP 232 and Mechanical Arm Network Programs `docs/network/`The only detailed network baseline for subsequent configuration and alignment.
 
-## 工作区初始状态
+## Initial state of the workspace
 
 ```text
 ## main...origin/main
 ```
 
-工作区干净。
+Workspace clean.
 
-## 可修改文件
+## Modifyable File
 
 - `docs/network/README.md`
 - `docs/overall-plan.md`
 - `plan/2026-08-31-document-network/plan.md`
 - `plan/log.md`
 
-## 只读文件和目录
+## Read-only files and directories
 
 - `AGENTS.md`
 - `ESP32/`
 - `Camera/`
 - `Robot Arm_Claws/`
-- 其他未列入可修改范围的文件
+- Other documents not included in the scope of modification
 
-## 共享依赖
+## Shared Dependencies
 
-- `docs/overall-plan.md` 已冻结的设备职责和网络决策。
-- 机械臂LAN1默认地址 `192.168.5.1`、运行端口 `5200`、LAN2固定地址 `192.168.200.1`。
-- 开发期使用2.4 GHz手机热点的既定决策。
+- `docs/overall-plan.md` Frozen device duties and network decisions
+- Default address for robot arm LAN1 `192.168.5.1`Run End mouth `5200`, LAN2 fixed address `192.168.200.1`.
+- The decision to use 2.4 GHz phone hotspots during the development period.
 
-## 风险和安全门
+## Risk and safety door
 
-- 风险：文档中的地址或控制边界如果表达错误，会误导后续配置。
-- 设备：不需要。
-- 用户操作：不需要。
-- 备份和恢复：由Git记录文档历史。
-- 运动确认：不适用。
+- Risk: An address or control border in a document that is misexpressed will mislead the subsequent configuration.
+- Device: Not required.
+- User Operations: Not required.
+- Backup and Recovery: Document history recorded by Git.
+- Movement confirmed: not applicable.
 
-## 预期工作
+## Expected work
 
-1. 新建 `docs/network/README.md`，记录拓扑、职责、地址、发现、数据路径、安全、故障降级和验收步骤。
-2. 在总体方案网络章节添加详细文档入口，避免两份文档互相冲突。
-3. 更新维护日志并完成L0检查。
+1. New `docs/network/README.md`And, records popping, duties, addresses, discovery, data path, security, failure downgrade and acceptance steps.
+2. Add a detailed document entry to the overall programme web chapter to avoid conflicting documents.
+3. Update maintenance log and complete L0 check.
 
-## 验证
+## Validation
 
 - `git diff --check`
 - `git status --short --branch`
-- 使用 `rg` 检查热点、LAN1、LAN2、TCP232、Tailscale、WebREPL和安全链路边界。
-- 检查文档相对链接有效。
+- Use `rg` Check hot spots, LAN1, LAN2, TCP 232, Tailscale, WebREPL and the security link border.
+- Check the document for relative links.
 
-## 实际结果
+## Actual results
 
-- 已建立 `docs/network/README.md`，覆盖物理拓扑、节点职责、热点动态地址、LAN1/LAN2地址、TCP232建议配置、控制路径、Tailscale边界、断链降级、接入步骤和验收清单。
-- 已在总体方案网络章节加入详细网络文档入口。
-- `git diff --check` 通过。
-- `rg` 确认热点、LAN1、LAN2、TCP232、Tailscale、WebREPL和安全边界均有明确说明。
-- 相对链接目标存在；未连接、写入或驱动真实设备。
+- Created `docs/network/README.md`, overwhelm physics, nodal duties, hotspot dynamic address, LAN1/LAN2 address, TCP232 suggested configuration, control path, Taircale border, break chain down, access steps and acceptance list.
+- Detailed web document portals have been added to the corporate programme network chapter.
+- `git diff --check` Pass.
+- `rg` Confirm hot spots, LAN1, LAN2, TCP 232, Tailscale, WebREPL and the security border are clear.
+- relative link target exists; not connected, written or driven real device.
 
-## 未解决事项
+## Outstanding matters
 
-- TCP232实际地址、串口参数和目标端口仍需在设备接入时通过配置页面或导出文件确认。
-- 机械臂通信中断时对正在执行动作的本体行为仍需L2/L3专项验证。
+- TCP232 physical address, serial parameters and target ports still need to be confirmed by configuration page or export file when the device is accessed.
+- L2/L3 is still to be specifically certified for the behavior of the body in which the action is being performed when the robot arm communication is interrupted.
 
-## 经验信号（供人工审阅）
+## Experience signal (for manual review)
 
 
-## 提交意图
+## Intent to submit
 
 ```text
 docs: document robot network architecture

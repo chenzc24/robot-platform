@@ -1,72 +1,72 @@
-# ESP32 COM7只读识别
+# ESP32 COM7 read-only recognition
 
-- 状态：`completed`
-- 负责人：Agent执行，用户现场确认
-- 最高验证等级：`L2`
+- Status:`completed`
+- Responsible: Agent execution, user confirmation on site
+- Highest validation level:`L2`
 
-## 目标
+## Objective
 
-通过COM7对已连接设备执行只读芯片识别，确认其是否为目标ESP32，不擦除、不烧录、不修改文件系统。
+Perform a read-only chip recognition of connected devices through COM7 to confirm whether they are targeted for ESP 32, do not erase, do not burn, do not modify the file system.
 
-## 工作区初始状态
+## Initial state of the workspace
 
 ```text
 ## main...origin/main
 ```
 
-工作区干净。Windows已将COM7识别为状态正常的WCH CH340 USB串口桥，VID:PID为 `1A86:7523`；COM3至COM6均为蓝牙虚拟串口。
+Workspace clean. Windows has identified COM7 as a normal WCH CH340 USB junction. `1A86:7523`; COM3 to COM6 are virtual bluetooth chains.
 
-## 可修改文件
+## Modifyable File
 
 - `plan/2026-08-31-esp32-usb-inspection/plan.md`
 - `plan/log.md`
 
-## 只读文件和目录
+## Read-only files and directories
 
-- 其余全部仓库文件
-- ESP32设备Flash和文件系统
+- All remaining repository files
+- ESP32 Device Flash and File System
 
-## 共享依赖
+## Shared Dependencies
 
-- `.venv` 中已验证的 `esptool 5.3.1`。
-- VS Code开发基线将目标串口作为运行时输入，不在共享配置中写死。
+- `.venv` verified `esptool 5.3.1`.
+- VS Code develops a baseline to enter the target string as running time, without dying in the shared configuration.
 
-## 风险和安全门
+## Risk and safety door
 
-- 风险：打开串口可能通过DTR/RTS复位ESP32，复位后设备可能重新运行已有程序。
-- 设备：COM7上的目标设备。
-- 用户操作：用户已确认底盘处于安全状态，可以进行本轮串口识别。
-- 备份和恢复：本目标不写设备，不需要恢复；文件系统备份属于后续目标。
-- 运动确认：用户已于本轮明确确认现场状态。
+- Risk: Opening a serial may be re-engineered through DTR/RTS to re-enact ESP32, and re-run the existing program.
+- Device: Target device on COM7.
+- User Operations: The user has confirmed that the chassis is safe and can be identified in this cycle.
+- Backup and recovery: This target does not write device and does not need to be restored; backup of the file system is a follow-up target.
+- The campaign confirmed that the user has clearly confirmed the state of the site during this round.
 
-## 预期工作
+## Expected work
 
-1. 运行 `esptool --port COM7 chip-id`。
-2. 记录芯片型号、修订版和只读识别结果。
-3. 不继续执行Flash写入或文件系统操作。
+1. Run `esptool --port COM7 chip-id`.
+2. Document chip model, revised version and read-only recognition.
+3. Do not continue the Flash writing or filesystem operation.
 
-## 验证
+## Validation
 
 - `.venv/Scripts/python.exe -m esptool --port COM7 chip-id`
 - `git diff --check`
 - `git status --short --branch`
 
-## 实际结果
+## Actual results
 
-- 第一次执行 `esptool --port COM7 chip-id` 能够打开COM7，但ESP下载握手未收到任何串口数据，命令以 `Failed to connect to Espressif device: No serial data received` 结束。
-- 用户按BOOT/RST流程手动进入下载模式后，第二次识别成功。
-- COM7设备确认为ESP32-S3 QFN56，修订版v0.2，双核+低功耗核、240 MHz、40 MHz晶振、8 MB嵌入式PSRAM，并支持Wi-Fi和Bluetooth LE 5。
-- `esptool`将识别stub临时上传到RAM后读取信息，未擦除、烧录或修改设备文件系统，结束时通过RTS硬复位设备。
+- First implementation `esptool --port COM7 chip-id` Enables to open COM7, but ESP downloads handsshake without receiving any serial data, command to `Failed to connect to Espressif device: No serial data received` Over.
+- Users manually enter download mode using BOOT/RST process for second recognition success.
+- COM7 device is recognized as ESP32-S3 QFN56, Rev. v0.2, bi-nucleotide + low-powered nucleus, 240 MHz, 40 MHz crystal oscillation, 8MB embedded PSRAM, and support Wi-Fi and Bluetooth LE 5.
+- `esptool`Read information after temporarily uploading the ID stub to RAM, unwieldy, burn or modify the device file system, and at the end pass the TRS hard reset device.
 
-## 未解决事项
+## Outstanding matters
 
-- 尚未通过MicroPython REPL读取设备运行时版本或备份文件系统。
-- 尚未读取Flash芯片信息；该读取可与文件系统备份一起纳入下一L2目标。
+- Not yet using MicroPython REPL to read the running version of the device or the backup file system.
+- The Flash chip information has not yet been read; this reading can be added to the next L2 target with the backup of the file system.
 
-## 经验信号（供人工审阅）
+## Experience signal (for manual review)
 
 
-## 提交意图
+## Intent to submit
 
 ```text
 docs: record ESP32 USB identification

@@ -1,329 +1,162 @@
-# 机器人系统网络方案
+# Robot Platform Network Baseline
 
-- 状态：第一版实施基线
-- 日期：2026-08-31
-- 范围：开发电脑、ESP32-S3、MaixCam、TCP232和Magician 6机械臂
+- Status: single-gateway runtime with separate deployment and maintenance paths
+- Date: 2026-09-01
+- Scope: computer, ESP32-S3, MaixCam, TCP232, and Magician 6 robot arm
 
-本文是项目网络配置、通信路径和网络联调的详细基线。设备职责与完整系统方案见 [`../overall-plan.md`](../overall-plan.md)。地址或链路发生变化时，应先更新本文，再修改设备配置和代码。
+This document defines network roles, addressing, failure behavior, and acceptance criteria. See the [overall plan](../overall-plan.md), [runtime baseline](../runtime/README.md), and [deployment baseline](../deployment/README.md).
 
-## 1. 设计目标
+## 1. Design Goals
 
-1. 电脑通过同一个VS Code工作区开发和调试ESP32、MaixCam及机械臂网关。
-2. 开发期优先使用现有手机热点，不把购买路由器作为前置条件。
-3. 机械臂运行控制不增加一层无线TCP：MaixCam通过UART和TCP232连接机械臂LAN1。
-4. 机械臂LAN2保留为电脑有线维护通道。
-5. 实时停车、运动限位和设备联锁在设备本地完成，不依赖手机、电脑、Tailscale或互联网。
-6. 更换手机热点、Windows热点、现有局域网或独立路由器时，不改变上层设备协议和职责。
+1. Develop every subsystem from one VS Code workspace.
+2. Use the existing phone hotspot first; a new router is not a prerequisite.
+3. During normal operation, the computer connects only to MaixCam.
+4. MaixCam uses local UART links to ESP32 and TCP232/arm LAN1.
+5. Keep arm LAN2 as a separate wired maintenance path.
+6. Keep stopping, limits, and critical interlocks local and independent of the computer, hotspot, Tailscale, or internet.
 
-## 2. 物理和逻辑拓扑
+## 2. Topology
+
+### Runtime
 
 ```text
-                         手机热点（2.4 GHz）
-                    仅作为开发期受控本地局域网
-                                  │
-             ┌────────────────────┼────────────────────┐
-             │                    │                    │
-        开发电脑                ESP32-S3             MaixCam
-     VS Code / 控制台          底盘控制器          视觉/机械臂网关
-             │                    │                    │
-             │                    └──── UART ──────────┤
-             │                                         │
-             │                                      UART
-             │                                         │
-             │                                      TCP232
-             │                                         │
-             │                          有线TCP / 机械臂LAN1
-             │                             192.168.5.1:5200
-             │
-             └──────── 可选维护网线 ────── 机械臂LAN2
-                                           192.168.200.1
+computer ── Wi-Fi: video, commands, status ── MaixCam gateway
+                                                   ├── UART2 ↔ ESP32 ↔ CAN ↔ chassis
+                                                   └── UART0 ↔ TCP232 ↔ arm LAN1
 ```
 
-网络由两个彼此独立的部分组成：
+Only the computer and MaixCam need the access point. The two downstream links do not traverse it.
 
-- 开发无线网：电脑、ESP32和MaixCam连接手机热点。
-- 机械臂有线网：MaixCam经TCP232连接LAN1；电脑维护时连接LAN2。
+### Deployment and Maintenance
 
-手机热点不参与TCP232与机械臂LAN1之间的数据转发。
+```text
+computer ↔ hotspot ↔ ESP32 WebREPL
+computer ↔ hotspot ↔ MaixCam SSH/SCP
+computer ↔ wired LAN2 ↔ DobotStudio Pro / robot arm
+computer ↔ TCP232 vendor configuration endpoint, only when verification is needed
+```
 
-## 3. 节点和接口职责
+## 3. Interface Responsibilities
 
-| 节点/接口 | 连接 | 用途 | 运行时要求 |
+| Interface | Connection | Purpose | Constraint |
 |---|---|---|---|
-| 电脑Wi-Fi | 手机热点 | VS Code部署、控制台、日志和视频 | 断开后设备进入本地定义的安全状态 |
-| 电脑有线网卡 | 机械臂LAN2 | DobotStudio、示教、维护和诊断 | 仅在维护时连接 |
-| ESP32 Wi-Fi | 手机热点 | 底盘部署、调试、状态和控制 | WebREPL仅限开发期 |
-| ESP32 UART | MaixCam UART | 设备侧低延迟触发与安全协同 | 不依赖电脑在线 |
-| MaixCam Wi-Fi | 手机热点 | SSH/SFTP、视频、视觉结果、控制台接口 | SSH是主要保底开发通道 |
-| MaixCam UART | TCP232 UART | 机械臂命令和响应 | 115200波特率为当前基线，真机前复核 |
-| TCP232 Ethernet | 机械臂LAN1 | UART与TCP透明转换 | TCP232作为客户端，机械臂作为服务端 |
-| 机械臂LAN1 | TCP232 | 正常运行控制 | 当前服务地址 `192.168.5.1:5200` |
-| 机械臂LAN2 | 电脑 | 本体维护和示教 | 固定地址 `192.168.200.1` |
+| Computer Wi-Fi | Controlled LAN | Console, video, logs, deployment | Runtime loss triggers local safe behavior |
+| Computer Ethernet | Arm LAN2 | DobotStudio, teaching, maintenance | Connect only for maintenance; no default gateway |
+| ESP32 Wi-Fi | Development hotspot | WebREPL deployment and diagnostics | Not a production runtime-control path |
+| ESP32 UART | MaixCam UART2 | Chassis commands, heartbeat, and status | ESP32 stops locally on loss |
+| MaixCam Wi-Fi | Controlled LAN | Sole computer runtime endpoint plus SSH/SCP | Business service is independent of SSH |
+| MaixCam UART0 | TCP232 UART | Arm commands and responses | Baseline 115200; verify before hardware use |
+| TCP232 Ethernet | Arm LAN1 | Transparent UART/TCP conversion | TCP client to arm server |
+| Arm LAN1 | TCP232 | Runtime control | Current baseline `192.168.5.1:5200` |
+| Arm LAN2 | Computer | Maintenance and teaching | Fixed `192.168.200.1` |
 
-## 4. 地址规划
+## 4. Addressing
 
-### 4.1 手机热点网段
+### Development Hotspot
 
-手机热点的网段和DHCP地址由手机系统决定，不假设固定为 `192.168.43.0/24`、`172.20.10.0/28` 或其他具体网段。
+The phone controls the subnet and DHCP leases. Do not assume a specific private subnet or permanently hard-code lease addresses. Discover devices in this order:
 
-```text
-手机热点网关：由手机决定
-电脑Wi-Fi：   DHCP
-ESP32 Wi-Fi： DHCP
-MaixCam Wi-Fi：DHCP
-```
+1. Explicit address in a Git-ignored `*.local.yaml` override.
+2. Stable hostname or mDNS.
+3. Bounded discovery on the current subnet.
+4. Manual confirmation in the hotspot client list.
 
-业务代码不得永久写死热点分配的地址。设备定位按以下顺序进行：
+Use logical names such as `chassis-esp32`, `vision-maixcam`, and `arm-gateway`.
 
-1. 本机 `*.local.yaml` 中的明确地址覆盖。
-2. 设备名或mDNS发现。
-3. 在当前热点网段进行受限发现。
-4. 从手机热点客户端列表人工确认。
+### Arm LAN1
 
-设备配置应使用稳定逻辑名称，例如：
-
-```text
-chassis-esp32
-vision-maixcam
-arm-gateway
-```
-
-### 4.2 机械臂LAN1运行网段
-
-当前基线：
-
-| 设备 | 地址 | 角色 |
+| Device | Baseline | Role |
 |---|---|---|
-| 机械臂LAN1 | `192.168.5.1/24` | TCP服务端 |
-| 机械臂服务端口 | `5200` | 机械臂TCP API |
-| TCP232 Ethernet | 建议 `192.168.5.7/24` | TCP客户端 |
+| Arm LAN1 | `192.168.5.1/24` | TCP server |
+| Service port | `5200` | Arm application service |
+| TCP232 Ethernet | suggested `192.168.5.7/24` | TCP client |
 
-TCP232参数在真机前通过配置页面或导出文件复核：
+TCP232 baseline: UART transparent mode, 115200 baud, 8 data bits, 1 stop bit, no parity, TCP Client to `192.168.5.1:5200`. The suggested TCP232 address is not a claim about current device configuration.
 
-```text
-串口模式：UART透明传输
-波特率：115200
-数据位：8
-停止位：1
-校验：None
-网络模式：TCP Client
-目标地址：192.168.5.1
-目标端口：5200
-```
+### Arm LAN2
 
-`192.168.5.7` 是建议值，不视为已经写入设备。实际值必须避免与LAN1网段其他节点冲突。
+| Device | Address |
+|---|---|
+| Arm LAN2 | `192.168.200.1/24` |
+| Computer Ethernet | `192.168.200.10/24` |
 
-### 4.3 机械臂LAN2维护网段
+Leave gateway and DNS empty on the computer's LAN2 adapter. If the hotspot overlaps LAN1 or LAN2, change the hotspot or an explicitly authorized endpoint; do not depend on ambiguous routing.
 
-| 设备 | 地址 | 配置 |
+## 5. Data Paths
+
+- ESP32 deployment: VS Code → hotspot → WebREPL. This can interrupt `main.py` and is not runtime control.
+- MaixCam deployment: VS Code → SSH/SCP → MaixCam.
+- Video: MaixCam RTSP/H.264 → computer, optionally remuxed by FFmpeg and served by MediaMTX as local RTSP/HLS/WebRTC.
+- Chassis runtime: computer → MaixCam → UART → ESP32 → CAN/motors.
+- Arm runtime: computer → MaixCam → UART → TCP232 → wired TCP → arm LAN1.
+
+UART protocols require framing, sequence, TTL, ACK/result semantics, timeout, and integrity checks. Video is observation and high-level input, never the only safety feedback.
+
+## 6. Hotspot Requirements
+
+- 2.4 GHz, fixed SSID, strong password stored only in ignored local configuration.
+- Disable automatic shutdown and power-saving disconnects.
+- Capacity for at least three clients during maintenance and two during runtime.
+- No client isolation; the computer must reach MaixCam and, during maintenance, ESP32.
+- Stable under screen lock, charging-state changes, and continuous video.
+
+Internet/mobile data is optional. Address changes are normal and must be handled by discovery.
+
+## 7. Development Channels
+
+- ESP32: USB for initial configuration and recovery; WebREPL for routine synchronization and soft reset on a trusted development LAN. Close or restrict WebREPL for production operation.
+- MaixCam: standard SSH/SCP for deployment, lifecycle, and logs; RTSP/H.264 for video. MaixVision and MaixCode are not dependencies.
+- Robot arm: LAN1 only through the MaixCam gateway for runtime; LAN2 through DobotStudio for maintenance. The console must not bypass MaixCam and create a second owner.
+
+## 8. Tailscale Boundary
+
+Tailscale is not deployed in the first stage. A future MaixCam or subnet gateway may support SSH, files, logs, video, and high-level discrete tasks. Never use it as the only physical-stop path, for continuous chassis velocity/heartbeat, arm jogging, or low-level chassis-arm interlocks. ESP32 is not assumed to run Tailscale.
+
+## 9. Failure Behavior
+
+| Fault | Required behavior | Recovery |
 |---|---|---|
-| 机械臂LAN2 | `192.168.200.1/24` | 固定 |
-| 电脑有线网卡 | `192.168.200.10/24` | 手动设置 |
-| 默认网关 | 留空 | 不通过LAN2访问互联网 |
-| DNS | 留空 | 不需要 |
+| Hotspot loss | MaixCam accepts no new computer task; ESP32 stops under UART heartbeat rules | Rediscover, query actual state, explicitly reacquire ownership |
+| Computer offline | No new commands from that session | Reconnect, query status, explicitly take control |
+| ESP32 Wi-Fi loss | Maintenance only is affected; UART runtime state machine continues | Restore only when maintenance is needed; never restore old velocity |
+| MaixCam-ESP32 UART loss | ESP32 stops; MaixCam rejects chassis-dependent tasks | Restore UART, perform non-motion handshake, reacquire ownership |
+| MaixCam Wi-Fi loss | No new computer tasks; ESP32 stops by heartbeat policy | Query chassis and arm state before continuing |
+| MaixCam-TCP232 loss | Gateway enters `FAULT` and rejects new arm tasks | Restore, discard expired queue entries, reinitialize |
+| TCP232-arm loss | Gateway times out; action result may be `UNKNOWN` | Read actual arm state and obtain physical confirmation if needed |
+| Arm LAN2 loss | Maintenance only is affected | Reconnect maintenance cable when required |
 
-电脑可同时连接手机热点和LAN2。Windows应根据目标子网自动选择接口；不得把LAN2设置为默认网关。手机热点网段若与 `192.168.5.0/24` 或 `192.168.200.0/24` 冲突，应更换热点或调整可修改的一侧地址，不能依赖不确定路由。
+Never infer that an in-flight arm action stopped or completed after link loss. Mark it `UNKNOWN` or `FAULT` from actual evidence and block dependent actions.
 
-## 5. 控制和数据路径
+## 10. First Connection Procedure
 
-### 5.1 底盘开发与控制
+1. Start a fixed 2.4 GHz hotspot.
+2. Connect the computer and record the current subnet.
+3. Configure ESP32 Wi-Fi through USB and connect it for maintenance.
+4. Configure MaixCam from its screen or recovery path and connect it.
+5. Confirm both DHCP leases in the hotspot client list.
+6. Test computer reachability to MaixCam and ESP32 maintenance endpoints without motion.
+7. Test MaixCam SSH and ESP32 WebREPL.
+8. In a separate device goal, test the MaixCam-ESP32 UART non-motion handshake.
+9. Verify TCP232 settings and first test against an arm simulator.
+10. Connect arm LAN1 and perform L2 non-motion status/PING.
+11. Connect LAN2 only when DobotStudio maintenance is required.
+12. Apply the AGENTS.md safety gate before any L3 motion.
 
-```text
-电脑控制台 → 手机热点 → ESP32底盘服务 → CAN/电机
-```
+## 11. Acceptance Criteria
 
-用途包括文件部署、状态读取和手动调试。ESP32必须在本地完成速度限幅、控制心跳和超时停车。
+- Runtime: computer and MaixCam remain connected, video and command/status channels are distinguishable, and rediscovery does not depend on an old DHCP lease.
+- Development: ESP32 also joins the hotspot; USB recovery, WebREPL synchronization, MaixCam SSH/SCP, and ignored secret storage work.
+- Arm: LAN1/LAN2 and TCP232 parameters are verified; the gateway detects connect, disconnect, timeout, and duplicate response; LAN2 maintenance is independent of LAN1 runtime.
+- Safety: removing each critical link produces the documented safe or fault state.
 
-### 5.2 视觉开发与视频
+Evidence recorded on 2026-09-01: MaixCam `/dev/ttyS0` through TCP232 to arm LAN1 passed versioned `PING/PONG` with sequence 1 and 163 ms round trip. Under a separately confirmed L3 safety gate, a fixed J1 +1°, one-second wait, -1° return at 5% speed/acceleration passed twice in 3525 ms and 3221 ms. This validates only that bounded diagnostic path, not a generic trajectory interface.
 
-```text
-VS Code → SSH/SFTP → MaixCam
-控制台 ← 视频/识别结果 ← MaixCam
-```
+## 12. Alternative Access Points
 
-视频流只用于观察和高层任务，不作为唯一的安全反馈。
-
-### 5.3 机械臂运行控制
-
-```text
-电脑控制台
-    → 手机热点
-    → MaixCam机械臂网关
-    → UART
-    → TCP232
-    → 有线TCP 192.168.5.1:5200
-    → 机械臂
-```
-
-无线链路只到MaixCam。MaixCam到机械臂使用本地UART和短距离有线TCP，不再经过电脑或手机热点。
-
-### 5.4 视觉与底盘本地协同
+Change the phone hotspot only for client isolation, repeated sleep/disconnect, insufficient client capacity, subnet conflict, or inadequate video/integration stability. Preferred order:
 
 ```text
-MaixCam ↔ UART ↔ ESP32
+phone hotspot → Windows hotspot → trusted existing LAN → dedicated small router
 ```
 
-该链路用于视觉触发、设备状态和低延迟安全协同。协议应具有消息边界、序列号、ACK、超时和校验，不继续依赖无边界裸字符串。
-
-## 6. 手机热点配置
-
-建议配置：
-
-- 频段：2.4 GHz。
-- SSID：固定，不使用会频繁变化的随机名称。
-- 密码：强密码，只写入本地秘密配置。
-- 自动关闭：关闭。
-- 省电断网：关闭。
-- 最大客户端数：至少3台。
-- 移动数据：核心局域网通信不需要，可按需关闭。
-
-手机需要确认以下行为：
-
-- 电脑可以访问ESP32。
-- 电脑可以访问MaixCam。
-- ESP32和MaixCam可以互相访问（如果使用它们之间的Wi-Fi备用路径）。
-- 锁屏、充电状态变化和持续视频传输不会关闭热点。
-
-热点由手机管理，因此设备地址可能在重启后变化。地址变化不是故障，部署和控制工具必须支持重新发现。
-
-## 7. VS Code开发通道
-
-### 7.1 ESP32
-
-- 首次Wi-Fi配置、固件写入和恢复：USB。
-- 日常同步和软重启：WebREPL。
-- WebREPL默认端口通常为 `8266`，最终以设备配置为准。
-- WebREPL不提供适合共享网络的强加密保护，只允许在受控开发热点开启；发布模式关闭。
-
-### 7.2 MaixCam
-
-- 开发通道：VS Code调用标准SSH和SFTP/SCP完成部署、启停与日志读取。
-- 视频通道：MaixCam原生RTSP/H.264；电脑可直接接收，也可经FFmpeg无转码重封装和MediaMTX转发为本机RTSP、HLS和WebRTC端点。
-- SSH默认端口为 `22`，最终以设备配置为准。
-- 推荐使用SSH密钥；密码和私钥不得提交Git。
-- MaixVision和第三方MaixCode扩展不属于项目运行或开发依赖。
-
-### 7.3 机械臂
-
-- 运行控制：MaixCam网关经TCP232访问LAN1。
-- 维护调试：电脑通过LAN2运行DobotStudio。
-- 统一控制台不直接绕过MaixCam向LAN1发送运行命令，避免产生两个控制所有者。
-
-## 8. Tailscale边界
-
-第一阶段不部署Tailscale。未来需要异地开发时，可以在MaixCam或额外子网网关上部署，用于：
-
-- SSH和文件同步。
-- 日志和状态查看。
-- 视频查看。
-- 高层离散任务下发。
-
-不得用于：
-
-- 实体急停的唯一通道。
-- 底盘连续速度控制或安全心跳。
-- 机械臂连续点动。
-- 底盘与机械臂的底层联锁。
-
-ESP32不假定能够直接运行Tailscale。需要访问不支持Tailscale的节点时，使用受控子网网关；即使Tailscale建立点对点连接，也不把互联网链路视为确定性实时链路。
-
-## 9. 断链和故障降级
-
-| 故障 | 本地预期行为 | 恢复要求 |
-|---|---|---|
-| 手机热点关闭 | ESP32心跳超时停车；MaixCam不接受新的电脑任务 | 热点恢复后重新发现和重新取得控制权 |
-| 电脑离线 | 设备停止接受该控制会话的新命令 | 控制台重连、查询状态并显式接管 |
-| ESP32 Wi-Fi断开 | ESP32本地停车，串口安全协同仍可用 | 网络恢复后重新握手，禁止自动恢复旧速度 |
-| MaixCam Wi-Fi断开 | 不再接收新的远程机械臂任务 | 查询机械臂实际状态后再决定下一步 |
-| MaixCam—TCP232断开 | 网关进入FAULT并拒绝新动作 | 恢复链路、清空过期队列、重新初始化 |
-| TCP232—机械臂断开 | 网关超时并上报，不能假定动作未执行 | 从机械臂读取实际状态，人工确认必要时复位 |
-| 机械臂LAN2断开 | 只影响电脑维护，不应影响LAN1运行链路 | 重新连接维护网线 |
-
-机械臂在通信中断时对“当前正在执行的原子动作”如何处理，需要在机械臂API真机测试后确定。实现前不得臆测为自动停止或自动完成；网关必须把状态标记为未知或故障，并阻止后续动作。
-
-## 10. 首次接入步骤
-
-1. 手机开启固定SSID的2.4 GHz热点。
-2. 电脑连接热点，记录电脑Wi-Fi地址和网段。
-3. ESP32通过USB写入本地热点配置并启动Wi-Fi。
-4. MaixCam通过屏幕或MaixVision连接同一热点。
-5. 从手机客户端列表确认ESP32和MaixCam地址。
-6. 测试电脑到ESP32和MaixCam的基本连通性。
-7. 测试MaixCam SSH和ESP32 WebREPL，暂不执行设备运动。
-8. 测试MaixCam与ESP32之间的网络互访；串口另行在设备目标中验证。
-9. 配置TCP232并核实参数，先使用机械臂模拟服务验证。
-10. 连接真实机械臂LAN1，执行L2无运动状态查询。
-11. 需要维护时，电脑有线网卡配置 `192.168.200.10/24` 后连接LAN2。
-12. L3机械臂或底盘运动测试必须按 `AGENTS.md` 完成人工安全确认。
-
-## 11. 电脑侧诊断命令
-
-以下命令只进行网络检查，不授权设备运动：
-
-```powershell
-ipconfig
-ping <esp32-ip>
-ping <maixcam-ip>
-Test-NetConnection <maixcam-ip> -Port 22
-Test-NetConnection <esp32-ip> -Port 8266
-ping 192.168.200.1
-```
-
-机械臂LAN1通常由TCP232直接连接，电脑不需要加入 `192.168.5.0/24`。只有在明确的维护或诊断计划中，才临时改变接线或电脑地址测试LAN1。
-
-## 12. 网络验收标准
-
-### 12.1 手机热点
-
-- [ ] 电脑、ESP32和MaixCam均能稳定加入热点。
-- [ ] 电脑能够访问ESP32和MaixCam。
-- [ ] 热点锁屏或持续运行30分钟不自动关闭。
-- [ ] 设备重启后能够重新发现，不依赖旧DHCP地址。
-- [ ] 手机无移动数据时，本地控制与部署仍可工作。
-
-### 12.2 开发服务
-
-- [ ] VS Code能够通过SSH/SFTP部署MaixCam最小程序。
-- [ ] VS Code能够通过USB恢复ESP32。
-- [ ] 受控热点中能够通过WebREPL同步ESP32文件。
-- [ ] WebREPL关闭后不影响ESP32正式控制服务。
-- [ ] 所有密码保存在Git忽略的本地配置中。
-
-### 12.3 机械臂链路
-
-- [ ] LAN1、LAN2和TCP端口通过本体配置确认。
-- [ ] TCP232地址、串口参数、客户端模式和目标端口已导出或截图留档。
-- [ ] MaixCam网关能够识别连接、断开、超时和重复响应。
-- [ ] LAN2维护与LAN1运行链路互不替代。
-- [ ] 拔除任一通信链路时，系统进入文档规定的安全或故障状态。
-
-2026-09-01已在机械臂未使能诊断项目、随后按现场安全门短暂使能的条件下，完成
-MaixCam `/dev/ttyS0` 经TCP232到LAN1服务端的单次版本化 `PING/PONG`；匹配
-序列号为1，往返163毫秒，Maix launcher在探针退出后恢复。该结果只证明通信，
-不授权机械臂动作。
-
-同日按L3现场安全门完成固定 `STEP/DONE` 验收：J1以5%速度和加速度正向1°、
-等待1秒并反向1°回位。两次独立人工授权的往返分别为3525毫秒和3221毫秒，
-用户现场确认链路打通。每个机械臂项目运行只消费一次STEP，MaixCam不自动重试，
-每次探针退出后 `/dev/ttyS0` 均恢复由Maix launcher持有。该验证不授权任意轨迹。
-
-## 13. 替代网络的启用条件
-
-只有出现以下问题时才更换手机热点：
-
-- 手机实施客户端隔离，设备不能互访。
-- 热点频繁休眠或断开。
-- 无法同时容纳所需设备。
-- 网段与机械臂LAN1或LAN2冲突。
-- 视频传输或持续联调稳定性不足。
-
-替代顺序建议为：
-
-```text
-手机热点
-→ Windows电脑热点
-→ 现有可信局域网
-→ 独立小型路由器
-```
-
-无论采用哪种接入点，ESP32、MaixCam和电脑仍处于同一受控开发局域网；机械臂LAN1/LAN2分工和本地安全边界不变。
+The access-point choice does not change the single-gateway runtime, MaixCam-ESP32 UART, arm LAN1/LAN2 roles, or local safety boundaries.

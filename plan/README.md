@@ -1,75 +1,75 @@
-# 目标计划目录
+# Target plan catalogue
 
-`plan/` 保存开发意图和事实维护历史，用于让人工和Agent共享目标边界、文件所有权、验证方法和真实完成状态。它不替代GitHub Issues、总体方案或Git提交。
+`plan/` Preservation of development intent and facts to preserve history, to allow artificial sharing of target boundaries with Agent, document ownership, validation methods and real completion status. It's not a substitute for GitHub Issues, or Git.
 
-## 工作闭环
+## Working closed circle
 
 ```text
-定义目标
-→ 检查Git状态和资料保护范围
-→ 创建目标计划
-→ 有界实施
-→ 按L0–L4验证
-→ 更新事实日志
-→ 审阅、提交和推送
+Defining objectives
+Check Git's status and data protection
+Create Target Scheme
+It's done.
+Press L0-L4 to verify
+Update the fact log
+Review, Submission and Transmission
 ```
 
-## 目标计划
+## Target plan
 
-需要计划的任务使用：
+Use of planned tasks:
 
 ```text
 plan/<YYYY-MM-DD-goal-slug>/plan.md
 ```
 
-从 `plan/target-plan.template.md` 复制结构。目标计划至少包含：
+From `plan/target-plan.template.md` Copy structure. Target plan includes at least:
 
-- 状态、目标和工作区初始状态。
-- 可修改文件、只读文件和共享依赖。
-- 预期工作和风险。
-- 最高验证等级及确定性检查。
-- 是否需要设备、用户操作和现场运动确认。
-- 实际结果、剩余风险和提交意图。
+- Status, Target and Workspace Initial Status.
+- Can modify files, read-only files and share dependencies.
+- Expected work and risks
+- Highest level of validation and certainty check.
+- Do you need device, user operations and field movement confirmation.
+- Actual results, residual risk and submission intent.
 
-一个目标应对应一个可以独立验收的工程结果，例如“ESP32无线部署通道”，而不是一个文件或一个模糊阶段。
+A target should respond to the results of a work that can be independently verified, such as the ESP32 Wireless Deployment Channel, not a document or a vague phase.
 
-## 脏工作区
+## Dirty work area
 
-脏工作区不会自动阻止无关目标。只有同时满足以下条件才能继续：
+A dirty work area does not automatically prevent unrelated targets.
 
-- 未提交文件与当前目标无关。
-- 不与当前目标的可修改范围重叠。
-- 不改变当前目标依赖的共享契约。
-- 目标计划记录了继续工作的判断。
+- Failure to submit documents is irrelevant to the current target.
+- No overlap with the modified scope of the current objective.
+- Without changing the shared contract on which the current target depends.
+- The target plan records the judgement to continue.
 
-如果文件归属不明、范围重叠或共享契约可能被影响，应停止编辑并请求协调。
+If the attribution of the document is not clear, the overlap or the sharing contract may be affected, the editing should be stopped and coordination requested.
 
-## 验证等级
+## Validation Level
 
-- L0：文档和静态配置。
-- L1：本地代码、协议和模拟器。
-- L2：连接真机但不运动。
-- L3：单设备低速真实运动，必须现场确认。
-- L4：多设备联合任务，必须现场确认。
+- L0: Document and static configuration.
+- L1: Local code, protocol and simulator.
+- L2: Connect the real machine without moving.
+- L3: Low-speed real motion on a single device must be confirmed on site.
+- L4: Multi-device joint mission, confirmed on site.
 
-计划应选择覆盖最高风险的等级。未执行的真机测试必须明确记录，不能用模拟结果替代。
+The plan should select the level to cover the highest risk.
 
-## 维护日志
+## Maintain Log
 
-`plan/log.md` 记录已经接受的项目维护事实。每条记录包括：
+`plan/log.md` Recording of accepted project maintenance facts. Each record includes:
 
-- 日期和目标。
-- 修改区域。
-- 实际验证及等级。
-- 是否连接或驱动硬件。
-- 提交状态。
-- 未解决问题或后续工作。
+- Dates and objectives
+- Modify the area.
+- Actual validation and ranking
+- Whether to connect or drive hardware ...
+- Submission status.
+- Failure to address or follow up
 
-计划描述工作前的意图，日志描述工作后的事实，Git记录实际文件状态。
+The plan describes pre-work intentions, post-work facts, Git records actual file status.
 
-## 计划归档
+## Schedule Archive
 
-- 进行中、受阻或失败的计划保留在原位置。
-- 完成计划在状态中标记 `completed`，不要求立即删除。
-- 当计划数量影响浏览时，可以将已完成计划移入 `plan/archive/<year>/`，同时保留 `plan/log.md` 索引。
-- 可能包含可复用经验信号的计划，在用户决定是否提炼前不得删除。
+- In progress, blocked or failed plans remain in place.
+- Mark in completion schedule status `completed`, does not require immediate deletion.
+- You can move a completed schedule to a planned number of impact browsing `plan/archive/<year>/`, while retaining `plan/log.md` Index.
+- A plan that may contain a reusable memory signal cannot be deleted until the user decides whether to refine it.

@@ -1,22 +1,22 @@
-# ESP32 MotorBus与CAN帧适配器迁移
+# ESP32 MotorBus and CAN frame adapter migration
 
-- 状态：`completed`
-- 负责人：Agent执行
-- 最高验证等级：`L1`
+- Status:`completed`
+- Responsible: Agent Implementation
+- Highest validation level:`L1`
 
-## 目标
+## Objective
 
-从冻结历史快照选择性迁移电机CAN速度模式协议，形成可向安全底盘状态机注入的正式 `MotorBus`。使用假CAN验证29位扩展ID、8字节载荷、小端参数编码、速度限幅、使能前后零目标、四电机批量失败继续和异常回滚。本目标不构造MicroPython真实CAN、不连接或部署ESP32。
+Selective displacement of motors from the freeze of historical snapshots to the CAN speed model protocol, which forms a formal injection into the safety chassis. `MotorBus`Using fake CAN to verify 29-bit extension ID, 8-bit load, small-end parameter coding, speed limit, enabling zero-point energy, four power mass failure to continue and abnormally roll back. This target does not construct MicroPython real CAN, does not connect or deploy ESP32.
 
-## 工作区初始状态
+## Initial state of the workspace
 
 ```text
 ## main...origin/main
 ```
 
-工作区干净。正式底盘安全状态机和12项假MotorBus测试已提交；真实设备仍运行历史PS2程序。
+Workspace clean. Formal chassis safety machines and 12 fake MotorBus tests have been submitted; Real device is still running the historical PS2 program.
 
-## 可修改文件
+## Modifyable File
 
 - `src/esp32/app/motor_bus.py`
 - `tests/esp32/test_motor_bus.py`
@@ -28,66 +28,66 @@
 - `plan/2026-08-31-esp32-motor-can-adapter/plan.md`
 - `plan/log.md`
 
-## 只读文件和目录
+## Read-only files and directories
 
 - `src/esp32/legacy/`
-- 其余 `src/esp32/app/` 文件
-- `.vscode/tasks.json` 和既有测试
-- ESP32设备、文件系统、原始资料和设备备份
+- Other `src/esp32/app/` Documentation
+- `.vscode/tasks.json` And established tests.
+- ESP32 Device, File System, Source and Device Backup
 
-## 共享依赖
+## Shared Dependencies
 
-- `SafeMecanumChassis` 需要的MotorBus五个接口。
-- 历史CAN协议：29位扩展ID、主机ID `0xFD`、速度模式参数索引和小端载荷。
-- 历史驱动速度硬上限44 rad/s及默认速度PI/滤波值。
-- 当前L1结果不能证明CAN收发、驱动ACK或真实电机状态。
+- `SafeMecanumChassis` Five interfaces for MotorBus.
+- History CAN protocol: 29-bit extension ID, host ID `0xFD`, speed mode parameter index and small end load.
+- Hard maximum 44 Rad/s and default PI/filtration values for historical drive speed.
+- The current L1 results do not prove that Can has been sent or sent, driven ACK or real power.
 
-## 设计边界
+## Design boundaries
 
-- CAN对象通过构造参数注入；正式模块不直接导入或构造 `esp32.CAN`。
-- 所有帧必须严格验证电机ID、通信类型、参数索引和8字节载荷。
-- 单电机初始化在使能前和使能后都写零速度。
-- 批量停车/失能即使某一帧失败也继续尝试其余电机，最后重新抛出首个异常。
-- 批量初始化失败后尽力停车并失能全部目标电机。
-- `CAN.send()` 返回 `False` 视为发送失败；`None` 与其它正常返回值兼容当前MicroPython API。
-- 不把“帧已发送”解释为“驱动已执行”；ACK与状态反馈留待后续协议确认。
+- CAN objects are injected through construction parameters; official modules are not imported or constructed directly `esp32.CAN`.
+- All frames must strictly verify the electrical ID, the type of communication, the parameter index and the 8 byte load.
+- Zero speed before and after the initialization of the single power.
+- Bulk parking/deactivation continues to try the rest of the power, even if one frame fails, and then throws the first anomaly again.
+- Once the batch initialization fails, try to stop and disable the entire target.
+- `CAN.send()` Back `False` Considers the dispatch failed;`None` Compatible with other normal return values for current MicroPython API.
+- Do not interpret "the frame sent" as "drive executed"; AK and status feedback left for subsequent agreement.
 
-## 预期工作
+## Expected work
 
-1. 实现CAN扩展ID、参数载荷和MotorBus基础命令。
-2. 实现安全的单/多电机速度模式初始化、停车和失能。
-3. 使用假CAN覆盖帧向量、限幅、调用顺序、发送失败和批量回滚。
-4. 增加MotorBus—SafeMecanumChassis集成测试。
-5. 更新设计、开发、审计和源码入口文档。
+1. Completing CAN Extension ID, Parameter Load and MotoBus Base Command.
+2. Initialize safe single/multi-power speed patterns, stop and disable.
+3. Use a fake CAN cover frame vector, limit band, call order, send failure and batch rollback.
+4. Add the MotoBus-SafeMecanumChasis integration test.
+5. Update design, develop, audit and source access documents.
 
-## 验证
+## Validation
 
 - `python -m unittest discover -s tests/esp32 -p "test_*.py"`
 - `python -m compileall -q src/esp32/app tests/esp32`
-- 固定CAN帧测试向量与小端浮点/整数断言。
-- 假CAN注入失败后的其余电机尝试和回滚断言。
-- 秘密扫描、`git diff --check`、`git status --short --branch`。
+- Fixed CAN frame test vector and small-end float/integer assertion.
+- The rest of the machine tried and rolled back after the fake CAN failed.
+- Secret scan.`git diff --check`, `git status --short --branch`.
 
-## 实际结果
+## Actual results
 
-- 新增可注入CAN对象的正式 `MotorBus`，实现严格29位扩展ID、固定8字节载荷、uint32/float32小端参数写入、有限数校验和±44 rad/s驱动侧限幅。
-- 单电机初始化在使能前后写零速度；批量停车和失能在单帧失败后继续处理其余电机；批量初始化失败时尽力停车并失能完整目标集合。
-- 新增10项FakeCAN测试，并与既有12项底盘安全核心测试共同运行；22项全部通过。源码与测试静态编译通过。
-- 新增CAN适配器设计文档，并同步更新底盘安全、开发入口、历史审计和源码入口说明。
-- 完成秘密、差异格式和提交范围检查；本轮没有连接、写入或驱动任何真实硬件。
+- Add an official that can be injected into the CAN object `MotorBus`, achieve a strict 29-bit extension ID, fix an 8-byte load, uint32/float32 small-end parameter written, limited validation and ±44 Rad/s drive side limit.
+- Initialization of single generators at zero velocity before and after performance; Batch parking and failure to process the remaining generators after failure of the single frame; Endeavour to stop and disable the complete target group when initialization fails.
+- Add 10 new FakeCAN tests, running in conjunction with the existing core of 12 chassis security tests; all 22 through ... source code and test static compilation.
+- Add a new CAN adaptor design document and synchronize the update of chassis security, development portal, history audit and source access description.
+- Complete secret, variance format and submission range check; no connection, write or drive any real hardware.
 
-## 未解决事项
+## Outstanding matters
 
-- 尚未用驱动器官方资料确认历史参数索引、默认PI/滤波值和反馈帧。
-- 尚未构造真实MicroPython CAN，CAN引脚、1 Mbps波特率、发送返回语义和bus-off恢复均未验证。
-- 尚无ACK、驱动状态、故障码、实际速度或真实回滚结果；“发送成功”不能解释为“驱动已执行”。
-- 下一目标应先完成协议资料核对，再设计不使能电机的L2 CAN连接检查；任何真实使能或运动仍须建立L3目标并重新通过人工安全门。
+- The historical parameter index has not been confirmed with official drive information, default PI/filtration values and feedback frames.
+- The real MicroPython CAN, CAN-led foot, 1 Mbpsport rate, sent back semantics and fus-off is not verified.
+- There is no AK, drive state, failure code, actual speed or real rollback results; "send successful" cannot be interpreted as "drive executed".
+- The next goal should be to complete the protocol data check and then design the L2 CAN connection check that does not connect the power plant; any real enabler or movement must still establish the L3 target and re-enter the manual security door.
 
-## 经验信号
+## Experience signal
 
-- CAN发送侧帧一致性与驱动执行确认必须作为两个独立验证层；FakeCAN只能关闭前者，不能替代ACK和状态反馈。
+- Can send frame consistency and driver validation must be used as two separate validation layers; FakeCAN can only close the former, not substitute for ACK and state feedback.
 
-## 提交意图
+## Intent to submit
 
 ```text
 feat: add tested ESP32 motor CAN adapter

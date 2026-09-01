@@ -1,32 +1,17 @@
-# ESP32 MicroPython source
+# ESP32 MicroPython Source
 
-这是ESP32底盘正式源码目录。根目录下的 `ESP32/` 是被Git忽略的原始资料库；不要从本目录反向覆盖资料原件。
+This directory is the version-controlled source of truth for ESP32 software. The root-level `ESP32/` directory is an ignored, read-only resource archive and must not be modified from here.
 
-## 当前状态
+## Current Status
 
-`app/` 包含已验证的Wi-Fi/WebREPL启动模块、默认 `SAFE_IDLE` 入口、结构化运行时状态、独占控制租约原语、底盘安全状态机和可注入CAN的正式MotorBus。当前仅通过本地假对象测试，尚未构造真实CAN、读取驱动反馈或把租约过期连接到真实停车；不能用本目录整体覆盖设备程序。
+`app/` contains the Wi-Fi/WebREPL bootstrap, default `SAFE_IDLE` entry point, structured runtime status, a tested control-lease primitive, the chassis safety state machine, and an injectable CAN MotorBus. Validation currently uses local fakes only. The code has not been connected to real CAN, does not read driver feedback, and does not yet connect lease expiry to real stopping. Do not deploy this directory as a complete device application.
 
-设备备份中的现有底盘程序已原样纳入 `legacy/chassis_2026_08_31/`。该目录是字节级历史快照，不是部署源；静态审计发现未知运行模式自动运动、失能后仍可写速度目标等阻断问题。详见 [`../../docs/esp32/legacy-chassis-audit.md`](../../docs/esp32/legacy-chassis-audit.md)。
+The existing device program is preserved byte-for-byte under `legacy/chassis_2026_08_31/`. It is a historical snapshot, not a deployment source. See the [legacy audit](../../docs/esp32/legacy-chassis-audit.md), [chassis safety core](../../docs/esp32/chassis-safety.md), [MotorBus design](../../docs/esp32/motor-can.md), and [runtime foundation](../../docs/runtime-foundation.md).
 
-当前安全核心和状态转换见 [`../../docs/esp32/chassis-safety.md`](../../docs/esp32/chassis-safety.md)。
-
-运行时契约、模块边界与VS Code入口见 [`../../docs/runtime-foundation.md`](../../docs/runtime-foundation.md)。
-
-MotorBus帧格式、回滚规则和剩余硬件验证见 [`../../docs/esp32/motor-can.md`](../../docs/esp32/motor-can.md)。
-
-## 本地检查
-
-在VS Code中运行：
-
-```text
-Tasks: Run Task
-→ ESP32: Check Python sources
-```
-
-或者：
+Run the local source check from VS Code (`ESP32: Check Python sources`) or PowerShell:
 
 ```powershell
 .\.venv\Scripts\python.exe tools\dev\check_python.py src/esp32/app
 ```
 
-USB和WebREPL任务见 [`../../docs/esp32/development.md`](../../docs/esp32/development.md)。
+USB and WebREPL procedures are documented in [ESP32 Development](../../docs/esp32/development.md).

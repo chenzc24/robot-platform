@@ -1,23 +1,23 @@
-# 验证PS2底盘与本地视频转发并行链路
+# Validation of parallel links between PS2 chassis and local video relay
 
-- 状态：`completed`
-- 负责人：Agent执行连接与程序操作，用户现场监护并操作PS2与实体急停
-- 最高验证等级：`L3`
+- Status:`completed`
+- Responsible: Agent executes connection and program operations, user on-site supervision and operation of PS2 with entities
+- Highest validation level:`L3`
 
-## 目标
+## Objective
 
-在同一手机热点下启动并确认ESP32现有PS2控制程序，同时保持MaixCam视频经电脑FFmpeg/MediaMTX转发到本地端口，验证两条链路能够并行工作、停车和结束状态明确。
+In the same cell phone hotspot, start and confirm the current PS2 control program for ESP32, while maintaining the MaixCam video relayed via computer FFmpeg/MediaMTX to the local port to verify that two links work in parallel, parking and end state.
 
-## 工作区初始状态
+## Initial state of the workspace
 
 ```text
 ## main...origin/main
  M .vscode/settings.json
 ```
 
-`.vscode/settings.json` 是用户已有修改，本目标保持只读。开始时统一CLI显示MaixCam SSH、设备RTSP和本机视频在线，ESP32 TCP 8266不可达，整体为DEGRADED。
+`.vscode/settings.json` It's the user that's changed, and this goal is kept read-only. At the beginning, CLI displays MaixCam SSH, device RTSP and live video online, ESSP32 TCP 8266 is not available, and the whole is DEGRADED.
 
-## 可修改文件
+## Modifyable File
 
 - `tools/esp32/webrepl_reset.py`
 - `tools/esp32/webrepl_probe.py`
@@ -25,68 +25,68 @@
 - `plan/2026-09-01-ps2-video-joint-test/plan.md`
 - `plan/log.md`
 
-## 只读文件和目录
+## Read-only files and directories
 
 - `.vscode/settings.json`
-- 所有受版本管理源码、协议、配置和工具
-- `ESP32/`、`Camera/`、`Robot Arm_Claws/`
-- 本地秘密、设备备份和缓存
-- MaixCam与ESP32设备文件系统
+- All version managed source codes, protocols, configurations and tools
+- `ESP32/`, `Camera/`, `Robot Arm_Claws/`
+- Local Secret, Device Backup and Cache
+- MaixCam and ESP32 device file system
 
-## 共享依赖
+## Shared Dependencies
 
-- ESP32当前设备上的既有PS2/CAN程序及此前L3通过的失能、使能、回中、R1停车和最终失能流程。
-- `robot` CLI的连接保护与当前电脑侧视频中继。
-- 本地转发端点 `rtsp://127.0.0.1:8555/maixcam` 和WebRTC页面。
+- The existing PS2/CAN program on the current ESP32 device and previous L3 failures, enabling, returning, R1 parking and final failure.
+- `robot` CLI connection protection and current computer side video relay.
+- Local Forward Peers `rtsp://127.0.0.1:8555/maixcam` And WebRTC page.
 
-## 风险和安全门
+## Risk and safety door
 
-- 风险：ESP32程序启动或复位可能初始化CAN和四轮电机；PS2输入可能产生真实底盘运动；无线链路中断不能代替实体急停。
-- 设备：ESP32、PS2、CAN、底盘电机、MaixCam和电脑视频中继。
-- 用户操作：现场掌握实体急停，确认底盘架空/限位与安全区域，按约定执行失能、低速小幅单轴、回中、停车和最终失能，并观察本地视频。
-- 备份和恢复：不上传或修改设备文件；ESP32无线失败时使用USB恢复通道，视频异常时保留设备RTSP并仅重启电脑中继。
-- 运动确认：开始PS2程序前，用户必须明确确认人员现场、急停可用、周边无人员障碍、底盘已架空/限位、机械臂不参与且安全、动作/停止/失败处理已理解。
+- Risk: ESP32 program start or reset may initiate CAN and four-wheeler engines; PS2 input may create a real chassis movement; Wireless link interruption cannot replace physical stoppage.
+- ESP32, PS2, CAN, chassis, MaixCam and computer video relay.
+- User Operations: On-site control of physical stoppage, confirmation of chassis emptiness/restriction and safety area, implementation of default, low-speed small single-axis, return, parking and eventual failure, and observation of local video.
+- Backup and recovery: device files are not uploaded or modified; USB is used to restore the channel when the ESS32 wireless failed, the device is maintained in case of video anomaly and only the computer relay is restarted.
+- The movement confirms that before the PS2 program starts, the user must clearly confirm the person's location, stop, have no human barriers, the chassis is empty/limited, the arm of the machine is not involved and safe, action/stop/failure is understood.
 
-## 预期工作
+## Expected work
 
-1. 完成本轮L3人工安全确认。
-2. 只读定位ESP32当前地址和8266不可达原因；建立不回显本地凭据的窄WebREPL复位与PS2诊断工具。
-3. 先读取PS2原始帧；必要时通过带设备端 `finally` 自动停车和失能的固定 `0.05 m/s`、`0.3 s` 直行脉冲分离验证电机链，再让设备现有PS2程序重新启动，按低速受控序列验证使能、单轴、回中、停车和失能。
-4. 同时从本地RTSP转发端口解码视频并确认连续帧、分辨率和帧率。
-5. 结束时确认底盘失能、ESP32/视频链路状态和未解决事项。
+1. Completion of L3 manual security clearance.
+2. Read only the current ESP32 address and 8266 non-attainable reasons; Create a narrow WebREPL repositioning and PS2 diagnostic tool without reminiscing local evidence.
+3. read PS2 original frame first; if necessary, with device end `finally` Automatic parking and disablement static `0.05 m/s`, `0.3 s` The direct pulse splits the validation chain, rebooting the existing PS2 program, authenticating the performance, single axis, returning, parking and failure.
+4. Also forward port decode video from local RTSP and confirm continuous frames, resolution and frame.
+5. At the end, confirm chassis failure, ESP32/video link status and unresolved matters.
 
-## 验证
+## Validation
 
-- L2：ESP32发现/8266、MaixCam RTSP、本机转发端口和实际视频解码。
-- L1：WebREPL复位工具的密码隔离、握手、提示符和复位发送假对象测试。
-- L3：用户现场报告PS2失能、使能、小幅单轴、回中、停车和最终失能结果。
-- 不执行机械臂动作，不上传或替换ESP32程序。
+- L2: ESP32 found/8266, MaixCam RTSP, forward port and decode actual video.
+- L1: Password segregation for WebREPL restoration tool, handshakes, hints and duplicates sending false object tests.
+- L3: Users report PS2 failure, energy, small single axis, returning, parking and final failure.
+- No robot arm action, no transfer or replacement of ESP32 program.
 - `git diff --check`
 - `git status --short --branch`
 
-## 实际结果
+## Actual results
 
-1. 用户完成本轮L3安全确认，并在结束时确认底盘动作、停车和失能均无问题。
-2. ESP32动态发现短暂漏检后，通过当前热点租约恢复；最终ESP32 WebREPL、MaixCam SSH、设备RTSP和本机视频中继四项均为 `READY`。
-3. 本机中继连续解码120.047秒，得到2399帧H.264视频，1280×720、标称与实测20 fps，首帧1.5秒，无断流或解码错误。
-4. 固定PS2探针读取到模式 `0x73`、标志 `0x5A`，按键值为0，四轴为128/127附近，确认手柄供电、接线和底层读取有效。
-5. Agent按用户授权发送固定 `vx=0.05 m/s`、0.3秒直行脉冲；设备端在同一命令的 `finally` 中停车并失能，探针返回完成，用户确认动作无问题，证明CAN和底盘调用链有效。
-6. 故障不是CAN、PS2或摄像头资源占用。WebREPL接入MicroPython解释器时通过Ctrl-C中断了正在运行的 `main.py`；旧诊断序列发送回车和两次Ctrl-C，产生多个残留提示符并让命令/响应错位。复位后的旧TCP会话又没有优雅关闭，导致工具把实际复位误报为超时。
-7. 工具改为单次Ctrl-C、逐命令提示符同步、固定探针、异常摘要、运动安全确认以及“复位命令已发送/旧套接字是否关闭”的分离反馈。复位原因从1变为2，真机确认 `machine.reset()` 已实际执行；最后再次复位后不再进入REPL，用户确认PS2控制恢复正常。
-8. 开发工具测试共23项通过，两个工具静态编译通过；未上传、覆盖或删除ESP32设备文件，未操作机械臂。
+1. The user completes the L3 security clearance on this round, and at the end, confirms the chassis movement, parking and failure.
+2. The current hot spot lease was restored after a short leak was detected by the ESS32 dynamic; `READY`.
+3. Repeated decoded 120.047 seconds, received 2399 frames H.264 video, 1280 x 720, labelled with 20 fps, initial frame 1.5 seconds, no break or decode error.
+4. Fixed PS2 probe to read mode `0x73`Marks `0x5A`, press key value 0, four axes 128/127, confirm hand handle power supply, connect and bottom read.
+5. Agent sends fixed as authorized by user `vx=0.05 m/s`, 0.3 seconds straight-line pulse; with the device end of the same command `finally` Stopped and disabled, probe returned complete, user confirmed no problem with the action, certified the CAN and chassis call chain.
+6. It's not CAN, PS2, or camera resources. WebREPL interrupted running through Ctrl-C when accessing MicroPython interpreter. `main.py`; the old diagnostic sequence sent back the car and two Ctrl-Cs, creating multiple residual hints and causing the command/response error. The old TCP session after the reset did not close with grace, resulting in the tool mischaracterizing the actual reset.
+7. The tool is changed to a single Ctrl-C, command-by-command prompt sync, stationary probe, abnormal summary, motion security confirmation and separation feedback for "repeated commands sent/ whether the old patch is off". The compounding reason is changed from one to two, genuine confirmation `machine.reset()` It's actually been implemented; no more re-entry into REPL after re-entry, and users confirm that PS2 controls are back to normal.
+8. (b) Not uploaded, overwrite or delete ESP32 device files, unoperated robot arm.
 
-## 未解决事项
+## Outstanding matters
 
-- ESP32重启时旧WebREPL TCP会话可能直到本机超时都不关闭；工具如实返回 `disconnect_confirmed=false`，不能单凭该字段判断设备未复位。
-- WebREPL仍是单会话维护入口，进入REPL会中断旧底盘主程序；任何诊断结束后都必须复位恢复应用，并避免再次登录验证运行态。
-- 本目标验证的是设备上的历史PS2程序；正式底盘服务、安全心跳和统一控制协议仍按后续目标实施。
-- ESP32地址由热点DHCP分配，仍须通过发现或本地覆盖获得，不进入Git。
+- The old WebREPL TCP session may not be shut down until this machine is out of time when the ESPD32 is restarted; the tool returns correctly `disconnect_confirmed=false`, cannot judge the device not to be reset by the field alone.
+- WebREPL is still the single-talk maintenance portal, and entering it interrupts the old chassis master; any diagnosis must be completed and the application must be reinstated and the validation operation avoided.
+- This target is validated by the historical PS2 program on the device; the formal chassis service, the security heartbeat and the unified control protocol are still in line with the subsequent target.
+- The ESP32 address is allocated by the Hotspot DHCP, still to be obtained by discovery or local coverage, without entering Git.
 
-## 经验信号（供人工审阅）
+## Experience signal (for manual review)
 
-本轮重复出现WebREPL进入REPL后中断应用、复位后TCP状态不能代表应用状态的事实，构成“开发通道与运行通道必须显式分离”的经验信号；不自动创建经验文档。
+This round repeats the fact that WebREPL's application is interrupted after entering the REPL, and that the TCP state after the repositioning does not represent the application state, constitutes an empirical signal that "the development channel must be clearly separated from the running channel"; it does not automatically create an experience document.
 
-## 提交意图
+## Intent to submit
 
 ```text
 test: verify PS2 control with local video relay

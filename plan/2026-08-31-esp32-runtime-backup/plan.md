@@ -1,85 +1,85 @@
-# ESP32 MicroPython运行时识别与备份
+# ESP32 MicroPython While Running
 
-- 状态：`completed`
-- 负责人：Agent执行，用户现场配合
-- 最高验证等级：`L2`
+- Status:`completed`
+- Responsible: Agent execution, user on site
+- Highest validation level:`L2`
 
-## 目标
+## Objective
 
-通过COM7连接正常启动的MicroPython运行时，读取版本和文件树，并在不修改设备的前提下将现有文件系统备份到本地忽略目录。
+When running through COM7 to a properly started MicroPython, read the version and the file tree and back up the existing file system to the local ignore directory without modifying the device.
 
-## 工作区初始状态
+## Initial state of the workspace
 
 ```text
 ## main...origin/main
 ```
 
-上一目标已确认COM7为ESP32-S3。用户已按RST使设备回到正常启动模式，并要求继续；现场仍保持不会意外运动的安全状态。
+The previous target has confirmed COM7 as ESP32-S3. Users have returned the device to normal start-up mode according to RST and request continuation;
 
-## 可修改文件
+## Modifyable File
 
 - `.vscode/tasks.json`
 - `docs/esp32/development.md`
 - `plan/2026-08-31-esp32-runtime-backup/plan.md`
 - `plan/log.md`
-- `device-backups/`（本地忽略目录，不提交）
+- `device-backups/`(local directory ignored, not submitted)
 
-## 只读文件和目录
+## Read-only files and directories
 
-- 其余全部仓库文件
-- ESP32设备文件系统和Flash
+- All remaining repository files
+- ESP32 Device File System and Flash
 
-## 共享依赖
+## Shared Dependencies
 
-- COM7上的ESP32-S3。
-- `.venv` 中的 `mpremote 1.29.0`。
-- `.gitignore` 已排除 `device-backups/`。
+- ESP32-S3.
+- `.venv` Medium `mpremote 1.29.0`.
+- `.gitignore` Excluded `device-backups/`.
 
-## 风险和安全门
+## Risk and safety door
 
-- 风险：`mpremote`动作会停止当前程序并对MicroPython执行软复位；串口握手也可能触发硬件复位。
-- 设备：COM7上的ESP32-S3。
-- 用户操作：用户已按RST并要求继续，现场安全状态沿用本轮确认。
-- 备份和恢复：本目标只读设备，并将文件复制到时间戳本地目录。
-- 运动确认：不上传或执行运动代码；设备已处于用户确认的安全状态。
+- Risk:`mpremote`The action will stop the current program and execute a soft reset for MicroPython; a serial handshake may trigger a reset.
+- Device: ESP32-S3. on COM7
+- User Operations: Users have continued as required by RST, and the current round has been confirmed for safety on site.
+- Backup and Recovery: This target read-only device and copy files to time stamp Local directory.
+- Motion confirmation: no movement code is uploaded or executed; the device is in user-identified security.
 
-## 预期工作
+## Expected work
 
-1. 读取MicroPython实现、版本、平台和唯一ID摘要。
-2. 读取设备文件树，识别现有 `boot.py`、`main.py` 和应用模块。
-3. 创建时间戳备份目录并复制设备文件系统。
-4. 校验本地备份可读，记录结果；不上传或删除设备文件。
-5. 修正联调中发现的 `mpremote fs tree` 参数兼容问题。
+1. Read MicroPython Achieved, Version, Platform and Single ID Summary.
+2. Read Device File Tree, recognize existing `boot.py`, `main.py` and application modules
+3. Create Timetamp Backup Directory and Copy Device File System.
+4. Verifying local backup readable, recording results; not uploading or deleting device files.
+5. Correcting what you found in the connection. `mpremote fs tree` The compatibility of parameters.
 
-## 验证
+## Validation
 
-- `mpremote connect COM7 exec <只读运行时信息>`
+- `mpremote connect COM7 exec <read-only-runtime-query>`
 - `mpremote connect COM7 fs tree -vsh :`
-- 对本地备份执行文件数量、大小和SHA-256清单检查。
+- Check the number of local backup execution files, size and SHA-256 list.
 - `git check-ignore device-backups`
 - `git diff --check`
 - `git status --short --branch`
 
-## 实际结果
+## Actual results
 
-- `mpremote`通过COM7成功连接MicroPython 1.27.0（2026-05-11），构建目标为 `ESP32_GENERIC_S3-SPIRAM_OCT`，平台为ESP32。
-- 文件树读取成功：设备根目录有11个Python文件，`SmartHybridChasisDemo/` 中另有相同的11个文件。
-- 已将全部22个文件、125684字节复制到本地忽略目录 `device-backups/esp32/20260831-111429/`。
-- 根目录和子目录的11对同名文件逐一计算SHA-256，全部一致；备份文件均可读取。
-- 根目录 `boot.py` 不初始化外设；根目录 `main.py` 会初始化UART、CAN和电机。当前 `robot_config.py` 为 `RUN_MODE="ps2"`，启动后进入PS2控制循环。
-- 第一次文件树命令使用了互斥的 `-s` 与 `-h` 参数而失败，已将VS Code任务修正为兼容mpremote 1.29.0的 `-vh` 并验证通过。
-- 本目标没有上传、删除或修改设备文件，未执行底盘运动。
+- `mpremote`Successfully connect MicroPython 1.27.0 (2026-05-11) to build target `ESP32_GENERIC_S3-SPIRAM_OCT`The platform is ESP32.
+- The file tree has been read successfully: the device root directory has 11 Python files.`SmartHybridChasisDemo/` The same 11 files.
+- All 22 files, 125684 bytes, have been copied to a local ignore directory `device-backups/esp32/20260831-111429/`.
+- The 11 pairs of the root directory and subdirectories calculate the same file by name SHA-256, all of which are consistent; backup files are accessible.
+- Root Directory `boot.py` not initializing externalities; root directories `main.py` UART, CAN AND THE ELECTRONICS. `robot_config.py` Yes `RUN_MODE="ps2"`After startup into PS2 control cycle.
+- The first file tree command used a cross-check. `-s` and `-h` Parameter failed, VS Code was amended to mpremote 1.29.0 `-vh` And verify the pass.
+- This target is not uploaded, device files are deleted or modified, chassis movement is not performed.
 
-## 未解决事项
+## Outstanding matters
 
-- 当前程序在复位后会重新初始化CAN和电机，下一次复位前仍需维持现场安全状态。
-- 尚未配置手机热点、`webrepl_setup`和无线连接。
-- 设备根目录与 `SmartHybridChasisDemo/` 的重复文件后续应在代码迁移目标中确定保留策略，本目标不删除设备文件。
+- The current program will re-initiate the CAN and the electrics when they are back in position, and will need to remain on site safe until the next reset.
+- We have not yet set up a cell phone hotspot.`webrepl_setup`Wireless.
+- Device Roots with `SmartHybridChasisDemo/` The duplicate file should be followed by a retention strategy in the code migration target, which does not delete the device file.
 
-## 经验信号（供人工审阅）
+## Experience signal (for manual review)
 
 
-## 提交意图
+## Intent to submit
 
 ```text
 docs: record ESP32 MicroPython runtime backup

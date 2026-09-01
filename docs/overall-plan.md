@@ -1,284 +1,160 @@
-# 复合移动机器人统一开发与控制总体方案
+# Unified Robot Development and Control Plan
 
-- 方案版本：1.0
-- 基线日期：2026-08-31
-- 覆盖设备：ESP32-S3 底盘、MaixCam 摄像头、Magician 6 机械臂、开发电脑
+- Version: 1.1
+- Baseline date: 2026-09-01
+- Devices: ESP32-S3 chassis, MaixCam, Magician 6 robot arm, and development computer
 
-## 1. 建设目标
+## 1. Objectives
 
-当前底盘代码在 Thonny 中开发，摄像头代码主要在 MaixVision 中开发，机械臂通过独立软件和零散通信示例调试。项目目标是：
+1. Move daily development, deployment, logs, and debugging into VS Code.
+2. Build one computer-side console for chassis, vision, and robot-arm tasks.
+3. Preserve local real-time control and safety when the computer or network fails.
+4. Establish shared message, state, log, configuration, and test conventions.
+5. Keep vendor resources read-only and manage promoted code through Git and GitHub.
 
-1. 将日常开发、部署、日志和调试统一到 VS Code。
-2. 在同一台电脑上建立统一控制台，分别控制底盘、视觉和机械臂。
-3. 保留设备本地实时控制和安全能力，电脑或网络掉线时不得造成失控。
-4. 建立统一通信协议、状态机、日志格式和测试方法。
-5. 原始资料只读保留，重构后的代码通过 Git 和 GitHub 管理。
+## 2. Two-Plane Architecture
 
-## 2. 系统拓扑
+Detailed runtime and deployment rules are in [Runtime Baseline](runtime/README.md) and [Deployment Baseline](deployment/README.md).
+
+### 2.1 Runtime Plane
 
 ```text
-                         2.4 GHz 手机热点
-                    （开发期受控本地局域网）
-                                 │
-              ┌──────────────────┼──────────────────┐
-              │                  │                  │
-         开发电脑             ESP32-S3           MaixCam
-         VS Code              底盘控制器          视觉/机械臂网关
-              │                  │                  │
-              │                  └──── 本地串口 ────┤
-              │                                     │
-              │                                  UART 串口
-              │                                     │
-              │                                   TCP232
-              │                                     │
-              │                         机械臂 LAN1：192.168.5.1:5200
-              │
-              └──── 可选维护网线 ────── 机械臂 LAN2：192.168.200.1
+Computer: vision inference, task orchestration, unified console
+                         │
+                         │ Wi-Fi: video, commands, status
+                         ▼
+                   MaixCam gateway
+              ┌──────────┴──────────┐
+              │ UART2               │ UART0
+              ▼                     ▼
+           ESP32-S3              TCP232
+              │ CAN                 │ wired TCP
+              ▼                     ▼
+            chassis          robot arm LAN1
 ```
 
-### 2.1 角色边界
+Only the computer and MaixCam must join the runtime LAN. ESP32 does not depend on Wi-Fi, and arm LAN2 may be disconnected.
 
-| 节点 | 主要职责 | 不承担的职责 |
+### 2.2 Deployment and Maintenance Plane
+
+```text
+ESP32:    computer → Wi-Fi/WebREPL; USB for initial setup and recovery
+MaixCam:  computer → Wi-Fi/SSH/SCP; screen/USB virtual network for recovery
+Robot arm: computer → wired LAN2 → DobotStudio Pro
+TCP232:   computer → vendor configuration endpoint for one-time verification
+```
+
+Maintenance endpoints never become a second runtime control owner.
+
+### 2.3 Responsibility Boundaries
+
+| Node | Primary responsibilities | Exclusions |
 |---|---|---|
-| 开发电脑 | VS Code、统一控制台、部署、日志、任务编排 | 不承担最终急停和底层实时联锁 |
-| ESP32-S3 | 底盘运动、CAN、电机、传感器、心跳停车 | 不直接连接机械臂 LAN1 |
-| MaixCam | 图像采集和识别、视频服务、机械臂唯一运行网关 | 不代替机械臂本体安全功能 |
-| TCP232 | MaixCam UART 与机械臂 LAN1 TCP 的透明转换 | 不承载业务状态机 |
-| 机械臂 | 轨迹执行、本体状态、示教点与本体保护 | 不直接依赖手机热点运行 |
+| Computer | VS Code, deployment, vision inference, unified console, logs, task orchestration | No direct production commands to ESP32 or arm; not the final emergency stop or real-time interlock |
+| MaixCam | Video, sole computer runtime endpoint, validation/routing, status aggregation, ESP32 and arm gateway | No unchecked motion pass-through; does not replace local safety |
+| ESP32-S3 | UART runtime input, chassis motion, CAN, motors, sensors, heartbeat stop, status | No Wi-Fi runtime dependency; no arm control |
+| TCP232 | Transparent UART-to-arm-LAN1 TCP transport | No application state machine |
+| Robot arm | Motion execution, controller state, taught points, controller safety | No runtime dependency on hotspot or LAN2 |
 
-## 3. 网络方案
+## 3. Network Baseline
 
-本节记录总体决策；具体地址、接口、接入步骤、故障降级和验收标准见 [`network/README.md`](network/README.md)。
+Development uses a controlled 2.4 GHz phone hotspot for the computer, ESP32, and MaixCam. Internet access is not required. Disable hotspot sleep and client isolation, use local configuration plus discovery instead of hard-coded DHCP addresses, and switch to a Windows hotspot, trusted LAN, or dedicated router only if stability requires it.
 
-### 3.1 开发期网络
+Robot-arm networks:
 
-电脑、ESP32 和 MaixCam 连接同一个 2.4 GHz 手机热点。手机热点只提供本地局域网和 DHCP；系统核心控制不要求手机具有移动数据或互联网连接。
+- LAN1: `192.168.5.1`, TCP service baseline `5200`, reached by TCP232.
+- LAN2: `192.168.200.1`, used for DobotStudio maintenance; computer baseline `192.168.200.10/24` with no default gateway.
+- Verify every address and TCP232 parameter before real-device integration.
 
-接入前检查：
+Tailscale is not part of the first implementation. A future remote gateway may carry SSH, files, logs, video, and high-level discrete tasks, but never the only emergency stop, continuous chassis control, arm jogging, or low-level interlock.
 
-- 热点固定使用 2.4 GHz、固定 SSID 和强密码。
-- 关闭热点自动休眠、省电断开和流量限制。
-- 验证热点允许客户端相互访问，不存在 AP/客户端隔离。
-- 记录 ESP32 与 MaixCam 当前 DHCP 地址，但业务代码不永久写死地址。
-- 设备发现采用“本地配置覆盖 + 设备名/mDNS + 网段发现”的组合方式。
+See [Network Baseline](network/README.md) for detailed addressing, failure behavior, and acceptance checks.
 
-如果手机热点不能满足客户端互访或稳定性要求，可以换成 Windows 热点、现有可信局域网或独立路由器；上层软件和设备职责保持不变。
+## 4. Development Environment
 
-### 3.2 机械臂网络
+`E:\Device Network` is the local repository root. `ESP32/`, `Camera/`, and `Robot Arm_Claws/` are ignored, read-only raw-resource archives. Production source lives under `src/esp32/`, `src/maixcam/`, and `src/console/`; the repository is the source of truth and devices are deployment targets.
 
-- LAN1：`192.168.5.1`，运行控制端口暂定 `5200`，由 TCP232 接入。
-- LAN2：固定 `192.168.200.1`，用于 DobotStudio、示教、部署和故障维护。
-- 电脑维护时将有线网卡配置为 `192.168.200.10/24`。
-- 电脑可同时通过 Wi-Fi 接入开发热点、通过有线网口接入机械臂 LAN2。
+### ESP32
 
-以上地址和端口在真实联调前必须通过机械臂及 TCP232 配置再次确认。
+- USB: initial firmware, Wi-Fi bootstrap, backup, and recovery.
+- WebREPL: routine file synchronization and soft reset on a trusted development LAN.
+- Production runtime: MaixCam-ESP32 UART, with velocity, stop, status, heartbeat, and fault handling.
 
-### 3.3 远程访问
+### MaixCam
 
-第一阶段不部署 Tailscale。未来需要异地访问时，可在 MaixCam 或额外子网网关部署 Tailscale，用于 SSH、程序同步、日志、视频和高层任务。远程链路不得用于急停、连续点动、底盘安全心跳或机械臂底层联锁。
+- Edit locally and deploy with standard SSH/SCP; MaixVision, MaixCode, and Remote-SSH are not required.
+- Provide RTSP/H.264 video. FFmpeg remuxes without transcoding and MediaMTX exposes computer-side RTSP, HLS, and WebRTC.
+- The unified service owns video, the computer command/status endpoint, both UART adapters, and aggregated status with explicit resource ownership.
 
-## 4. 开发环境
+### Robot Arm
 
-### 4.1 统一工作区
+- Keep DobotStudio Pro for teaching, configuration, project deployment, and maintenance through LAN2.
+- Use MaixCam and LAN1 for runtime tasks.
+- Validate protocols against a simulator before low-speed unloaded hardware tests.
 
-仓库以 `E:\Device Network` 为本地根目录。现有 `ESP32/`、`Camera/`、`Robot Arm_Claws/` 是本地资料库并被 Git 忽略。后续建立以下受版本管理的目录：
-
-```text
-.vscode/   config/   docs/      protocol/
-src/esp32/ src/maixcam/ src/console/ tests/ tools/
-```
-
-本地代码为唯一可信源，设备文件系统只作为部署目标。设备上的修改应同步回本地并提交，避免出现“只有设备上存在”的代码。由于Windows下现有原始资料目录 `ESP32/` 与小写 `esp32/` 无法并存，正式设备源码统一放在 `src/esp32/`、`src/maixcam/` 和 `src/console/`。
-
-### 4.2 ESP32
-
-- 首次固件安装、Wi-Fi 引导和故障恢复使用 USB。
-- 日常文件同步和软重启使用 Wi-Fi WebREPL。
-- VS Code 任务封装设备检测、备份、刷写、同步、重启和日志操作。
-- WebREPL 仅在可信开发网络中开启，正式运行固件应关闭或严格限制。
-- 底盘服务对外提供速度控制、停车、状态、心跳和故障查询接口。
-
-### 4.3 MaixCam
-
-- 日常源码编辑、部署和日志统一使用VS Code与标准SSH/SCP，不依赖MaixCode或MaixVision。
-- MaixCam使用官方RTSP/H.264提供视频；电脑使用标准媒体工具验证，并由FFmpeg无转码兼容桥和MediaMTX转发为后续控制台可用的RTSP、HLS和WebRTC端点。
-- 设备屏幕和USB虚拟网卡用于网络恢复；系统损坏时使用官方镜像工具恢复存储介质，不把厂商IDE作为唯一恢复路径。
-- MaixCam 软件拆分为视觉服务、视频服务、ESP32 链路和机械臂网关。
-
-### 4.4 机械臂
-
-- DobotStudio 保留用于示教、参数设置、程序部署和维护。
-- 日常业务代码在 VS Code 中开发，通过 MaixCam 网关发送到机械臂 LAN1。
-- 联调前先使用机械臂模拟服务器验证协议、超时和状态机，再进行低速空载真机测试。
-
-## 5. 控制与数据流
-
-### 5.1 底盘
+## 5. Control and Data Flow
 
 ```text
-统一控制台 → Wi-Fi → ESP32 底盘服务 → chassis.drive(vx, vy, omega)
+Chassis: computer → Wi-Fi → MaixCam → UART → ESP32 → CAN/motors
+Video:   MaixCam → Wi-Fi → computer vision and console
+Arm:     computer → Wi-Fi → MaixCam → UART → TCP232 → LAN1
+Status:  ESP32/arm → MaixCam → Wi-Fi → computer
 ```
 
-ESP32负责参数限幅、控制所有权、心跳和超时停车。
+MaixCam validates and converts device-specific commands and enforces cross-device gates such as requiring confirmed chassis stop before an arm task. ESP32 retains final limits, ownership, heartbeat, and stop behavior. The arm retains controller limits and body safety.
 
-### 5.2 视觉
+The first high-level task sequence is:
 
 ```text
-统一控制台 ← Wi-Fi → MaixCam
-                      ├── 视频流
-                      ├── 识别结果
-                      └── 相机状态和参数
+chassis arrives → confirmed stop → vision detection → target validation
+→ arm pick → result → arm safe pose → chassis may continue
 ```
 
-### 5.3 机械臂
+## 6. Shared Message Contract
 
-```text
-统一控制台 → Wi-Fi → MaixCam 机械臂网关
-                         → UART → TCP232 → TCP 5200 → 机械臂 LAN1
-```
+Replace legacy raw strings with a versioned envelope containing source, target, message type, sequence, timestamp, TTL, payload, and transport framing/CRC where needed. The common envelope does not make device command sets identical; MaixCam must parse and convert them.
 
-MaixCam是机械臂运行控制的唯一网关，负责序列号、命令排队、响应匹配、超时和错误上报。
+Traceable results use `ACK`, `RUNNING`, `DONE`, `FAULT`, `REJECTED`, and `UNKNOWN`. Duplicate, expired, invalid, or unauthorized commands are rejected. Non-idempotent actions in `UNKNOWN` are not automatically retried.
 
-### 5.4 设备协同
+Service-health state in `protocol/runtime-status.schema.json` remains distinct from physical task state. A service marked `running` does not mean the robot is moving.
 
-第一阶段的高层任务编排运行在电脑控制台，例如：
+## 7. Safety Requirements
 
-```text
-底盘到位 → 确认停车 → 视觉识别 → 校验目标
-→ 机械臂抓取 → 返回结果 → 机械臂回安全位 → 底盘继续
-```
+- Every device powers on without motion.
+- Loss of the computer, hotspot, or network must not allow new actions or continued stale velocity.
+- Validate, limit, authorize, and log every motion command.
+- ESP32 stops locally on heartbeat timeout and rejects invalid or expired commands.
+- The arm uses confirmed safe poses, low speed, limited workspace, and conflict rejection during development.
+- Do not move the arm until chassis stop is confirmed; do not allow high-speed chassis motion until the arm is safe.
+- Software stop never replaces the physical emergency stop.
 
-快速停车、网络掉线处理及底盘与机械臂的关键联锁在设备本地完成。MaixCam 与 ESP32 之间保留本地串口，供低延迟触发和网络故障时的安全协同使用。
+## 8. First Console Scope
 
-## 6. 统一通信协议
+- Link and device status for ESP32, MaixCam, and the arm.
+- Chassis manual control, limits, and stop.
+- Video, recognition results, and basic camera settings.
+- Arm initialization, safe pose, and named actions.
+- Sequence-aware command status, errors, and unified logs.
+- Separate single-device debug and coordinated-task modes.
 
-当前 `Initialize`、`biao`、`ok` 等裸字符串将逐步替换为带边界和版本的消息。基础字段包括：
+## 9. Implementation Stages
 
-- 协议版本、来源、目标和命令类型。
-- 序列号、时间戳、负载长度和参数。
-- 校验值或 CRC。
-- ACK、执行结果、超时和错误代码。
-- 重复命令识别和幂等处理。
+1. Repository and VS Code baseline.
+2. Development network and independent deployment channels.
+3. Shared protocol/simulators plus ESP32 and MaixCam resident services.
+4. L2 connectivity and L3 low-speed single-device validation.
+5. Unified console and L4 coordinated interlock validation.
 
-统一设备状态：
+Completed evidence as of 2026-09-01 includes ESP32 USB/WebREPL maintenance, PS2-CAN chassis operation, MaixCam SSH/SCP, continuous RTSP video, and MaixCam-UART-TCP232-arm LAN1 PING plus one fixed low-speed action. These facts do not prove the generic gateway, generic arm service, or coordinated system.
 
-```text
-DISCONNECTED → INITIALIZING → IDLE → ARMED → RUNNING → COMPLETED
-                                      └──────────────→ FAULT / ESTOP
-```
+## 10. Frozen First-Version Decisions
 
-上述为未来运动与任务业务状态。设备服务健康状态使用独立的 `protocol/runtime-status.schema.json`，包含设备、子系统、事件、序列号、运行时间、错误码和结构化细节。服务 `running` 不得被解释为机器人正在运动。
+1. Daily development uses VS Code.
+2. The first development LAN is a 2.4 GHz phone hotspot.
+3. ESP32 owns chassis control and low-level safety; its Wi-Fi is maintenance-only.
+4. MaixCam is the sole computer-facing runtime node and gateway for ESP32 and the arm.
+5. Arm LAN1 is for runtime control; LAN2 is for computer maintenance.
+6. Tailscale is a possible future maintenance path, never a real-time safety link.
+7. Raw vendor-resource directories are excluded from Git.
 
-协议应同时提供 Python 参考实现、ESP32 实现、模拟器和自动化测试向量。
-
-## 7. 安全要求
-
-### 7.1 通用要求
-
-- 所有设备开机默认不运动。
-- 电脑、手机热点或网络断开不能导致设备继续接受新动作。
-- 每个运动命令必须限幅、校验、确认来源并记录日志。
-- 真实运动测试必须有人现场监护并能操作实体急停。
-
-### 7.2 底盘
-
-- 控制心跳超时立即执行本地停车。
-- 限制最大线速度、角速度和加速度。
-- 非法或过期命令拒绝执行。
-
-### 7.3 机械臂
-
-- 调试阶段采用低速、空载和明确的安全工作空间。
-- 底盘没有确认停止时禁止机械臂执行动作。
-- 机械臂未回安全位时禁止底盘高速移动。
-- 忙碌状态拒绝冲突动作；通信中断停止下发后续动作。
-- 安全位、示教点、速度、抓取力和禁入区由现场人员确认。
-
-## 8. 统一控制台首版范围
-
-首版控制台提供：
-
-- ESP32、MaixCam、机械臂和链路在线状态。
-- 底盘手动控制、限速和停车。
-- 摄像头视频、识别结果和基础参数。
-- 机械臂初始化、回安全位和预设动作。
-- 设备状态、命令序列号、错误和统一日志。
-- 单设备调试模式和多设备联合任务模式。
-- 软件急停入口；软件急停不能取代实体急停。
-
-## 9. 实施阶段与验收
-
-### 阶段一：仓库和 VS Code 基线
-
-- 建立私有 GitHub 仓库。
-- 忽略三个原始资料目录和本地秘密配置。
-- 创建 Python 3.12 虚拟环境、VS Code 任务和配置模板。
-
-验收：新电脑克隆仓库后能按文档建立开发环境，Git中不存在资料原件和密码。
-
-### 阶段二：开发网络和部署通道
-
-- ESP32完成USB恢复、Wi-Fi配置和WebREPL同步。
-- MaixCam完成热点接入、SSH/SFTP和运行日志。
-- 建立设备发现、连通性检查和诊断工具。
-
-验收：重启设备后能够重新发现并从VS Code部署最小程序。
-
-### 阶段三：设备服务重构
-
-- 建立ESP32底盘服务和安全心跳。
-- 建立MaixCam视觉服务和机械臂网关。
-- 建立统一协议库、日志格式和配置模型。
-
-验收：模拟器上完成命令、ACK、结果、超时、重连和重复命令测试。
-
-### 阶段四：单设备真机联调
-
-依次测试ESP32、MaixCam、TCP232和机械臂，机械臂采用低速空载。
-
-验收：每台设备可独立部署、控制、停止、重连并输出可追踪日志。
-
-截至2026-09-01，MaixCam经UART/TCP232到机械臂LAN1的L2双向诊断和L3固定
-低速回位动作已经通过，launcher资源恢复正常。该里程碑只证明链路和固定验证
-动作，不代表通用机械臂服务或本阶段全部验收完成；步骤、安全门和剩余边界见
-[`robot-arm/lan1-diagnostic.md`](robot-arm/lan1-diagnostic.md)。
-
-### 阶段五：统一控制台和联合验收
-
-- 完成控制台设备适配器和用户界面。
-- 完成底盘停止、视觉确认、机械臂运行和安全位互锁。
-- 进行断网、超时、设备重启和错误恢复测试。
-
-验收：三设备完成一条完整任务链，任一关键链路中断时系统进入预期安全状态。
-
-## 10. 协作分工
-
-### 软件侧可完成
-
-- 仓库、VS Code、配置模板和部署工具。
-- 现有代码整理、迁移和重构。
-- 统一协议、设备服务、模拟器和自动化测试。
-- 统一控制台、日志、诊断和使用文档。
-
-### 现场侧需要配合
-
-- 开启手机2.4 GHz热点并提供设备当前IP。
-- 连接ESP32 USB，必要时操作BOOT/RST。
-- 在MaixCam上完成热点和SSH配置。
-- 确认TCP232参数以及机械臂LAN1、LAN2和5200端口。
-- 示教并确认机械臂安全位、测试点、速度、抓取力和禁入区域。
-- 真实运动阶段现场监护并掌握实体急停。
-
-热点、SSH和WebREPL密码只写入本机忽略文件，不在聊天、代码或Git提交中保存。
-
-## 11. 已冻结的第一版决策
-
-1. 日常开发统一到 VS Code。
-2. 开发网络首先使用2.4 GHz手机热点。
-3. ESP32负责底盘和底层安全，不增加有线机械臂接口。
-4. MaixCam作为机械臂唯一运行控制网关。
-5. 机械臂LAN1用于运行控制，LAN2用于电脑维护。
-6. Tailscale仅作为未来远程开发入口，不进入实时安全链路。
-7. 原始设备资料目录不上传GitHub。
-
-影响以上决策的变更应先更新本文件，再修改代码和硬件连接。
+Update this document and obtain user confirmation before changing these decisions.

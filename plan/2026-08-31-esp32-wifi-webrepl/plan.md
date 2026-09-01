@@ -1,95 +1,95 @@
-# ESP32手机热点与WebREPL联调
+# ESP32 Hotspots with WebREPL
 
-- 状态：`completed`
-- 负责人：Agent执行，用户提供热点和现场条件
-- 最高验证等级：`L2`
+- Status:`completed`
+- Responsible: Agent execution, users providing hot spots and site conditions
+- Highest validation level:`L2`
 
-## 目标
+## Objective
 
-通过COM7为当前MicroPython会话连接用户手机2.4 GHz热点，确认ESP32获得局域网地址；随后配置独立WebREPL密码并验证电脑到ESP32的无线REPL连接。未经验证不修改现有启动文件。
+Connecting to the current MicroPython cell phone 2.4 GHz hotspot through COM7 confirms ESP32's access to the local area network (LAN) address; then configures the independent WebREPL password and validates the wireless REPL connection of the computer to ESP32. Existing startup file is not modified without validation.
 
-## 工作区初始状态
+## Initial state of the workspace
 
 ```text
 ## main...origin/main
 ```
 
-工作区干净。MicroPython 1.27.0和设备文件系统已完成只读备份；用户已开启热点并明确授权使用本轮提供的热点凭据。热点密码不得写入Git、计划、日志或命令输出。
+Workspace clean. MicroPython 1.27.0 and device file system completed read-only backup; users have turned on hot spots and clearly authorized the use of hot spots provided by this round According to... hot code not to write to Git, schedule, log or command output.
 
-## 可修改文件
+## Modifyable File
 
 - `.vscode/tasks.json`
 - `src/esp32/app/boot.py`
 - `src/esp32/app/network_boot.py`
 - `src/esp32/app/secrets.example.py`
-- `src/esp32/app/secrets.py`（本机忽略文件）
+- `src/esp32/app/secrets.py`(Door ignores files)
 - `src/esp32/README.md`
 - `docs/esp32/development.md`
 - `plan/2026-08-31-esp32-wifi-webrepl/plan.md`
 - `plan/log.md`
-- ESP32运行时网络状态
-- ESP32根目录 `boot.py`、`network_boot.py` 与 `secrets.py`
+- ESP32 Runtime Network State
+- ESP32 directories `boot.py`, `network_boot.py` and `secrets.py`
 
-## 只读文件和目录
+## Read-only files and directories
 
-- 其余仓库文件
-- ESP32现有底盘应用文件，除非计划在写入前明确更新范围
+- Remaining repository files
+- ESP32 Existing chassis application file, unless planned to be clearly updated before writing
 
-## 共享依赖
+## Shared Dependencies
 
-- COM7上的MicroPython 1.27.0。
-- 用户手机2.4 GHz热点。
-- 官方WebREPL客户端及4至9字符独立密码限制。
-- 已完成的本地设备文件系统备份。
+- MicroPython 1.27.0.
+- User phone 2.4 GHz hotspot.
+- The official WebREPL client and the separate password limit for 4-9 characters.
+- Local device file system backup completed.
 
-## 风险和安全门
+## Risk and safety door
 
-- 风险：`mpremote`会停止现有PS2控制程序并软复位；后续复位可能重新初始化CAN和电机。
-- 设备：COM7上的ESP32-S3。
-- 用户操作：热点已开启；现场继续保持底盘不会意外运动的状态。
-- 备份和恢复：写入前已有完整文件备份；本轮先采用非持久运行时连接。
-- 运动确认：不发送底盘运动命令。
+- Risk:`mpremote`The current PS2 control program will be stopped and reset softly; and the subsequent re-initiation of the CAN and the power is possible.
+- Device: ESP32-S3. on COM7
+- User Operations: Hotspots are on; on site keep the chassis unplanned.
+- Backup and recovery: complete file backup is available before writing; non-sustainable running connection is used first for this round.
+- Motion confirmation: Do not send chassis motion orders.
 
-## 预期工作
+## Expected work
 
-1. 通过串口在当前MicroPython会话启用STA并连接手机热点，不打印密码。
-2. 读取连接状态和DHCP地址，确认电脑与ESP32处于可达网段。
-3. 确定4至9字符WebREPL独立密码，通过串口启用并验证无线终端。
-4. 无线验证通过后，将有超时和异常隔离的Wi-Fi与WebREPL引导模块写入启动流程；真实凭据只存在本机忽略文件和设备文件系统。
-5. 重启后重新验证DHCP、TCP 8266和只读无线REPL；不改动或发送底盘运动命令。
-6. 将Windows下不可用且会回显密码的官方CLI终端任务替换为官方WebREPL浏览器客户端入口。
+1. Activate STA and connect mobile phone hotspots through the current MicroPython session, without printing passwords.
+2. Read the connection and the DHCP address and confirm that the computer and ESP32 are on the accessible section.
+3. Determines that 4-9 characters WebREPL are unique passwords, enable and verify wireless terminals by serial port.
+4. The Wi-Fi and WebREPL pilot modules will be written into the start-up process after the Wi-Fi and WebREPL are overtimed and abnormally sequestered; real proof only exists that the file and device file system is ignored.
+5. Revalidate DHCP, TCP 8266 and read-only REPL after restart; do not change or send chassis motion commands.
+6. Replace the official CLI terminal task with the official WebREPL browser client portal, which is not available under Windows and which resonates.
 
-## 验证
+## Validation
 
-- 读取 `WLAN.isconnected()`、`WLAN.status()` 和 `ifconfig()`。
-- 电脑到ESP32执行 `ping` 和TCP 8266连通检查。
-- 官方WebREPL协议完成登录并执行只读REPL命令。
-- 重启后重复局域网与无线REPL检查。
+- Read `WLAN.isconnected()`, `WLAN.status()` and `ifconfig()`.
+- Computer to ESP 32 `ping` Connect to TCP 8266.
+- The official WebREPL protocol completes the login and executes a read-only REPL order.
+- Repeat LAN and WirelessREPL check after restart.
 - `git diff --check`
 - `git status --short --branch`
 
-## 实际结果
+## Actual results
 
-- ESP32在当前会话中成功连接2.4 GHz手机热点，`WLAN.isconnected()`为真，并通过DHCP取得 `10.114.1.97/24`；电脑切到同一热点后ICMP互访成功。
-- 通过串口临时启动WebREPL后，TCP 8266可达；官方WebREPL协议完成鉴权，返回MicroPython 1.27.0，并成功执行不写文件的REPL标记命令。
-- 新增 `network_boot.py`，采用20秒有界轮询连接Wi-Fi并启动WebREPL；`boot.py`隔离网络异常，不初始化运动外设。真实凭据只存在Git忽略的本地 `secrets.py` 和设备文件系统。
-- 按 `network_boot.py`、`secrets.py`、`boot.py` 的顺序上传到COM7，并在设备端完成三文件语法检查；没有修改设备原有 `main.py` 或其他底盘文件。
-- 硬复位后ESP32自动恢复相同DHCP地址和TCP 8266服务，无线鉴权与只读REPL探针再次成功。探针结束后执行最终硬复位，确认ICMP与TCP 8266恢复，不再进入REPL干扰原有PS2启动流程。
-- 固定版本的官方CLI完成鉴权后在Windows因缺少 `termios` 退出，并意外在状态行回显密码。VS Code已移除该CLI终端和上传任务，改为打开官方 `webrepl.html` 浏览器客户端。
-- 本地Python语法、VS Code任务JSON、官方浏览器客户端存在性、秘密扫描和Git格式检查均通过。
-- 本轮只进行L2连接和配置验证，没有发送底盘运动命令，也没有执行L3运动验证。
+- ESP32 successfully connected 2.4 GHz mobile phone hotspots in the current session.`WLAN.isconnected()`For real, and through DHCP `10.114.1.97/24`- ICMP visits were successful after the computer cut to the same hotspot.
+- (b) Official WebREPL protocol completes the clearance, returns MicroPython 1.27.0 and successfully executes the unwritten REPL tag order.
+- Add `network_boot.py`, using 20 seconds of roving to connect Wi-Fi and activate WebREPL;`boot.py`Isolation network abnormal, non-initiation of movement outside. `secrets.py` and device documentation systems
+- Press `network_boot.py`, `secrets.py`, `boot.py` , and complete the grammatical check of three files at the end of the device; no changes to the original device `main.py` Or other chassis files.
+- ESP32 automatically restores the same DHCP address and TCP 8266 service after hard repositioning, wireless validation and read-only RTL probes again succeed. After completion of the probe, executes the final hard reset, confirming that ICMPs and TCP 8266 resume, and no longer enters the RPL to interfere with the original PS2 start-up process.
+- A fixed version of the official CLI completed its clearance in Windows due to a lack of information `termios` Quits, and unexpectedly moves back to the CLI password. VS Code has removed the CLI terminal and uploading task and opened it officially `webrepl.html` Browser client.
+- Local Python syntax, VS Code job JSON, Official Browser Client Existence, Secret Scan and Git format check.
+- This round only performs L2 connection and configuration verification, does not send chassis motion orders, does not perform L3 campaign validation.
 
-## 未解决事项
+## Outstanding matters
 
-- DHCP地址仍可能变化；mDNS或设备发现工具留待后续网络诊断目标。
-- Windows日常无线操作当前使用官方浏览器客户端，命令行多文件同步需等待上游修复或另建目标实现不泄密的薄封装。
-- 设备原有底盘 `main.py` 尚未审计迁入受版本管理源码，本轮保留原状。
+- The DHCP address is still subject to change; mDNS or device discovery tools are left to follow-up network diagnostic targets.
+- Windows' daily wireless operation currently uses an official browser client to order multi-file synchronization to wait upstream to repair or create a separate target to achieve undisclosed thin packaging.
+- Original device chassis `main.py` No audit has yet been conducted to move to version management source code, and the current round remains as it is.
 
-## 经验信号（供人工审阅）
+## Experience signal (for manual review)
 
-- 固定版本官方WebREPL CLI在Windows交互REPL和凭据输出方面存在可迁移的安全/兼容性问题；后续部署工具选择应显式验证这两项。
+- A fixed version of the official WebREPL CLI has transportable security/compatibility issues with regard to Windows InteractiveREPLs and certificate output;
 
-## 提交意图
+## Intent to submit
 
 ```text
 feat: enable ESP32 Wi-Fi WebREPL bootstrap

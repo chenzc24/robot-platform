@@ -12,6 +12,7 @@ SCHEMA_PATH = ROOT / "protocol" / "runtime-status.schema.json"
 SOURCE_ROOTS = (
     ROOT / "src" / "esp32" / "app",
     ROOT / "src" / "maixcam",
+    ROOT / "src" / "robot_arm",
     ROOT / "tools",
 )
 SOURCE_SUFFIXES = {".py", ".ps1", ".sh"}

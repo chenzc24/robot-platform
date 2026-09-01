@@ -18,6 +18,8 @@ ESP32与MaixCam的日常启动、结束、排障和问题登记见 [docs/develop
 
 共享状态契约、模块边界、保护原语和VS Code入口见 [docs/runtime-foundation.md](docs/runtime-foundation.md)。
 
+MaixCam经UART/TCP232到机械臂LAN1的无运动诊断和受控L3链路验证见 [docs/robot-arm/lan1-diagnostic.md](docs/robot-arm/lan1-diagnostic.md)。
+
 日常连接可在仓库根目录直接使用扁平CLI：
 
 ```powershell

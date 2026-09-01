@@ -238,6 +238,11 @@ DISCONNECTED → INITIALIZING → IDLE → ARMED → RUNNING → COMPLETED
 
 验收：每台设备可独立部署、控制、停止、重连并输出可追踪日志。
 
+截至2026-09-01，MaixCam经UART/TCP232到机械臂LAN1的L2双向诊断和L3固定
+低速回位动作已经通过，launcher资源恢复正常。该里程碑只证明链路和固定验证
+动作，不代表通用机械臂服务或本阶段全部验收完成；步骤、安全门和剩余边界见
+[`robot-arm/lan1-diagnostic.md`](robot-arm/lan1-diagnostic.md)。
+
 ### 阶段五：统一控制台和联合验收
 
 - 完成控制台设备适配器和用户界面。

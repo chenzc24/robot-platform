@@ -242,6 +242,7 @@ class SerializedSession(QObject):
             result = self._dispatcher(self._client, command, payload)
         except Exception as error:
             code = getattr(error, "code", None) or "request_failed"
+            self._disconnect_internal()
             self._emit_result(command, Lifecycle.FAULT, code)
             self._emit_fault(code, "safe request failed", False)
             return
@@ -293,6 +294,7 @@ class VideoDecoderWorker(QObject):
         return True
 
     def stop(self, timeout_seconds=1.0):
+        """Request decoder shutdown without falsely reporting a blocked thread as offline."""
         self._stop_event.set()
         with self._lock:
             container = self._container
@@ -305,7 +307,12 @@ class VideoDecoderWorker(QObject):
                 pass
         if thread is not None:
             thread.join(timeout_seconds)
+            if thread.is_alive():
+                self.fault_raised.emit(SessionFault("Video", "video_stop_timeout", "Video decoder did not stop before timeout", False))
+                self.state_changed.emit("degraded")
+                return False
         self.state_changed.emit("offline")
+        return True
 
     def save_snapshot(self, destination):
         image = self.last_frame.image if self.last_frame is not None else None
@@ -376,12 +383,14 @@ class RuntimeCoordinator(QObject):
         chassis_factory=None,
         arm_factory=None,
         video_worker=None,
+        snapshot_root=None,
         parent=None,
     ):
         super().__init__(parent)
         if not isinstance(config, RuntimeConfig):
             raise TypeError("config must be RuntimeConfig")
         self.config = config
+        self._snapshot_root = Path(snapshot_root or (_source_root() / "logs")).resolve()
         self.chassis = SerializedSession(
             "ESP32",
             chassis_factory or (lambda: _default_chassis_factory(config.chassis)),
@@ -443,7 +452,14 @@ class RuntimeCoordinator(QObject):
         if not directory:
             self.fault_raised.emit(SessionFault("Video", "snapshot_directory_unavailable", "Snapshot directory is not configured", False))
             return False
-        destination = Path(directory) / ("maixcam-%d.png" % int(time.time() * 1_000))
+        requested_directory = Path(directory)
+        destination_directory = (self._snapshot_root / requested_directory).resolve() if not requested_directory.is_absolute() else requested_directory.resolve()
+        try:
+            destination_directory.relative_to(self._snapshot_root)
+        except ValueError:
+            self.fault_raised.emit(SessionFault("Video", "snapshot_path_outside_allowed_root", "Snapshot path is outside the allowed local root", False))
+            return False
+        destination = destination_directory / ("maixcam-%d.png" % time.time_ns())
         try:
             self.video.save_snapshot(destination)
         except Exception as error:

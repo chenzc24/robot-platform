@@ -53,10 +53,12 @@ class ChassisState:
     authenticated: bool = False
     lease_owner: Optional[str] = None
     lease_remaining_ms: Optional[int] = None
+    motion_permitted: bool = False
     motion_enabled: bool = False
     manual_unlocked: bool = False
     heartbeat_age_ms: Optional[int] = None
     reported_state: str = "safe idle"
+    last_error: str = "none"
     velocity: Tuple[int, int, int] = (0, 0, 0)
     physical_feedback: str = "unavailable"
 
@@ -67,6 +69,9 @@ class ArmState:
     uart_lan1: LinkState = LinkState.OFFLINE
     controller: LinkState = LinkState.OFFLINE
     task: Lifecycle = Lifecycle.IDLE
+    reported_state: str = "unknown"
+    motion_permitted: bool = False
+    last_error: str = "none"
     manual_unlocked: bool = False
     last_status_age_ms: Optional[int] = None
     measured_pose: str = "unavailable"

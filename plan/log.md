@@ -271,3 +271,13 @@ entry format:
 - Hardware: no device, endpoint, socket, RTSP stream, relay, credential, process, deployment target, CAN bus, motor, TCP232, or robot-arm API was accessed, written, reset, or moved.
 - Commit status: committed and pushed on `target/control-console-ui-phase-b`; local configuration, credentials, caches, backups, raw resources, and user settings are excluded.
 - Follow-up: create a separate L2 goal only after the user provides approved local endpoint configuration and asks for non-motion connection/status validation. Motion admission, heartbeat scheduling, bounded polling, and L3/L4 safety work remain separate.
+
+## 2026-09-01 - Harden local console state and worker behavior
+
+- Goal: finish the requested L1 hardening without a local endpoint simulator: strict status parsing, video/session failure coverage, and hardware-mode UI binding checks.
+- Modified scope: console status mapper, models, controller, runtime worker lifecycle, views, local console tests, console documentation, and this goal plan/log. The primary worktree's user-owned `.vscode/settings.json`, local configuration, protocol source, device source, raw archives, credentials, endpoints, relays, and device state remained read-only.
+- Implementation: the console now accepts only full RCP/TCP v2 chassis `STATE` frames and terminal MaixCam `arm.status` lifecycle responses carrying the current RPA2 service state. Malformed status retains the last known display state and raises a persistent fault. Safe-query errors close the affected session without retry. Decoder shutdown reports a bounded degraded fault when it cannot stop; snapshots cannot escape the local `logs/` root. Hardware mode continues to reject all motion while displaying copied decoded frames and exact reported non-motion state.
+- Validation: L1; 190 local tests passed (console 34, development 23, ESP32 52, MaixCam 44, protocol 28, robot arm 9), plus offscreen UI smoke test, workspace validation, ASCII audit, and Git diff-format validation. Tests use only fake clients, fake frame containers, temporary local files, and offscreen Qt.
+- Hardware: no device, endpoint, socket, RTSP stream, relay, credential, process, deployment target, CAN bus, motor, TCP232, or robot-arm API was accessed, written, reset, or moved.
+- Commit status: committed and pushed on `target/control-console-ui-phase-b-hardening`; user settings, secrets, caches, backups, local configuration, and raw resources are excluded.
+- Follow-up: L2 must validate the actual endpoint response and timeout/reconnect behavior with motion disabled. L3 remains a separate on-site safety-governed motion goal.

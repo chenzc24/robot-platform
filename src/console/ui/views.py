@@ -1,4 +1,4 @@
-"""PySide6 views for the simulator-only unified robot control console."""
+"""PySide6 views for the unified robot control console."""
 
 from datetime import datetime
 
@@ -66,6 +66,8 @@ class VideoPlaceholder(QWidget):
 
     def set_frame(self, frame):
         """Display a copied decoder frame owned by the GUI thread."""
+        if self._frozen:
+            return
         self._image = frame.image
         self.update()
 
@@ -430,10 +432,12 @@ class MainWindow(QMainWindow):
         route.setContentsMargins(10, 8, 10, 4)
         self.arm_gateway_value = _label("Offline", "value")
         self.arm_uart_value = _label("Offline", "value")
+        self.arm_controller_value = _label("Offline", "value")
         self.arm_task_value = _label("Idle", "value")
-        for index, (name, value) in enumerate((("MaixCam", self.arm_gateway_value), ("UART / LAN1", self.arm_uart_value), ("Task", self.arm_task_value))):
-            route.addWidget(_label(name), 0, index)
-            route.addWidget(value, 1, index)
+        for index, (name, value) in enumerate((("MaixCam", self.arm_gateway_value), ("UART / LAN1", self.arm_uart_value), ("Controller", self.arm_controller_value), ("Task", self.arm_task_value))):
+            row, column = (index // 2) * 2, index % 2
+            route.addWidget(_label(name), row, column)
+            route.addWidget(value, row + 1, column)
         layout.addLayout(route)
 
         arm_session = QHBoxLayout()
@@ -634,11 +638,13 @@ class MainWindow(QMainWindow):
         self.freeze_button.setText("Resume" if state.video.frozen else "Freeze")
         self.overlay_button.setText("Show overlay" if not state.video.overlays_visible else "Hide overlay")
         self.video_metrics_label.setText(
-            "%s / %.0f fps / frame %d / age %s"
+            "%s / %s / %.0f fps / frame %d / decode %s / age %s"
             % (
                 self._state_text(state.video.link),
+                "%d x %d" % state.video.resolution if state.video.resolution else "resolution unavailable",
                 state.video.fps,
                 state.video.frame_id,
+                "%d ms" % state.video.decode_latency_ms if state.video.decode_latency_ms is not None else "unavailable",
                 "%d ms" % state.video.last_frame_age_ms if state.video.last_frame_age_ms is not None else "unavailable",
             )
         )
@@ -651,7 +657,7 @@ class MainWindow(QMainWindow):
             if chassis.lease_owner
             else "None"
         )
-        self.chassis_motion_value.setText("Enabled" if chassis.motion_enabled else "Locked")
+        self.chassis_motion_value.setText("Enabled" if chassis.motion_enabled else "Permitted (locked)" if chassis.motion_permitted else "Locked")
         self.chassis_connect_button.setText("Disconnect" if chassis.link != LinkState.OFFLINE else "Connect")
         simulator_mode = state.environment == Environment.SIMULATOR
         self.chassis_acquire_button.setEnabled(simulator_mode and chassis.link == LinkState.ONLINE and chassis.lease_owner is None)
@@ -673,7 +679,8 @@ class MainWindow(QMainWindow):
         self._set_chip(self.arm_panel_status, "Gateway", arm.gateway)
         self.arm_gateway_value.setText(self._state_text(arm.gateway))
         self.arm_uart_value.setText(self._state_text(arm.uart_lan1))
-        self.arm_task_value.setText(arm.task.value.title())
+        self.arm_controller_value.setText(self._state_text(arm.controller))
+        self.arm_task_value.setText("%s / %s" % (arm.task.value.title(), arm.reported_state))
         self.arm_connect_button.setText("Disconnect arm route" if arm.gateway != LinkState.OFFLINE else "Connect arm route")
         self.arm_unlock.blockSignals(True)
         self.arm_unlock.setChecked(arm.manual_unlocked)

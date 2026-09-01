@@ -1,4 +1,4 @@
-"""Simulator-only state controller for the first control-console UI release."""
+"""Immutable console state controller with simulator and locked runtime bindings."""
 
 from dataclasses import replace
 from time import time_ns
@@ -18,6 +18,7 @@ from .models import (
     VideoState,
 )
 from .runtime import SessionFault, SessionResult
+from .status_mapping import StatusMappingError, parse_arm_status, parse_chassis_status
 
 
 SCENARIOS = (
@@ -448,6 +449,8 @@ class ConsoleController(QObject):
 
     def tick(self):
         """Advance visual-only simulator metrics; no device I/O occurs here."""
+        if self.state.environment != Environment.SIMULATOR:
+            return
         video = self.state.video
         chassis = self.state.chassis
         arm = self.state.arm
@@ -508,7 +511,7 @@ class ConsoleController(QObject):
     def _on_hardware_video_state(self, state):
         if self.state.environment != Environment.HARDWARE:
             return
-        mapping = {"online": LinkState.ONLINE, "connecting": LinkState.DEGRADED, "offline": LinkState.OFFLINE}
+        mapping = {"online": LinkState.ONLINE, "connecting": LinkState.DEGRADED, "degraded": LinkState.DEGRADED, "offline": LinkState.OFFLINE}
         link = mapping.get(state, LinkState.UNKNOWN)
         self._replace(video=replace(self.state.video, link=link, fps=0.0 if link != LinkState.ONLINE else self.state.video.fps))
 
@@ -517,9 +520,53 @@ class ConsoleController(QObject):
             return
         self._record(result.target, result.command, result.lifecycle, result.code)
         if result.target == "ESP32" and result.command == "status" and result.lifecycle == Lifecycle.DONE:
-            self._replace(chassis=replace(self.state.chassis, reported_state="status received", heartbeat_age_ms=0))
+            self._apply_chassis_status(result.payload)
         if result.target == "MaixCam" and result.command == "status" and result.lifecycle == Lifecycle.DONE:
-            self._replace(arm=replace(self.state.arm, uart_lan1=LinkState.UNKNOWN, controller=LinkState.UNKNOWN, last_status_age_ms=0))
+            self._apply_arm_status(result.payload)
+
+    def _apply_chassis_status(self, payload):
+        try:
+            status = parse_chassis_status(payload)
+        except StatusMappingError as error:
+            self._raise_fault(error.args[0], "fault", "esp32", "ESP32 returned an invalid status payload.")
+            return
+        owner = status.lease_owner if status.lease_active else None
+        chassis = replace(
+            self.state.chassis,
+            authenticated=status.authenticated,
+            lease_owner=owner,
+            lease_remaining_ms=status.lease_remaining_ms if owner else None,
+            motion_permitted=status.motion_permitted,
+            motion_enabled=status.motion_enabled,
+            heartbeat_age_ms=0,
+            reported_state=status.chassis_state.replace("_", " "),
+            last_error=status.last_error,
+        )
+        self._replace(chassis=chassis)
+
+    def _apply_arm_status(self, payload):
+        try:
+            status = parse_arm_status(payload)
+        except StatusMappingError as error:
+            self._raise_fault(error.args[0], "fault", "arm", "MaixCam returned an invalid arm status payload.")
+            return
+        controller_link = LinkState.ONLINE if status.service_state == "ready" else LinkState.DEGRADED
+        task = {
+            "ready": Lifecycle.IDLE,
+            "running": Lifecycle.RUNNING,
+            "fault": Lifecycle.FAULT,
+        }[status.service_state]
+        arm = replace(
+            self.state.arm,
+            uart_lan1=LinkState.ONLINE,
+            controller=controller_link,
+            task=task,
+            reported_state=status.service_state,
+            motion_permitted=status.motion_permitted,
+            last_error=status.last_error,
+            last_status_age_ms=0,
+        )
+        self._replace(arm=arm)
 
     def _on_hardware_fault(self, fault):
         if self.state.environment != Environment.HARDWARE or not isinstance(fault, SessionFault):

@@ -31,6 +31,8 @@ Phase A adds a PySide6 desktop shell in `ui/`. It implements the approved video-
 
 Phase B adds local runtime foundations without admitting hardware motion: separate FIFO background sessions for the existing direct ESP32 and MaixCam-arm clients, a copied-frame PyAV RTSP worker, and a secret-free local configuration loader. No connection starts automatically and no action is retried automatically. In `Hardware` mode, the console may request an explicit connection, `PING`/`STATUS`, a disconnection, preview frames, and a local snapshot; lease, enable, velocity, arm movement, and chassis software stop remain disabled or rejected.
 
+The console accepts only the current exact ESP32 RCP/TCP v2 `STATE` schema and the current terminal `arm.status` lifecycle/RPA2 state schema. A malformed, incomplete, or inconsistent status response becomes a persistent fault and never enables a control. Snapshots use a configured relative directory below the local `logs/` root, such as `snapshots/session-a`; absolute paths and traversal outside that root are rejected.
+
 Launch it from the repository root:
 
 ```powershell

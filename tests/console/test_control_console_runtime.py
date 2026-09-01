@@ -1,22 +1,27 @@
 """L1 tests for local console runtime adapters without real endpoints."""
 
 import json
+import os
 import pathlib
 import sys
 import tempfile
+import threading
 import time
 import unittest
 
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src" / "console"))
 
 from PySide6.QtCore import QCoreApplication, QObject, Signal
 from PySide6.QtGui import QImage
+from PySide6.QtWidgets import QApplication
 
 from ui.controller import ConsoleController
 from ui.models import Environment, Lifecycle, LinkState
-from ui.runtime import SerializedSession, SessionResult, VideoDecoderWorker, VideoFrame
+from ui.runtime import RuntimeCoordinator, SerializedSession, SessionFault, SessionResult, VideoDecoderWorker, VideoFrame
 from ui.runtime_config import (
     ArmConfig,
     ChassisConfig,
@@ -25,6 +30,7 @@ from ui.runtime_config import (
     VideoConfig,
     load_runtime_config,
 )
+from ui.views import MainWindow
 
 
 def wait_until(predicate, timeout_seconds=1.5):
@@ -75,6 +81,80 @@ class FakeContainer:
 
     def close(self):
         self.closed = True
+
+
+class TwoFrameContainer(FakeContainer):
+    def decode(self, video=0):
+        self.video_index = video
+        yield FakeFrame()
+        yield FakeFrame()
+
+
+class BlockingContainer:
+    def __init__(self):
+        self.closed = threading.Event()
+
+    def decode(self, video=0):
+        self.video_index = video
+        while not self.closed.wait(0.01):
+            pass
+        if False:
+            yield FakeFrame()
+
+    def close(self):
+        self.closed.set()
+
+
+class FailingClient:
+    def __init__(self):
+        self.connection = FakeConnection()
+        self.status_calls = 0
+
+    def status(self):
+        self.status_calls += 1
+        raise OSError("connection_closed_before_response")
+
+
+class OrderedClient:
+    def __init__(self):
+        self.connection = FakeConnection()
+        self.calls = []
+        self.first_started = threading.Event()
+        self.release_first = threading.Event()
+
+    def status(self):
+        index = len(self.calls)
+        self.calls.append(index)
+        if index == 0:
+            self.first_started.set()
+            self.release_first.wait(1.0)
+        return {"sequence": index}
+
+
+class SnapshotVideoWorker(QObject):
+    state_changed = Signal(str)
+    frame_ready = Signal(object)
+    fault_raised = Signal(object)
+
+    def __init__(self, image, fail_write=False):
+        super().__init__()
+        self.last_frame = VideoFrame(image, 1, 0, 0.0, 0)
+        self.saved = []
+        self.fail_write = fail_write
+
+    def start(self, _url, _timeout):
+        return False
+
+    def stop(self):
+        return True
+
+    def save_snapshot(self, destination):
+        if self.fail_write:
+            raise RuntimeError("snapshot_write_failed")
+        self.saved.append(pathlib.Path(destination))
+        pathlib.Path(destination).parent.mkdir(parents=True, exist_ok=True)
+        if not self.last_frame.image.save(str(destination)):
+            raise RuntimeError("snapshot_write_failed")
 
 
 class FakeRuntime(QObject):
@@ -151,7 +231,7 @@ class RuntimeConfigTests(unittest.TestCase):
 class RuntimeWorkerTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.application = QCoreApplication.instance() or QCoreApplication(["runtime-tests"])
+        cls.application = QApplication.instance() or QApplication(["runtime-tests"])
 
     def test_session_serializes_safe_requests_and_rejects_motion_before_client_call(self):
         client = FakeChassisClient()
@@ -201,6 +281,132 @@ class RuntimeWorkerTests(unittest.TestCase):
         worker.stop()
         self.assertTrue(container.closed)
 
+    def test_video_worker_reports_low_frame_rate_and_can_restart_after_completion(self):
+        containers = [TwoFrameContainer(), FakeContainer()]
+        frames = []
+
+        def slow_adapter(_frame):
+            time.sleep(0.05)
+            return 1, 1, b"\x01\x02\x03"
+
+        worker = VideoDecoderWorker(
+            decoder_factory=lambda _url, _timeout: containers.pop(0),
+            frame_adapter=slow_adapter,
+        )
+        worker.frame_ready.connect(frames.append)
+        self.assertTrue(worker.start("rtsp://local/fake", 1.0))
+        self.assertTrue(wait_until(lambda: len(frames) == 2))
+        self.assertEqual(frames[0].fps, 0.0)
+        self.assertLess(frames[1].fps, 100.0)
+        self.assertTrue(wait_until(lambda: worker._thread is not None and not worker._thread.is_alive()))
+        self.assertTrue(worker.start("rtsp://local/fake", 1.0))
+        self.assertTrue(wait_until(lambda: len(frames) == 3))
+        worker.stop()
+
+    def test_video_worker_reports_decode_failure_and_stops_blocking_decoder(self):
+        faults = []
+        states = []
+        blocking = BlockingContainer()
+        worker = VideoDecoderWorker(decoder_factory=lambda _url, _timeout: blocking)
+        worker.fault_raised.connect(faults.append)
+        worker.state_changed.connect(states.append)
+        self.assertTrue(worker.start("rtsp://local/fake", 1.0))
+        self.assertTrue(wait_until(lambda: "online" in states))
+        self.assertTrue(worker.stop(timeout_seconds=0.5))
+        self.assertTrue(blocking.closed.is_set())
+        self.assertIn("offline", states)
+
+        failed = VideoDecoderWorker(decoder_factory=lambda _url, _timeout: (_ for _ in ()).throw(RuntimeError("decode failed")))
+        failed.fault_raised.connect(faults.append)
+        self.assertTrue(failed.start("rtsp://local/fake", 1.0))
+        self.assertTrue(wait_until(lambda: bool(faults)))
+        self.assertEqual(faults[-1].code, "video_decode_failed")
+
+    def test_session_surfaces_safe_request_failure_without_retry_and_preserves_fifo(self):
+        failing = FailingClient()
+        results = []
+        states = []
+        session = SerializedSession("ESP32", lambda: failing, lambda client, command, _payload: getattr(client, command)(), {"status"}, {"velocity"})
+        session.result_ready.connect(results.append)
+        session.state_changed.connect(states.append)
+        try:
+            session.connect()
+            self.assertTrue(wait_until(lambda: any(item.command == "connect" for item in results)))
+            session.request("status")
+            self.assertTrue(wait_until(lambda: any(item.command == "status" for item in results)))
+            self.assertEqual(failing.status_calls, 1)
+            self.assertEqual(results[-1].lifecycle, Lifecycle.FAULT)
+            self.assertTrue(wait_until(lambda: "offline" in states))
+            self.assertTrue(failing.connection.closed)
+
+            ordered = OrderedClient()
+            ordered_results = []
+            second = SerializedSession("ESP32", lambda: ordered, lambda client, command, _payload: getattr(client, command)(), {"status"}, {"velocity"})
+            second.result_ready.connect(ordered_results.append)
+            try:
+                second.connect()
+                self.assertTrue(wait_until(lambda: any(item.command == "connect" for item in ordered_results)))
+                second.request("status")
+                second.request("status")
+                self.assertTrue(ordered.first_started.wait(0.5))
+                self.assertEqual(ordered.calls, [0])
+                ordered.release_first.set()
+                self.assertTrue(wait_until(lambda: len([item for item in ordered_results if item.command == "status"]) == 2))
+                self.assertEqual(ordered.calls, [0, 1])
+            finally:
+                second.close()
+        finally:
+            session.close()
+
+    def test_session_reports_connection_timeout_once_without_automatic_retry(self):
+        attempts = []
+
+        def timeout_factory():
+            attempts.append("connect")
+            raise TimeoutError("timed out")
+
+        results = []
+        session = SerializedSession("ESP32", timeout_factory, lambda *_args: None, {"status"}, {"velocity"})
+        session.result_ready.connect(results.append)
+        try:
+            session.connect()
+            self.assertTrue(wait_until(lambda: bool(results)))
+            self.assertEqual(attempts, ["connect"])
+            self.assertEqual(results[-1].command, "connect")
+            self.assertEqual(results[-1].lifecycle, Lifecycle.FAULT)
+        finally:
+            session.close()
+
+    def test_snapshot_stays_inside_injected_local_root(self):
+        image = QImage(2, 1, QImage.Format.Format_RGB888)
+        image.fill(0xFF336699)
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory) / "logs"
+            config = RuntimeConfig(
+                ChassisConfig("", 0, 1.0, "console", "ROBOT_CHASSIS_CREDENTIAL"),
+                ArmConfig("", 0, 1.0, "console"),
+                VideoConfig("", 1.0, "session"),
+            )
+            worker = SnapshotVideoWorker(image)
+            runtime = RuntimeCoordinator(config, video_worker=worker, snapshot_root=root)
+            self.assertTrue(runtime.save_snapshot())
+            self.assertEqual(len(worker.saved), 1)
+            self.assertTrue(worker.saved[0].is_file())
+            self.assertTrue(worker.saved[0].is_relative_to(root.resolve()))
+
+            outside = RuntimeConfig(config.chassis, config.arm, VideoConfig("", 1.0, "../outside"))
+            rejected = RuntimeCoordinator(outside, video_worker=SnapshotVideoWorker(image), snapshot_root=root)
+            faults = []
+            rejected.fault_raised.connect(faults.append)
+            self.assertFalse(rejected.save_snapshot())
+            self.assertEqual(faults[-1].code, "snapshot_path_outside_allowed_root")
+
+            failed = RuntimeCoordinator(config, video_worker=SnapshotVideoWorker(image, fail_write=True), snapshot_root=root)
+            failed_faults = []
+            failed.fault_raised.connect(failed_faults.append)
+            self.assertFalse(failed.save_snapshot())
+            self.assertEqual(failed_faults[-1].code, "snapshot_write_failed")
+
     def test_hardware_controller_uses_status_only_runtime_and_keeps_motion_locked(self):
         runtime = FakeRuntime()
         controller = ConsoleController(runtime=runtime)
@@ -214,13 +420,51 @@ class RuntimeWorkerTests(unittest.TestCase):
         self.assertFalse(controller.can_chassis_move())
         self.assertFalse(controller.chassis_velocity(1, 0, 0))
 
-        runtime.result_ready.emit(SessionResult("ESP32", "status", Lifecycle.DONE, "completed"))
-        self.assertEqual(controller.state.chassis.reported_state, "status received")
+        runtime.result_ready.emit(SessionResult("ESP32", "status", Lifecycle.DONE, "completed", {
+            "version": 2, "sequence": 2, "type": "STATE", "ttl_ms": 0,
+            "payload": {
+                "service_state": "safe_idle", "chassis_state": "disabled", "motion_permitted": False,
+                "authenticated": True, "lease_active": False, "lease_owner": "none", "lease_remaining_ms": 0,
+                "hold_remaining_ms": 0, "last_error": "none",
+            },
+        }))
+        self.assertEqual(controller.state.chassis.reported_state, "disabled")
+        self.assertFalse(controller.state.chassis.motion_enabled)
+
+        runtime.arm_state_changed.emit("online")
+        runtime.result_ready.emit(SessionResult("MaixCam", "status", Lifecycle.DONE, "completed", [{
+            "version": 1, "kind": "lifecycle", "message_id": "console-2:done", "sequence": 2,
+            "target": "arm", "name": "arm.status", "ttl_ms": 0,
+            "payload": {"downstream_sequence": 7, "terminal_position": "unknown", "downstream_payload": "service_state=ready;motion_enabled=0;active_sequence=0;last_error=none;terminal_position_supported=0;cancel_supported=0"},
+            "correlation_id": "console-2", "lifecycle": "DONE",
+        }]))
+        self.assertEqual(controller.state.arm.uart_lan1, LinkState.ONLINE)
+        self.assertEqual(controller.state.arm.controller, LinkState.ONLINE)
+        self.assertEqual(controller.state.arm.reported_state, "ready")
 
         image = QImage(1, 1, QImage.Format.Format_RGB888)
         runtime.frame_ready.emit(VideoFrame(image, 3, 0, 20.0, 0))
         self.assertEqual(controller.state.video.link, LinkState.ONLINE)
         self.assertEqual(controller.state.video.resolution, (1, 1))
+
+    def test_hardware_ui_binds_decoded_frame_and_retains_invalid_status_fault(self):
+        runtime = FakeRuntime()
+        controller = ConsoleController(runtime=runtime)
+        window = MainWindow(controller)
+        try:
+            controller.set_environment(Environment.HARDWARE)
+            runtime.frame_ready.emit(VideoFrame(QImage(3, 2, QImage.Format.Format_RGB888), 9, 0, 18.0, 4))
+            self.assertEqual((window.video_canvas._image.width(), window.video_canvas._image.height()), (3, 2))
+            runtime.result_ready.emit(SessionResult("ESP32", "status", Lifecycle.DONE, "completed", {"type": "STATE", "payload": {}}))
+            self.assertTrue(any(item.code == "invalid_chassis_status_response" for item in controller.state.faults))
+            controller.recheck()
+            self.assertTrue(any(item.code == "invalid_chassis_status_response" for item in controller.state.faults))
+            self.assertFalse(window.chassis_acquire_button.isEnabled())
+            self.assertFalse(window.chassis_enable_button.isEnabled())
+            self.assertFalse(window.chassis_unlock.isEnabled())
+            self.assertFalse(window.joint_execute_button.isEnabled())
+        finally:
+            window.close()
 
 
 if __name__ == "__main__":

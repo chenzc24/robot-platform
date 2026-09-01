@@ -361,6 +361,8 @@ Only after a separate L3 safety gate, deploy and validate one device at low spee
 
 Bounded polling, any motion admission, deployed endpoint tests, and heartbeat scheduling remain later work. They must not be inferred from this L1 foundation.
 
+The Phase B hardening pass accepts only the exact current status schemas: ESP32 RCP/TCP v2 `STATE`, and the terminal MaixCam `arm.status` lifecycle envelope containing the RPA2 arm-service state. Invalid status leaves the last trustworthy state unchanged and creates a persistent fault. Video frames are copied before crossing into the GUI thread; decoder failure, bounded shutdown, repeat start/stop, low frame rate, and snapshot path rejection are covered with local fakes. Snapshots are constrained below the local `logs/` root. Hardware-mode controls remain default-deny even if a reported endpoint says motion is permitted.
+
 ### Phase C: hardware connectivity, L2
 
 - bind the deployed ESP32 and MaixCam endpoints with motion disabled;

@@ -5,6 +5,8 @@
 - Recommended toolkit: Python 3.11+ and PySide6
 - First validation mode: local simulators; real motion remains locked
 
+Phase A is implemented as a local PySide6 simulator shell. It provides the approved layout, immutable state model, command journal, fault center, and deterministic fault scenarios. It has no RTSP decoder, real network session, device adapter, or hardware motion path; those remain separate later goals.
+
 ## 1. Purpose
 
 The console gives one operator a clear view of video, chassis control, robot-arm control, command progress, and failures while preserving the two independent runtime routes:

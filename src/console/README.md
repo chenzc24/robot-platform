@@ -24,3 +24,24 @@ arm.*     → injected MaixCam arm session
 It validates target/name agreement and exact payload keys, requires an injected admission callback for motion, preserves correlation IDs, and reports `automatic_retry=false`. `maixcam_arm_client.py` now provides the matching one-request-at-a-time NDJSON client for the MaixCam arm endpoint. Both are L1 candidates only; there is no GUI, persistent aggregate state store, or deployed endpoint yet.
 
 No credential, host address, or runtime port is hard-coded in these modules. Real values belong in ignored local configuration.
+
+## Simulator control console
+
+Phase A adds a PySide6 desktop shell in `ui/`. It implements the approved video-first layout, independent chassis and arm controls, command journal, persistent fault list, and deterministic simulator scenarios. It deliberately owns no device socket, MediaMTX process, RTSP decoder, credential, or hardware transport.
+
+Launch it from the repository root:
+
+```powershell
+$env:PYTHONPATH = "$PWD/src/console"
+python -m ui
+```
+
+Run the non-interactive GUI construction check with:
+
+```powershell
+$env:PYTHONPATH = "$PWD/src/console"
+$env:QT_QPA_PLATFORM = "offscreen"
+python -m ui --smoke-test
+```
+
+`Simulator` is the only active environment in this phase. Its motion values, lifecycle transitions, and faults are synthetic and visibly recorded as such. `Hardware` mode resets every session and refuses every connection or motion request because worker-backed adapters are not implemented yet. The chassis software-stop control is not a physical emergency stop and must not be used as one.

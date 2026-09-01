@@ -251,3 +251,13 @@ entry format:
 - Hardware: no device, socket, local relay, credential, process, deployment target, CAN bus, motor, TCP232, or robot-arm API was accessed or changed.
 - Commit status: intended for `target/control-console-ui-design`; the in-conversation mockup remains outside the repository, while the durable design specification is version controlled.
 - Follow-up: obtain user approval for the layout and five explicit UI decisions, then implement the PySide6 shell, simulator adapters, state store, worker wrappers, and PyAV video path under a separate L1 goal.
+
+## 2026-09-01 - Implement the simulator control console shell
+
+- Goal: deliver the first runnable local desktop control-console implementation without real device access, transport, or motion.
+- Modified scope: added PySide6 as a development dependency; added `src/console/ui/` models, controller, views, and module entry point; added seven console tests; documented the Phase A launch boundary; updated the UI design status; and added this goal plan/log. Existing runtime clients, protocols, device source, configuration, raw resources, credentials, and every device filesystem remained read-only.
+- Implementation: the desktop shell provides the video-first layout, overlay-ready placeholder, independent simulator chassis and arm panels, press-and-hold chassis controls, arm joint/Cartesian/gripper forms, command lifecycle journal, persistent faults, fault acknowledgement/recheck, simulator fault scenarios, and a responsive compact control-tab layout. Hardware mode clears state and rejects every action because no adapter is present.
+- Validation: L1; 179 tests passed across console (23), development (23), ESP32 (52), MaixCam (44), protocol (28), and robot-arm (9) suites. The offscreen UI smoke test, Python compilation, workspace validation, source ASCII review, and Git format checks passed. Native previews were inspected at 1440 x 900 and 1280 x 720.
+- Hardware: no device, network endpoint, socket, video relay, MediaMTX process, SSH/WebREPL session, deployment target, CAN bus, motor, TCP232, or robot-arm API was accessed, changed, or moved.
+- Commit status: intended for `target/control-console-ui-phase-a`; no secret, local configuration, cache, screenshot, or raw resource is staged.
+- Follow-up: Phase B adds worker-thread adapters for the existing chassis and MaixCam arm clients plus decoded RTSP video. That work must first preserve the current default-deny and no-automatic-retry semantics, then pass local L1 and separate L2 evidence before any motion stage.

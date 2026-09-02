@@ -232,8 +232,8 @@ class ManualRuntime(FakeRuntime):
                 lease_ms=2000,
                 heartbeat_interval_ms=500,
                 velocity_hold_ms=500,
-                linear_limit_mm_s=50,
-                angular_limit_mrad_s=100,
+                linear_limit_mm_s=200,
+                angular_limit_mrad_s=400,
             )
         )
 
@@ -579,14 +579,14 @@ class RuntimeWorkerTests(unittest.TestCase):
         self.assertTrue(controller.set_chassis_manual_unlock(True))
         self.assertEqual(runtime.calls[-1], ("heartbeat", {"lease_ms": 2000}))
         self.assertEqual(controller._lease_heartbeat_timer.interval(), 500)
-        self.assertTrue(controller.chassis_velocity(50, 0, 0))
+        self.assertTrue(controller.chassis_velocity(200, 0, 0))
         self.assertEqual(runtime.calls[-1][0], "velocity")
         self.assertEqual(controller._velocity_refresh_timer.interval(), 100)
         before_refresh = len(runtime.calls)
         controller._velocity_refresh_tick()
         self.assertEqual(len(runtime.calls), before_refresh + 1)
         self.assertEqual(runtime.calls[-1][0], "velocity")
-        self.assertFalse(controller.chassis_velocity(51, 0, 0))
+        self.assertFalse(controller.chassis_velocity(201, 0, 0))
         self.assertFalse(controller.set_chassis_manual_unlock(False))
         self.assertEqual(runtime.calls[-1], ("stop", {}))
         self.assertFalse(controller._velocity_refresh_timer.isActive())
@@ -712,6 +712,12 @@ class RuntimeWorkerTests(unittest.TestCase):
         try:
             self.assertEqual(controller.chassis_lease_owner_id(), "console-l2")
             self.assertTrue(window.chassis_enable_button.isEnabled())
+            self.assertEqual(window.linear_slider.maximum(), 200)
+            self.assertEqual(window.angular_slider.maximum(), 400)
+            self.assertTrue(window.chassis_advanced.isHidden())
+            window.chassis_advanced_toggle.setChecked(True)
+            self.assertFalse(window.chassis_advanced.isHidden())
+            self.assertEqual(window.chassis_vector_label.text(), "Cmd 0 / 0 / 0")
         finally:
             window.close()
 

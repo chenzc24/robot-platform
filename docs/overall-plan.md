@@ -128,6 +128,9 @@ Service-health state in `protocol/runtime-status.schema.json` remains distinct f
 - The arm uses confirmed safe poses, low speed, limited workspace, and conflict rejection during development.
 - Do not move the arm until chassis stop is confirmed; do not allow high-speed chassis motion until the arm is safe.
 - Software stop never replaces the physical emergency stop.
+- The attended chassis console keeps separate bounded device and UI limits. The
+  current manual tuning ceiling is 200 mm/s linear and 400 mrad/s angular, with
+  lower startup selections; both ends must match before an L3 session.
 
 ## 8. First Console Scope
 

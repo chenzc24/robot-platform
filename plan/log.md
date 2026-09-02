@@ -540,3 +540,23 @@ entry format:
 - Hardware: ESP32 was interrupted, written, and reset under the confirmed gate;
   CAN motion was not requested and the robot arm was not accessed.
 - Commit status: committed and pushed on `target/control-console-manual-l3`.
+
+## 2026-09-02 - Simplify chassis panel and prepare wider tuning range
+
+- Goal: reduce routine chassis-panel density and prepare a wider but still bounded
+  manual tuning range requested by the operator.
+- Modified scope: console chassis view, console and ESP32 configuration examples,
+  ignored console manual-limit fields, deterministic UI tests, console/ESP32 and
+  overall-plan documents, and this goal plan/log. Device files, CAN settings,
+  credentials, endpoints, MaixCam, arm, and raw resources remained unchanged.
+- Implementation: the normal view now keeps only compact status, Connect,
+  Start/End, direction/STOP, and two speed sliders visible. Protocol-level controls
+  are genuinely collapsed under Advanced. Prepared ceilings are 200 mm/s linear
+  and 400 mrad/s angular; startup slider selections remain 80 and 240.
+- Validation: L1. 203 tests passed across all six suites, plus offscreen UI smoke,
+  Python compilation, workspace validation, and diff-format checks.
+- Hardware: none in this implementation step. The running console and ESP32 still
+  use the prior release and device 50/100 limits. Device deployment requires a
+  fresh immediate L3 gate.
+- Commit status: committed and pushed on `target/control-console-manual-l3`;
+  device deployment evidence remains pending in the same goal.

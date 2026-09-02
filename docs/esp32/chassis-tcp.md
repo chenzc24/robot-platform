@@ -91,6 +91,10 @@ startup integration: available only when local ignored `device_config.py` select
 
 An authenticated session must explicitly acquire a `250..2000 ms` lease and renew it with `HEARTBEAT`. Velocity contains a separate `100..500 ms` hold. Velocity-hold expiry sends a local stop while preserving the enabled, owned session so an attended operator can jog again. Lease expiry stops and disables. Disconnect, malformed authenticated input, short write, or execution failure also attempts stop and disable before the session is closed.
 
+The current attended tuning ceiling is 200 mm/s linear and 400 mrad/s angular.
+The ESP32 local configuration and console local configuration must carry the same
+limits before the wider range is used; a UI-only increase is not deployment.
+
 The first credential is a local pre-shared value checked by an injected verifier. It is never included in committed configuration, responses, status, or logs. It is access control on the controlled WPA-protected LAN, not TLS and not a physical safety mechanism.
 
 The first device step remains non-motion: deploy `tcp_v2_l2` with a local credential and `motion_permitted=false`, then prove authentication rejection/acceptance, `PING`, `STATUS`, heartbeat expiry, disconnect cleanup, and rollback without CAN initialization. The new listener composes `NoMotionChassis`, so it cannot construct CAN or send a motor command. CAN composition and movement remain a separate L3 goal.

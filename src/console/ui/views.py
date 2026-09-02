@@ -13,7 +13,6 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QFrame,
     QGridLayout,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -330,32 +329,39 @@ class MainWindow(QMainWindow):
 
     def _build_chassis_panel(self):
         panel, layout, self.chassis_panel_status = self._panel("Chassis", "[ ] Offline")
-        status_grid = QGridLayout()
-        status_grid.setContentsMargins(10, 8, 10, 4)
-        status_grid.setHorizontalSpacing(12)
+        status_grid = QHBoxLayout()
+        status_grid.setContentsMargins(10, 7, 10, 3)
+        status_grid.setSpacing(8)
         self.chassis_tcp_value = _label("Offline", "value")
         self.chassis_lease_value = _label("None", "value")
         self.chassis_motion_value = _label("Locked", "value")
-        for index, (name, value) in enumerate((("TCP", self.chassis_tcp_value), ("Lease", self.chassis_lease_value), ("Motion", self.chassis_motion_value))):
-            status_grid.addWidget(_label(name), 0, index)
-            status_grid.addWidget(value, 1, index)
+        for name, value in (("Link", self.chassis_tcp_value), ("Owner", self.chassis_lease_value), ("Drive", self.chassis_motion_value)):
+            status_grid.addWidget(_label(name))
+            status_grid.addWidget(value)
+        status_grid.addStretch(1)
         layout.addLayout(status_grid)
 
         session = QHBoxLayout()
         session.setContentsMargins(10, 4, 10, 6)
         session.setSpacing(6)
         self.chassis_connect_button = QPushButton("Connect")
-        self.chassis_start_button = QPushButton("Start manual control")
-        self.chassis_end_button = QPushButton("End manual control")
+        self.chassis_start_button = QPushButton("Start control")
+        self.chassis_end_button = QPushButton("End control")
         for widget in (self.chassis_connect_button, self.chassis_start_button, self.chassis_end_button):
             session.addWidget(widget)
         session.addStretch(1)
         layout.addLayout(session)
 
-        self.chassis_advanced = QGroupBox("Advanced protocol controls")
-        self.chassis_advanced.setCheckable(True)
-        self.chassis_advanced.setChecked(False)
+        self.chassis_advanced_toggle = QToolButton()
+        self.chassis_advanced_toggle.setText("Advanced")
+        self.chassis_advanced_toggle.setCheckable(True)
+        self.chassis_advanced_toggle.setArrowType(Qt.ArrowType.RightArrow)
+        self.chassis_advanced_toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.chassis_advanced = QWidget()
+        self.chassis_advanced.setVisible(False)
         advanced = QHBoxLayout(self.chassis_advanced)
+        advanced.setContentsMargins(10, 0, 10, 5)
+        advanced.setSpacing(6)
         self.chassis_acquire_button = QPushButton("Acquire")
         self.chassis_enable_button = QPushButton("Enable")
         self.chassis_disable_button = QPushButton("Disable")
@@ -364,7 +370,6 @@ class MainWindow(QMainWindow):
         for widget in (self.chassis_acquire_button, self.chassis_enable_button, self.chassis_disable_button, self.chassis_release_button, self.chassis_unlock):
             advanced.addWidget(widget)
         advanced.addStretch(1)
-        layout.addWidget(self.chassis_advanced)
 
         controls = QHBoxLayout()
         controls.setContentsMargins(10, 4, 10, 8)
@@ -394,19 +399,21 @@ class MainWindow(QMainWindow):
         controls.addLayout(pad)
 
         limits = QVBoxLayout()
-        self.linear_limit_label = _label("Linear limit / 80 mm/s")
+        self.linear_limit_label = _label("Speed 80 mm/s")
         self.linear_slider = QSlider(Qt.Orientation.Horizontal)
         self.linear_slider.setRange(10, 200)
         self.linear_slider.setValue(80)
-        self.angular_limit_label = _label("Angular limit / 240 mrad/s")
+        self.angular_limit_label = _label("Turn 240 mrad/s")
         self.angular_slider = QSlider(Qt.Orientation.Horizontal)
-        self.angular_slider.setRange(10, 800)
+        self.angular_slider.setRange(10, 400)
         self.angular_slider.setValue(240)
-        self.chassis_vector_label = _label("Requested vx 0 / vy 0 / omega 0", "muted")
+        self.chassis_vector_label = _label("Cmd 0 / 0 / 0", "muted")
         for widget in (self.linear_limit_label, self.linear_slider, self.angular_limit_label, self.angular_slider, self.chassis_vector_label):
             limits.addWidget(widget)
         controls.addLayout(limits, 1)
         layout.addLayout(controls)
+        layout.addWidget(self.chassis_advanced_toggle)
+        layout.addWidget(self.chassis_advanced)
         return panel
 
     def _spin(self, value, minimum=-360.0, maximum=360.0, suffix=" deg"):
@@ -541,6 +548,7 @@ class MainWindow(QMainWindow):
         self.overlay_button.clicked.connect(self.controller.toggle_overlays)
         self.freeze_button.clicked.connect(self.controller.toggle_video_freeze)
         self.chassis_connect_button.clicked.connect(self._toggle_chassis_connection)
+        self.chassis_advanced_toggle.toggled.connect(self._toggle_chassis_advanced)
         self.chassis_start_button.clicked.connect(self.controller.start_chassis_manual)
         self.chassis_end_button.clicked.connect(self.controller.end_chassis_manual)
         self.chassis_acquire_button.clicked.connect(self.controller.chassis_acquire)
@@ -586,8 +594,14 @@ class MainWindow(QMainWindow):
             self.controller.disconnect_arm()
 
     def _update_limit_labels(self):
-        self.linear_limit_label.setText("Linear limit / %d mm/s" % self.linear_slider.value())
-        self.angular_limit_label.setText("Angular limit / %d mrad/s" % self.angular_slider.value())
+        self.linear_limit_label.setText("Speed %d mm/s" % self.linear_slider.value())
+        self.angular_limit_label.setText("Turn %d mrad/s" % self.angular_slider.value())
+
+    def _toggle_chassis_advanced(self, expanded):
+        self.chassis_advanced_toggle.setArrowType(
+            Qt.ArrowType.DownArrow if expanded else Qt.ArrowType.RightArrow
+        )
+        self.chassis_advanced.setVisible(expanded)
 
     def _start_chassis_hold(self, direction):
         linear = self.linear_slider.value()
@@ -675,8 +689,8 @@ class MainWindow(QMainWindow):
         self.chassis_connect_button.setText("Disconnect" if chassis.link != LinkState.OFFLINE else "Connect")
         manual_mode = state.environment == Environment.SIMULATOR or self.controller._hardware_manual_enabled()
         transition = self.controller.chassis_manual_transition()
-        self.chassis_start_button.setText("Starting..." if transition == "starting" else "Start manual control")
-        self.chassis_end_button.setText("Ending..." if transition == "ending" else "End manual control")
+        self.chassis_start_button.setText("Starting..." if transition == "starting" else "Start control")
+        self.chassis_end_button.setText("Ending..." if transition == "ending" else "End control")
         self.chassis_start_button.setEnabled(self.controller.can_start_chassis_manual())
         self.chassis_end_button.setEnabled(self.controller.can_end_chassis_manual())
         self.chassis_unlock.setText(
@@ -697,8 +711,8 @@ class MainWindow(QMainWindow):
         self.chassis_unlock.blockSignals(False)
         self.chassis_unlock.setEnabled(chassis.motion_enabled and chassis.motion_permitted and manual_mode)
         self.chassis_vector_label.setText(
-            "Requested vx %d / vy %d / omega %d / physical feedback %s"
-            % (*chassis.velocity, chassis.physical_feedback)
+            "Cmd %d / %d / %d"
+            % chassis.velocity
         )
         for button in self.chassis_direction_buttons:
             button.setEnabled(self.controller.can_chassis_move() or button.objectName() == "localStopButton")

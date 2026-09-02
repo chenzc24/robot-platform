@@ -38,9 +38,13 @@ lease:              2000 ms
 lease heartbeat:     500 ms
 velocity refresh:    100 ms maximum
 velocity hold:       500 ms
-linear limit:         50 mm/s
-angular limit:       100 mrad/s
+linear range:       10–200 mm/s (starts at 80)
+angular range:      10–400 mrad/s (starts at 240)
 ```
+
+The normal panel keeps only connection, start/end control, the direction pad,
+STOP, and the two speed sliders visible. Raw protocol operations and manual
+unlock are collapsed under **Advanced**.
 
 The two timeout classes have deliberately different results:
 

@@ -1,7 +1,6 @@
-"""Fail-closed ESP32 L2 and L3 runtime composition."""
+"""Fail-closed ESP32 RCP/TCP v3 L2 and L3 runtime composition."""
 
 from chassis_motion_tcp_service import ChassisMotionTcpService, fixed_credential_verifier
-from control_lease import ControlLease
 
 
 class NoMotionChassis:
@@ -22,10 +21,17 @@ def runtime_credential():
 
 
 def make_l2_service(transport):
-    """Create the first deployable v2 service: network only, motion impossible."""
+    """Create the v3 diagnostic service: network only, motion impossible."""
+    config = _local_config()
     credential = runtime_credential()
     verifier = fixed_credential_verifier(credential) if credential else None
-    return ChassisMotionTcpService(transport, NoMotionChassis(), ControlLease(), authorize=verifier, motion_permitted=False)
+    return ChassisMotionTcpService(
+        transport,
+        NoMotionChassis(),
+        authorize=verifier,
+        motion_permitted=False,
+        health_timeout_ms=_health_timeout(config),
+    )
 
 
 def _local_config():
@@ -40,6 +46,13 @@ def _positive_int(config, field, maximum):
     value = getattr(config, field, None)
     if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= maximum:
         raise RuntimeError("invalid_%s" % field.lower())
+    return value
+
+
+def _health_timeout(config):
+    value = getattr(config, "RUNTIME_HEALTH_TIMEOUT_MS", 2000)
+    if isinstance(value, bool) or not isinstance(value, int) or not 500 <= value <= 10_000:
+        raise RuntimeError("invalid_runtime_health_timeout_ms")
     return value
 
 
@@ -73,9 +86,9 @@ def make_l3_service_factory():
         service = ChassisMotionTcpService(
             transport,
             chassis,
-            ControlLease(),
             authorize=verifier,
             motion_permitted=motion_permitted,
+            health_timeout_ms=_health_timeout(config),
             max_linear_mm_s=max_linear_mm_s,
             max_omega_mrad_s=max_omega_mrad_s,
             max_hold_ms=max_hold_ms,

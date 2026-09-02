@@ -31,7 +31,7 @@ The computer, MaixCam, and ESP32 must join the LAN at runtime. Robot arm LAN2 ma
 |---|---|---|
 | Computer | Receive video, run vision inference, orchestrate tasks, own one direct ESP32 chassis session and one MaixCam arm/video session | Does not control CAN or arm LAN1 directly and is not the sole emergency-stop or interlock layer |
 | MaixCam | Video output, robot-arm command validation/routing, arm status, and arm task gates | Does not route chassis commands or replace local device safety |
-| ESP32 | Receive direct TCP chassis commands, own chassis control, enforce ownership/TTL/heartbeat and speed limits, execute CAN commands, report status | WebREPL is maintenance-only; safe stopping cannot depend on the computer remaining online; no arm control |
+| ESP32 | Receive direct TCP chassis commands, own chassis control, enforce authentication/TTL/connection-health and speed limits, execute CAN commands, report status | WebREPL is maintenance-only; safe stopping cannot depend on the computer remaining online; no arm control |
 | TCP232 | Transparent byte transport between MaixCam UART and robot arm LAN1 TCP | Does not parse the application protocol or decide whether an action completed |
 | Robot arm | Host the LAN1 service, parse commands, own its action state machine, call the Dobot API, report results | Does not accept a second computer runtime owner and does not use LAN2 for runtime data |
 
@@ -40,7 +40,7 @@ The computer, MaixCam, and ESP32 must join the LAN at runtime. Robot arm LAN2 ma
 | Channel | Direction | Transport | Current status |
 |---|---|---|---|
 | Video | MaixCam → computer | RTSP/H.264; FFmpeg/MediaMTX exposes local RTSP, HLS, and WebRTC | Passed continuous real-device video validation |
-| Chassis commands and status | Computer ↔ ESP32 | Dedicated persistent TCP service with bounded newline-delimited messages, sequence, TTL, ownership, and heartbeat | RCP1/TCP passed once on hardware; v2 service/client/listener pass L1 and the listener is explicitly no-CAN/non-motion |
+| Chassis commands and status | Computer ↔ ESP32 | RCP/TCP v3 persistent TCP service with bounded newline-delimited messages, sequence, TTL, authentication, and health polling | Earlier versions passed hardware checks; v3 currently passes L1 and awaits deployment |
 | Arm commands and status | Computer ↔ MaixCam | Persistent bidirectional NDJSON control envelope | L1 endpoint/client/simulator exist; default admission rejects all motion |
 | Arm commands and status | MaixCam ↔ TCP232 ↔ arm LAN1 | UART 115200 8N1, RPA2 CRC frames, and a robot-arm project | RPA1 diagnostics and one fixed action passed; RPA2 service passes L1 and defaults to motion-disabled |
 
@@ -61,12 +61,12 @@ ttl_ms
 payload
 ```
 
-Byte-oriented device links require framing and integrity checks appropriate to their transport. TCP chassis messages use bounded newline-delimited JSON and rely on TCP integrity; UART arm messages retain explicit checksum requirements. A receiver rejects unknown versions or targets, invalid or out-of-range values, duplicate/expired/out-of-order commands, commands without ownership, commands illegal in the current state, oversized frames, and incomplete frames.
+Byte-oriented device links require framing and integrity checks appropriate to their transport. TCP chassis messages use bounded newline-delimited JSON and rely on TCP integrity; UART arm messages retain explicit checksum requirements. A receiver rejects unknown versions or targets, invalid or out-of-range values, duplicate/expired/out-of-order commands, unauthenticated commands, commands illegal in the current state, oversized frames, and incomplete frames.
 
 Device command sets remain separate:
 
 ```text
-chassis: acquire / heartbeat / velocity / stop / disable / status
+chassis: enable / velocity / stop / disable / ping / status
 arm:     ping / initialize / execute_named_action / cancel / status
 system:  snapshot / fault / estop_state
 ```
@@ -87,7 +87,7 @@ RECEIVED → ACCEPTED → RUNNING → DONE
 - `RUNNING`: physical execution has started.
 - `DONE`: the target device reported successful completion; writing bytes is not completion.
 - `FAULT`: the target explicitly reported failure.
-- `REJECTED`: the command was not executed because state, parameters, TTL, or ownership were invalid.
+- `REJECTED`: the command was not executed because state, parameters, TTL, or authentication were invalid.
 - `UNKNOWN`: a link failed and execution or completion cannot be determined. Never auto-retry a non-idempotent command in this state.
 
 The computer advances a task only after receiving a matching terminal state. A connected TCP socket, a successful UART write, an online TCP232, or a legacy "running" response is not proof of completion.
@@ -102,23 +102,23 @@ MaixPy's default communication listener may own `/dev/ttyS0`. The existing video
 
 ### 6.2 ESP32
 
-The resident chassis service starts in safe idle, opens its dedicated TCP runtime port, and initializes the state machine and CAN only in a separately validated motion mode. It stops locally on client disconnect, heartbeat expiry, command expiry, parse failure, or ownership loss. WebREPL does not participate in runtime control.
+The resident chassis service starts in safe idle, opens its dedicated TCP runtime port, and initializes the state machine and CAN only in a separately validated motion mode. The authenticated connection is the controller; there is no acquire/release layer. It stops and disables locally on client disconnect, connection-health timeout, parse failure, or execution failure. Velocity-hold expiry stops motion but leaves the session enabled. WebREPL does not participate in runtime control.
 
 The legacy program's Wi-Fi/WebREPL bootstrap and PS2 loop do not expose a production TCP chassis service. WebREPL execution is not a substitute for the resident endpoint.
 
 The local v2 foundation now separates four responsibilities:
 
 ```text
-chassis_tcp_v2 codec
+chassis_tcp_v3 codec
         ↓
-ChassisMotionTcpService: authentication, lease, commands, lifecycle, watchdogs
+ChassisMotionTcpService: authentication, commands, lifecycle, watchdogs
         ↓ injected interfaces
-ControlLease + SafeMecanumChassis
+SafeMecanumChassis
         ↓ later L3 integration
 MotorBus + MicroPython CAN
 ```
 
-`ChassisMotionTcpRuntime` polls one injected connection and all local deadlines. `ChassisMotionTcpServer` now binds one client only when ignored local configuration selects `tcp_v2_l2`; that mode creates `NoMotionChassis`, never creates CAN, and keeps `motion_permitted=false`. The default credential verifier denies every login and the default application entry remains safe idle.
+`ChassisMotionTcpRuntime` polls one injected connection and all local deadlines. `ChassisMotionTcpServer` binds one client. Ignored local configuration selects `tcp_v3_l2` for `NoMotionChassis` or the separately gated `tcp_v3_l3` CAN composition. The default credential verifier denies every login and the default application entry remains safe idle.
 
 ### 6.3 Robot Arm
 
@@ -130,7 +130,7 @@ Do not assume cold-boot auto-start. The current safe sequence is to verify the i
 
 1. Restrain the chassis or place it in the agreed safe area, and place the arm at its safe initial pose.
 2. Power ESP32, MaixCam, TCP232, and the robot arm.
-3. ESP32 enters `safe_idle`, starts its TCP endpoint, and does not restore an old velocity, owner, or client session.
+3. ESP32 enters `safe_idle`, starts its TCP endpoint, and does not restore an old velocity or client session.
 4. An on-site person enables the arm and starts the configured LAN1 project.
 5. MaixCam acquires arm UART ownership and performs a non-motion handshake with the arm.
 6. MaixCam starts its arm command/status endpoint and video service.
@@ -143,20 +143,20 @@ A missing state keeps the system idle. Link recovery never replays an old comman
 
 | Fault | Required local behavior |
 |---|---|
-| Computer or hotspot disconnects | ESP32 stops under its local TCP heartbeat policy; MaixCam accepts no new arm tasks from that session |
-| ESP32 TCP client disconnects | ESP32 stops locally, clears ownership and old sequence state, and requires a fresh handshake |
+| Computer or hotspot disconnects | ESP32 stops and disables under its local TCP connection-health policy; MaixCam accepts no new arm tasks from that session |
+| ESP32 TCP client disconnects | ESP32 stops locally, clears authentication and old sequence state, and requires a fresh handshake |
 | MaixCam process exits | The arm receives no new task; in-flight action status follows the real protocol evidence; ESP32 chassis safety remains independent |
 | MaixCam-arm link disconnects | MaixCam enters `FAULT`; an uncertain non-idempotent action becomes `UNKNOWN` and is not retried |
 | Video disconnects | Stop vision-dependent decisions; never continue from the last frame |
-| A device restarts | Clear ownership, queues, and old sequence state, then repeat non-motion handshakes |
+| A device restarts | Clear sessions, queues, and old sequence state, then repeat non-motion handshakes |
 
 The physical emergency stop, robot limits, and ESP32 local stop must not depend on the computer, Wi-Fi, SSH, WebREPL, or a MaixCam software stop.
 
 ## 9. Implementation Order
 
 1. Define the shared envelope, state semantics, cross-device vectors, and simulators.
-2. Implement the ESP32 TCP safety service and computer client; pass L1 plus non-motion hardware validation. RCP1/TCP v1 hardware proof and the separate RCP/TCP v2 local foundation now satisfy the software portion of this step.
-3. Bind and deploy v2 with motion disabled for L2 evidence, then add reviewed CAN composition and bounded motion under a separate L3 goal.
+2. Implement the ESP32 TCP safety service and computer client; pass L1 plus non-motion hardware validation. RCP/TCP v3 is the current source contract; earlier versions provide historical hardware evidence only.
+3. Bind and deploy v3 with motion disabled for L2 evidence, then deploy the reviewed CAN composition and bounded motion under a separate L3 gate.
 4. Deploy the locally-tested RPA2 arm service and computer/MaixCam endpoint in their default-deny mode, without arbitrary trajectory pass-through.
 5. Add authenticated arm-session admission, vision input, and cross-device task state only after their non-motion L2 evidence is complete.
 6. Progress through L2 connectivity, L3 single-device motion, and L4 interlock validation.

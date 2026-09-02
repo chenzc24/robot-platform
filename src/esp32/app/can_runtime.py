@@ -13,7 +13,7 @@ def create_can(config):
     """Construct one normal-mode ESP32 CAN bus from explicit local settings.
 
     This function has a hardware side effect and must be called only by the
-    `tcp_v2_l3` composition after its physical safety gate. It sends no motor
+    `tcp_v3_l3` composition after its physical safety gate. It sends no motor
     frame itself.
     """
     try:

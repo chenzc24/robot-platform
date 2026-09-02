@@ -16,11 +16,6 @@ from chassis_motion_tcp_client import ChassisMotionTcpClient, open_connection
 
 DEFAULT_SPEED_MM_S = 50
 DEFAULT_HOLD_MS = 200
-# Four independent motor speed-mode initializations include deliberate settling
-# waits. This lease covers setup only; the actual velocity remains limited by
-# the 200 ms local hold watchdog.
-SETUP_LEASE_MS = 5000
-MOTION_LEASE_MS = 1000
 
 
 def parse_arguments():
@@ -51,26 +46,24 @@ def execute(arguments):
         welcome = _required(client.hello(arguments.client_id, credential), "WELCOME")
         if welcome["payload"]["motion_permitted"] is not True:
             raise RuntimeError("motion_not_permitted_by_device")
-        _required(client.acquire(SETUP_LEASE_MS), "DONE")
         _required(client.enable(), "DONE")
-        _required(client.heartbeat(MOTION_LEASE_MS), "DONE")
         _required(
             client.velocity(
                 DEFAULT_SPEED_MM_S,
                 0,
                 0,
                 DEFAULT_HOLD_MS,
-                MOTION_LEASE_MS,
+                1000,
             ),
             "DONE",
         )
         time.sleep((DEFAULT_HOLD_MS + 150) / 1000.0)
         state = _required(client.status(), "STATE")["payload"]
-        if state["chassis_state"] != "disabled":
-            raise RuntimeError("hold_expiry_did_not_disable")
-        _required(client.release(), "DONE")
+        if state["chassis_state"] != "enabled_stopped":
+            raise RuntimeError("hold_expiry_did_not_stop")
+        _required(client.disable(), "DONE")
         print("L3_RESULT=velocity_hold_expired")
-        print("CHASSIS_STATE=" + state["chassis_state"])
+        print("HOLD_STATE=" + state["chassis_state"])
         print("MOTION_PERMITTED=" + str(state["motion_permitted"]))
     finally:
         try:

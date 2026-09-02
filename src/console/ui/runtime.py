@@ -17,7 +17,7 @@ from .runtime_config import RuntimeConfig
 
 SAFE_CHASSIS_COMMANDS = {"ping", "status"}
 SAFE_ARM_COMMANDS = {"ping", "status"}
-MOTION_CHASSIS_COMMANDS = {"acquire", "heartbeat", "enable", "velocity", "stop", "disable", "release"}
+MOTION_CHASSIS_COMMANDS = {"enable", "velocity", "stop", "disable"}
 MOTION_ARM_COMMANDS = {"move_joint", "move_linear", "jog_joint", "jog_xyz", "gripper"}
 
 
@@ -112,8 +112,6 @@ def _chassis_dispatch(client, command, payload):
     handlers = {
         "ping": lambda: client.ping(),
         "status": lambda: client.status(),
-        "acquire": lambda: client.acquire(payload["lease_ms"]),
-        "heartbeat": lambda: client.heartbeat(payload["lease_ms"]),
         "enable": client.enable,
         "velocity": lambda: client.velocity(
             payload["vx_mm_s"],
@@ -123,7 +121,6 @@ def _chassis_dispatch(client, command, payload):
         ),
         "stop": client.stop,
         "disable": client.disable,
-        "release": client.release,
     }
     if command not in handlers:
         raise ValueError("unsupported_chassis_command")
@@ -196,9 +193,9 @@ class SerializedSession(QObject):
     def request(self, command, payload=None):
         self._start_if_needed()
         operation = ("request", command, payload or {})
-        if command in {"velocity", "heartbeat"}:
+        if command in {"velocity", "ping"}:
             self._replace_pending(command, operation)
-        elif command in {"stop", "disable", "release"}:
+        elif command in {"stop", "disable"}:
             self._prioritize_safe_output(operation)
         else:
             self._operations.put(operation)
@@ -216,11 +213,11 @@ class SerializedSession(QObject):
             self._operations.not_empty.notify()
 
     def _prioritize_safe_output(self, operation):
-        """Drop stale motion/heartbeats and schedule stop-like output next."""
+        """Drop stale periodic requests and schedule stop-like output next."""
         with self._operations.mutex:
             retained = [
                 item for item in self._operations.queue
-                if not (item[0] == "request" and item[1] in {"velocity", "heartbeat"})
+                if not (item[0] == "request" and item[1] in {"velocity", "ping"})
             ]
             self._operations.queue.clear()
             self._operations.queue.extend(retained)
@@ -527,6 +524,9 @@ class RuntimeCoordinator(QObject):
 
     def request_chassis_status(self):
         self.chassis.request("status")
+
+    def request_chassis_health(self):
+        self.chassis.request("ping")
 
     @property
     def manual_chassis_enabled(self):

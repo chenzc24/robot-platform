@@ -45,11 +45,12 @@ These are service health and safety, not equal to future robotic missions. `ARME
 | `main.py` | Group entrance | None |
 | `application.py` | Operating mode doors and life cycle | Only `SAFE_IDLE` |
 | `esp_runtime_status.py` | MicroPython compatible JSON status event | None |
-| `control_lease.py` | Single controller, timeout, renewal and release | None, not connected to chassis parking |
 | `chassis_control.py` | Baseboard status machine, limit bands and failure rollback | It's only possible by injecting MotoBus. |
 | `motor_bus.py` | Can frame encoding, sending, failure count and batch rollback | It's only possible by injecting Can. |
 
-`ControlLease` It's only a protected language that has been tested. Until the official chassis service is completed, the lease expires without automatically calling the real parking, without claiming that the heartbeat has been stopped.
+The current RCP/TCP v3 service treats its authenticated TCP connection as the
+single controller and stops/disables on connection-health timeout. The earlier
+standalone lease primitive has been removed.
 
 ## 4. MaixCam video module
 
@@ -102,7 +103,7 @@ This round will only confirm:
 
 - Share status fields and devices to achieve consistency in local testing.
 - The ESP32 security entrance still does not initiate motor hardware.
-- Control the lease, camera ownership, state feedback and failure rolls back through false object testing.
+- Connection health, camera ownership, state feedback and failure rollback use fake-object testing.
 - New deployment lists and scripts have not been implemented on MicroPython or MaixCam.
 
 Once onboard, the user must set an additional L2 target, verify import, file deployment, structured log, camera startup and recovery; do not deploy ESP32 mode before L2.

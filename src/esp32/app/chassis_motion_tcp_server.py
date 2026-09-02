@@ -1,4 +1,4 @@
-"""One-client MicroPython listener for the direct RCP/TCP v2 chassis service."""
+"""One-client MicroPython listener for the direct RCP/TCP v3 chassis service."""
 
 try:
     import usocket as socket

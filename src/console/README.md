@@ -8,11 +8,16 @@ The current allowlist is only `HELLO`, `PING`, and `STATUS`. No motion command e
 python src/console/chassis_tcp_probe.py --host <current-esp32-ip>
 ```
 
-Motion control, authentication, control leasing, heartbeat stop, reconnect policy, and console integration require a separate safety goal.
+The legacy v1 probe remains non-motion. Production motion uses the separate v3
+client described below.
 
 ## Direct Chassis Motion Foundation
 
-`chassis_motion_tcp_client.py` implements the local RCP/TCP v2 computer session. It supports authenticated `HELLO`, `PING`, `STATUS`, lease acquisition, heartbeat, enable, bounded velocity, stop, disable, and release. It sends one request at a time and never automatically retries a state-changing request whose outcome becomes unknown.
+`chassis_motion_tcp_client.py` implements the RCP/TCP v3 computer session. It
+supports authenticated `HELLO`, `PING`, `STATUS`, enable, bounded velocity,
+stop, and disable. The authenticated connection itself is the control session;
+there is no acquire/release layer. It sends one request at a time and never
+automatically retries a state-changing request whose outcome becomes unknown.
 
 `motion_router.py` is the first flat dual-session routing layer:
 
@@ -42,12 +47,11 @@ chassis dependency. The same commands are exposed through
 `MaixCamArmClient` and `robot arm jog-joint` / `robot arm jog-xyz`.
 
 The optional [Hardware Manual Chassis Debug](../../docs/console/manual-chassis-debug.md)
-surface admits the deployed ESP32 L3 lifecycle only when the ignored local
+surface admits the ESP32 L3 lifecycle only when the ignored local
 `manual_chassis.enabled` flag is explicitly true. It remains disconnected on
-startup, requires the operator to acquire and enable each session, bounds each
-velocity, refreshes only while manual unlock is active, and gives `STOP`,
-`DISABLE`, and `RELEASE` priority over pending periodic requests. It is for an
-attended L3 test only; it is not a production autonomy mode or an emergency stop.
+startup. After Connect and Enable, direction buttons send bounded velocity and
+refresh only while held. `STOP` and `DISABLE` take priority over periodic
+requests. It is for attended debugging; it is not a physical emergency stop.
 
 The normal desktop launch writes sanitized live event/fault records to the
 ignored `logs/console/latest-events.log`. Use `Get-Content
@@ -55,7 +59,7 @@ logs\console\latest-events.log -Wait` from a second PowerShell terminal to
 follow command outcomes without screenshots. The log excludes credentials,
 endpoint addresses, payloads, and command parameters.
 
-The console accepts only the current exact ESP32 RCP/TCP v2 `STATE` schema and the current terminal `arm.status` lifecycle/RPA2 state schema. A malformed, incomplete, or inconsistent status response becomes a persistent fault and never enables a control. Snapshots use a configured relative directory below the local `logs/` root, such as `snapshots/session-a`; absolute paths and traversal outside that root are rejected.
+The console accepts only the current exact ESP32 RCP/TCP v3 `STATE` schema and the current terminal `arm.status` lifecycle/RPA2 state schema. A malformed, incomplete, or inconsistent status response becomes a persistent fault and never enables a control. Snapshots use a configured relative directory below the local `logs/` root, such as `snapshots/session-a`; absolute paths and traversal outside that root are rejected.
 
 Launch it from the repository root:
 

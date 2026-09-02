@@ -7,7 +7,7 @@ sys.path.insert(0, str(ROOT / "protocol"))
 sys.path.insert(0, str(ROOT / "src/esp32/app"))
 
 from chassis_runtime_factory import NoMotionChassis, make_l2_service
-from chassis_tcp_v2 import decode_message, encode_message
+from chassis_tcp_v3 import decode_message, encode_message
 
 
 class Transport:

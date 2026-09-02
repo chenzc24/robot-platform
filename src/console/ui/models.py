@@ -51,12 +51,9 @@ class VideoState:
 class ChassisState:
     link: LinkState = LinkState.OFFLINE
     authenticated: bool = False
-    lease_owner: Optional[str] = None
-    lease_remaining_ms: Optional[int] = None
     motion_permitted: bool = False
     motion_enabled: bool = False
-    manual_unlocked: bool = False
-    heartbeat_age_ms: Optional[int] = None
+    health_age_ms: Optional[int] = None
     reported_state: str = "safe idle"
     last_error: str = "none"
     velocity: Tuple[int, int, int] = (0, 0, 0)

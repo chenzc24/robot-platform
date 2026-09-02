@@ -1,4 +1,4 @@
-"""Contract tests for motion-capable RCP/TCP v2 chassis messages."""
+"""Contract tests for lease-free RCP/TCP v3 chassis messages."""
 
 import json
 import pathlib
@@ -10,19 +10,19 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "protocol"))
 
 import chassis_tcp
-from chassis_tcp_v2 import (
+from chassis_tcp_v3 import (
     MAX_FRAME_BYTES,
-    ChassisTcpV2FrameError,
+    ChassisTcpV3FrameError,
     MessageStreamDecoder,
     decode_message,
     encode_message,
 )
 
 
-class ChassisTcpV2ContractTests(unittest.TestCase):
+class ChassisTcpV3ContractTests(unittest.TestCase):
     def test_golden_vectors_round_trip(self):
         vectors = json.loads(
-            (ROOT / "protocol/chassis-tcp-v2-vectors.json").read_text("utf-8")
+            (ROOT / "protocol/chassis-tcp-v3-vectors.json").read_text("utf-8")
         )["vectors"]
         for vector in vectors:
             encoded = encode_message(
@@ -43,7 +43,7 @@ class ChassisTcpV2ContractTests(unittest.TestCase):
                 500,
                 {"vx_mm_s": 0, "vy_mm_s": 0, "omega_mrad_s": 0, "hold_ms": 250},
             )
-        with self.assertRaises(ChassisTcpV2FrameError):
+        with self.assertRaises(ChassisTcpV3FrameError):
             decode_message(chassis_tcp.encode_message("PING", 1, 1000, {}))
 
     def test_fragmented_combined_and_oversized_streams(self):
@@ -64,7 +64,9 @@ class ChassisTcpV2ContractTests(unittest.TestCase):
     def test_request_ranges_and_exact_payloads_are_enforced(self):
         invalid = (
             ("HELLO", 1, 1000, {"client": "console", "credential": "short"}),
-            ("ACQUIRE", 1, 1000, {"lease_ms": 249}),
+            ("ACQUIRE", 1, 1000, {}),
+            ("HEARTBEAT", 1, 1000, {}),
+            ("RELEASE", 1, 1000, {}),
             ("VELOCITY", 1, 500, {"vx_mm_s": 601, "vy_mm_s": 0, "omega_mrad_s": 0, "hold_ms": 250}),
             ("VELOCITY", 1, 500, {"vx_mm_s": 0, "vy_mm_s": 0, "omega_mrad_s": 0, "hold_ms": 99}),
             ("STOP", 1, 1000, {"extra": True}),
@@ -72,7 +74,7 @@ class ChassisTcpV2ContractTests(unittest.TestCase):
             ("PING", 1, 99, {}),
         )
         for values in invalid:
-            with self.assertRaises(ChassisTcpV2FrameError):
+            with self.assertRaises(ChassisTcpV3FrameError):
                 encode_message(*values)
 
     def test_state_and_lifecycle_responses_are_exact(self):
@@ -81,9 +83,6 @@ class ChassisTcpV2ContractTests(unittest.TestCase):
             "chassis_state": "disabled",
             "motion_permitted": False,
             "authenticated": True,
-            "lease_active": False,
-            "lease_owner": "none",
-            "lease_remaining_ms": 0,
             "hold_remaining_ms": 0,
             "last_error": "none",
         }
@@ -94,12 +93,12 @@ class ChassisTcpV2ContractTests(unittest.TestCase):
         self.assertEqual(
             decode_message(encode_message("DONE", 5, 0, done))["payload"], done
         )
-        with self.assertRaises(ChassisTcpV2FrameError):
+        with self.assertRaises(ChassisTcpV3FrameError):
             encode_message("DONE", 5, 0, {"command": "PING", "state": "ready"})
 
     def test_invalid_json_ascii_and_terminator_are_rejected(self):
-        for frame in (b"not-json\n", b'{"version":2}\n', b"\xff\n", b"{}\r\n"):
-            with self.assertRaises(ChassisTcpV2FrameError):
+        for frame in (b"not-json\n", b'{"version":3}\n', b"\xff\n", b"{}\r\n"):
+            with self.assertRaises(ChassisTcpV3FrameError):
                 decode_message(frame)
 
 

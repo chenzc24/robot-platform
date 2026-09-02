@@ -1,4 +1,4 @@
-"""Fail-closed local tests for the ESP32 RCP/TCP v2 motion service."""
+"""Fail-closed local tests for the ESP32 RCP/TCP v3 motion service."""
 
 import pathlib
 import sys
@@ -14,8 +14,7 @@ from chassis_motion_tcp_service import (
     ChassisMotionTcpService,
     fixed_credential_verifier,
 )
-from chassis_tcp_v2 import decode_message, encode_message
-from control_lease import ControlLease
+from chassis_tcp_v3 import decode_message, encode_message
 
 
 CREDENTIAL = "test-credential-0001"
@@ -79,6 +78,7 @@ class ServiceHarness:
         short_write=False,
         fail_drive=False,
         fail_stop=False,
+        health_timeout_ms=2000,
     ):
         self.clock = FakeClock()
         self.transport = FakeTransport(short_write)
@@ -87,10 +87,10 @@ class ServiceHarness:
         self.service = ChassisMotionTcpService(
             self.transport,
             self.chassis,
-            ControlLease(self.clock),
             authorize=verifier,
             motion_permitted=motion_permitted,
             clock_ms=self.clock,
+            health_timeout_ms=health_timeout_ms,
         )
         self.sequence = 1
 
@@ -133,19 +133,17 @@ class ChassisMotionTcpServiceTests(unittest.TestCase):
         self.assertTrue(state["payload"]["authenticated"])
         self.assertEqual(harness.chassis.events, [])
 
-    def test_motion_disabled_rejects_enable_after_valid_acquire(self):
+    def test_motion_disabled_rejects_enable_on_authenticated_session(self):
         harness = ServiceHarness()
         harness.authenticate()
-        harness.feed("ACQUIRE", {"lease_ms": 1000})
         response = harness.feed("ENABLE", {})[-1]
         self.assertEqual(response["type"], "ERROR")
         self.assertEqual(response["payload"]["code"], "motion_disabled")
         self.assertEqual(harness.chassis.events, [])
 
-    def test_bounded_velocity_hold_expiry_stops_without_releasing_enabled_session(self):
+    def test_bounded_velocity_hold_expiry_stops_without_disabling_session(self):
         harness = ServiceHarness(motion_permitted=True)
         harness.authenticate()
-        harness.feed("ACQUIRE", {"lease_ms": 1000})
         harness.feed("ENABLE", {})
         responses = harness.feed(
             "VELOCITY",
@@ -160,7 +158,7 @@ class ChassisMotionTcpServiceTests(unittest.TestCase):
         self.assertEqual(harness.chassis.events[-1], "stop")
         self.assertNotEqual(harness.chassis.events[-2:], ["stop", "disable"])
         self.assertEqual(harness.chassis.state, "enabled_stopped")
-        self.assertEqual(harness.service.lease.owner, "console")
+        self.assertTrue(harness.service.authenticated)
 
     def test_runtime_velocity_limits_reject_before_any_drive(self):
         harness = ServiceHarness(motion_permitted=True)
@@ -168,7 +166,6 @@ class ChassisMotionTcpServiceTests(unittest.TestCase):
         harness.service.max_omega_mrad_s = 100
         harness.service.max_hold_ms = 200
         harness.authenticate()
-        harness.feed("ACQUIRE", {"lease_ms": 1000})
         harness.feed("ENABLE", {})
         for payload, code in (
             ({"vx_mm_s": 51, "vy_mm_s": 0, "omega_mrad_s": 0, "hold_ms": 200}, "linear_speed_limited"),
@@ -179,25 +176,24 @@ class ChassisMotionTcpServiceTests(unittest.TestCase):
             self.assertEqual(response["payload"]["code"], code)
         self.assertFalse(any(isinstance(item, tuple) for item in harness.chassis.events))
 
-    def test_heartbeat_renews_lease_then_expiry_stops_locally(self):
-        harness = ServiceHarness(motion_permitted=True)
+    def test_ping_refreshes_health_then_timeout_stops_and_disables(self):
+        harness = ServiceHarness(motion_permitted=True, health_timeout_ms=300)
         harness.authenticate()
-        harness.feed("ACQUIRE", {"lease_ms": 300})
         harness.feed("ENABLE", {})
         harness.clock.advance(200)
-        harness.feed("HEARTBEAT", {"lease_ms": 300})
+        harness.feed("PING", {})
         harness.clock.advance(299)
         self.assertIsNone(harness.service.poll_safety())
         harness.clock.advance(1)
         event = harness.service.poll_safety()
-        self.assertEqual(event["event"], "lease_expired")
+        self.assertEqual(event["event"], "health_timeout")
         self.assertEqual(harness.chassis.events[-2:], ["stop", "disable"])
         self.assertEqual(harness.chassis.state, "disabled")
+        self.assertTrue(harness.service.close_required)
 
     def test_identical_duplicate_replays_without_reexecuting_velocity(self):
         harness = ServiceHarness(motion_permitted=True)
         harness.authenticate()
-        harness.feed("ACQUIRE", {"lease_ms": 1000})
         harness.feed("ENABLE", {})
         request = encode_message(
             "VELOCITY",
@@ -225,7 +221,6 @@ class ChassisMotionTcpServiceTests(unittest.TestCase):
     def test_malformed_authenticated_stream_and_disconnect_fail_safe(self):
         harness = ServiceHarness(motion_permitted=True)
         harness.authenticate()
-        harness.feed("ACQUIRE", {"lease_ms": 1000})
         harness.feed("ENABLE", {})
         harness.service.feed(b"invalid\n")
         self.assertEqual(harness.chassis.events[-2:], ["stop", "disable"])
@@ -233,7 +228,6 @@ class ChassisMotionTcpServiceTests(unittest.TestCase):
 
         other = ServiceHarness(motion_permitted=True)
         other.authenticate()
-        other.feed("ACQUIRE", {"lease_ms": 1000})
         other.feed("ENABLE", {})
         other.service.on_disconnect()
         self.assertEqual(other.chassis.events[-2:], ["stop", "disable"])
@@ -253,9 +247,8 @@ class ChassisMotionTcpServiceTests(unittest.TestCase):
         self.assertEqual(decode_message(replacement.writes[-1])["type"], "WELCOME")
 
     def test_failed_stop_still_attempts_disable_and_reports_safe_output_failure(self):
-        harness = ServiceHarness(motion_permitted=True, fail_stop=True)
+        harness = ServiceHarness(motion_permitted=True, fail_stop=True, health_timeout_ms=300)
         harness.authenticate()
-        harness.feed("ACQUIRE", {"lease_ms": 300})
         harness.clock.advance(300)
         event = harness.service.poll_safety()
         self.assertEqual(event["event"], "watchdog_stop_failed")
@@ -265,7 +258,6 @@ class ChassisMotionTcpServiceTests(unittest.TestCase):
     def test_malformed_batch_does_not_execute_following_valid_command(self):
         harness = ServiceHarness(motion_permitted=True)
         harness.authenticate()
-        harness.feed("ACQUIRE", {"lease_ms": 1000})
         next_sequence = harness.sequence
         valid = encode_message("ENABLE", next_sequence, 1000, {})
         harness.service.feed(b"invalid\n" + valid)
@@ -275,7 +267,6 @@ class ChassisMotionTcpServiceTests(unittest.TestCase):
     def test_execution_and_short_write_faults_attempt_safe_output(self):
         harness = ServiceHarness(motion_permitted=True, fail_drive=True)
         harness.authenticate()
-        harness.feed("ACQUIRE", {"lease_ms": 1000})
         harness.feed("ENABLE", {})
         response = harness.feed(
             "VELOCITY",
@@ -312,7 +303,6 @@ class ChassisMotionTcpRuntimeTests(unittest.TestCase):
         service = ChassisMotionTcpService(
             connection,
             chassis,
-            ControlLease(clock),
             authorize=fixed_credential_verifier(CREDENTIAL),
             clock_ms=clock,
         )
@@ -321,6 +311,36 @@ class ChassisMotionTcpRuntimeTests(unittest.TestCase):
         self.assertFalse(service.close_required)
         self.assertEqual(chassis.events, [])
 
+    def test_health_timeout_closes_even_when_socket_read_would_be_idle(self):
+        class IdleConnection(FakeTransport):
+            def recv(self, _size):
+                raise TimeoutError("idle")
+
+        clock = FakeClock()
+        connection = IdleConnection()
+        chassis = FakeChassis()
+        service = ChassisMotionTcpService(
+            connection,
+            chassis,
+            authorize=fixed_credential_verifier(CREDENTIAL),
+            clock_ms=clock,
+            health_timeout_ms=500,
+        )
+        service.feed(
+            encode_message(
+                "HELLO",
+                1,
+                1000,
+                {"client": "console", "credential": CREDENTIAL},
+            ),
+            now_ms=clock.now,
+        )
+        clock.advance(500)
+        runtime = ChassisMotionTcpRuntime(service, connection)
+        with self.assertRaisesRegex(OSError, "session_close_required"):
+            runtime.poll_once()
+        self.assertEqual(chassis.events[-2:], ["stop", "disable"])
+
     def test_connection_close_invokes_local_safe_output(self):
         clock = FakeClock()
         connection = RuntimeConnection([b""])
@@ -328,7 +348,6 @@ class ChassisMotionTcpRuntimeTests(unittest.TestCase):
         service = ChassisMotionTcpService(
             connection,
             chassis,
-            ControlLease(clock),
             authorize=fixed_credential_verifier(CREDENTIAL),
             clock_ms=clock,
         )

@@ -1,6 +1,6 @@
 # Computer-ESP32 Chassis TCP Link
 
-- Protocols: [RCP1/TCP v1](../../protocol/chassis-tcp-v1.md) and [RCP/TCP v2](../../protocol/chassis-tcp-v2.md)
+- Protocols: historical [RCP1/TCP v1](../../protocol/chassis-tcp-v1.md) and current [RCP/TCP v3](../../protocol/chassis-tcp-v3.md)
 - Runtime port baseline: `8765`, configured locally rather than scattered through application code
 - Current safety boundary: session, liveness, and safe-state query only; no motion type exists
 - Current validation: local L1 and one bounded real-device non-motion exchange passed on 2026-09-01
@@ -15,7 +15,7 @@ Production runtime:
 computer → Wi-Fi/TCP configured runtime port → ESP32 chassis service
 ```
 
-WebREPL can interrupt `main.py` and must never carry production velocity or heartbeat traffic. The runtime service is a separate socket owner, message parser, lifecycle, and safety state machine.
+WebREPL can interrupt `main.py` and must never carry production velocity or connection-health traffic. The runtime service is a separate socket owner, message parser, lifecycle, and safety state machine.
 
 ## 2. First Non-Motion Proof
 
@@ -58,8 +58,8 @@ After the current safety gate is confirmed:
 
 The later production service must add, test, and validate together:
 
-- authenticated control acquisition and one active owner;
-- heartbeat renewal and local stop/disable on expiry;
+- authenticated single-client connection;
+- connection-health polling and local stop/disable on timeout;
 - bounded velocity, explicit stop, and disable types;
 - safe CAN and MotorBus composition;
 - state and fault feedback;
@@ -68,14 +68,14 @@ The later production service must add, test, and validate together:
 
 That revision requires a fresh L3 goal. A successful non-motion TCP handshake does not authorize movement.
 
-## 5. Local RCP/TCP v2 Foundation
+## 5. Current RCP/TCP v3 Runtime
 
-RCP/TCP v2 is now implemented locally as a separate motion-capable revision. It does not modify v1 or convert the v1 hardware proof into motion evidence.
+RCP/TCP v3 is the current motion-capable revision. It is intentionally incompatible with v2 because the acquire/heartbeat/release lease layer has been removed.
 
-The v2 source consists of:
+The v3 source consists of:
 
-- `protocol/chassis_tcp_v2.py`: strict MicroPython-compatible JSON framing and validation;
-- `src/esp32/app/chassis_motion_tcp_service.py`: injected authentication, ownership lease, heartbeat, bounded velocity, stop, disable, release, status, duplicate handling, and local watchdogs;
+- `protocol/chassis_tcp_v3.py`: strict MicroPython-compatible JSON framing and validation;
+- `src/esp32/app/chassis_motion_tcp_service.py`: authentication, connection health, bounded velocity, stop, disable, status, duplicate handling, and local watchdogs;
 - `src/console/chassis_motion_tcp_client.py`: one-request-at-a-time client with lifecycle correlation and no automatic retry;
 - `src/console/motion_router.py`: computer-side routing that sends chassis commands directly to ESP32 and arm commands only to the MaixCam arm session.
 
@@ -84,12 +84,12 @@ Committed safety defaults remain:
 ```text
 credential verifier: absent, therefore authentication denied
 motion_permitted: false
-socket listener: available only in the explicit `tcp_v2_l2` composition
-CAN and MotorBus: not constructed by `tcp_v2_l2`
-startup integration: available only when local ignored `device_config.py` selects `tcp_v2_l2`
+socket listener: available in explicit `tcp_v3_l2` and `tcp_v3_l3` compositions
+CAN and MotorBus: not constructed by `tcp_v3_l2`
+startup integration: selected by local ignored `device_config.py`
 ```
 
-An authenticated session must explicitly acquire a `250..2000 ms` lease and renew it with `HEARTBEAT`. Velocity contains a separate `100..500 ms` hold. Velocity-hold expiry sends a local stop while preserving the enabled, owned session so an attended operator can jog again. Lease expiry stops and disables. Disconnect, malformed authenticated input, short write, or execution failure also attempts stop and disable before the session is closed.
+After `HELLO` succeeds, the TCP connection itself is the control session and `ENABLE` may be sent directly. `STOP` zeros motion without disabling. `DISABLE` stops and disables but retains the authenticated connection, so `ENABLE` may be sent again. Disconnecting ends the session. Background `PING` requests maintain connection health; timeout stops, disables, and closes the session. Velocity contains a separate `100..500 ms` hold whose expiry stops motion without disabling, so an attended operator can jog again immediately.
 
 The current attended tuning ceiling is 200 mm/s linear and 400 mrad/s angular.
 The ESP32 local configuration and console local configuration must carry the same
@@ -97,4 +97,4 @@ limits before the wider range is used; a UI-only increase is not deployment.
 
 The first credential is a local pre-shared value checked by an injected verifier. It is never included in committed configuration, responses, status, or logs. It is access control on the controlled WPA-protected LAN, not TLS and not a physical safety mechanism.
 
-The first device step remains non-motion: deploy `tcp_v2_l2` with a local credential and `motion_permitted=false`, then prove authentication rejection/acceptance, `PING`, `STATUS`, heartbeat expiry, disconnect cleanup, and rollback without CAN initialization. The new listener composes `NoMotionChassis`, so it cannot construct CAN or send a motor command. CAN composition and movement remain a separate L3 goal.
+Before replacing an older device runtime, deploy `tcp_v3_l2` with a local credential and `motion_permitted=false`, then prove authentication rejection/acceptance, `PING`, `STATUS`, health timeout, disconnect cleanup, and rollback without CAN initialization. Only after that L2 proof should `tcp_v3_l3` be deployed and validated under a fresh on-site motion gate.

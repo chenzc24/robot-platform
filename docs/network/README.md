@@ -42,7 +42,7 @@ computer ↔ TCP232 vendor configuration endpoint, only when verification is nee
 |---|---|---|---|
 | Computer Wi-Fi | Controlled LAN | Console, video, logs, deployment | Runtime loss triggers local safe behavior |
 | Computer Ethernet | Arm LAN2 | DobotStudio, teaching, maintenance | Connect only for maintenance; no default gateway |
-| ESP32 Wi-Fi runtime | Controlled LAN | Dedicated chassis TCP commands, heartbeat, and status | Independent of WebREPL; ESP32 stops locally on loss |
+| ESP32 Wi-Fi runtime | Controlled LAN | Dedicated chassis TCP commands, health polling, and status | Independent of WebREPL; ESP32 stops locally on loss |
 | ESP32 WebREPL | Controlled LAN | Deployment and diagnostics | Not a production runtime-control path |
 | MaixCam Wi-Fi | Controlled LAN | Video, robot-arm endpoint, and SSH/SCP | Arm business service is independent of SSH |
 | MaixCam UART0 | TCP232 UART | Arm commands and responses | Baseline 115200; verify before hardware use |
@@ -110,7 +110,7 @@ Internet/mobile data is optional. Address changes are normal and must be handled
 
 ## 8. Tailscale Boundary
 
-Tailscale is not deployed in the first stage. A future MaixCam or subnet gateway may support SSH, files, logs, video, and high-level discrete tasks. Never use it as the only physical-stop path, for continuous chassis velocity/heartbeat, arm jogging, or low-level chassis-arm interlocks. ESP32 is not assumed to run Tailscale.
+Tailscale is not deployed in the first stage. A future MaixCam or subnet gateway may support SSH, files, logs, video, and high-level discrete tasks. Never use it as the only physical-stop path, for continuous chassis velocity, arm jogging, or low-level chassis-arm interlocks. ESP32 is not assumed to run Tailscale.
 
 ## 9. Failure Behavior
 

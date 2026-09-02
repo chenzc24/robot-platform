@@ -159,7 +159,7 @@ Development and deployment: VS Code → WebREPL → ESP32 file system/REPL
 Formal control: Unified console Control Protocol ESP32 chassis service
 ```
 
-WebREPL is not an official chassis control protocol. Release mode should shut down or restrict WebREPL, without affecting the chassis heartbeat, parking, status and control services.
+WebREPL is not an official chassis control protocol. Release mode should shut down or restrict WebREPL, without affecting chassis connection-health polling, stopping, status, or control services.
 
 ## 8. Version status of existing chassis programs
 

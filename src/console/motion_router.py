@@ -5,13 +5,10 @@ MESSAGE_FIELDS = {"message_id", "target", "name", "ttl_ms", "payload"}
 COMMAND_PAYLOAD_KEYS = {
     "chassis.ping": (),
     "chassis.status": (),
-    "chassis.acquire": ("lease_ms",),
-    "chassis.heartbeat": ("lease_ms",),
     "chassis.enable": (),
     "chassis.velocity": ("vx_mm_s", "vy_mm_s", "omega_mrad_s", "hold_ms"),
     "chassis.stop": (),
     "chassis.disable": (),
-    "chassis.release": (),
     "arm.ping": (),
     "arm.status": (),
     "arm.move_joint": ("joint_deg", "accel_pct", "speed_pct"),
@@ -91,10 +88,6 @@ class DualSessionMotionRouter:
                 result = self.chassis.ping(min(ttl_ms, 5000))
             elif name == "chassis.status":
                 result = self.chassis.status(min(ttl_ms, 5000))
-            elif name == "chassis.acquire":
-                result = self.chassis.acquire(payload["lease_ms"], min(ttl_ms, 5000))
-            elif name == "chassis.heartbeat":
-                result = self.chassis.heartbeat(payload["lease_ms"], min(ttl_ms, 5000))
             elif name == "chassis.enable":
                 result = self.chassis.enable(min(ttl_ms, 5000))
             elif name == "chassis.velocity":
@@ -109,8 +102,6 @@ class DualSessionMotionRouter:
                 result = self.chassis.stop(min(ttl_ms, 5000))
             elif name == "chassis.disable":
                 result = self.chassis.disable(min(ttl_ms, 5000))
-            elif name == "chassis.release":
-                result = self.chassis.release(min(ttl_ms, 5000))
             elif name == "arm.ping":
                 result = self.arm.ping(ttl_ms)
             elif name == "arm.status":

@@ -49,12 +49,10 @@ class ConsoleController(QObject):
         self._next_id = 1
         self._active_arm_command = None
         self._held_chassis_velocity = None
-        self._manual_chassis_transition = None
-        self._manual_chassis_pending_command = None
         self._event_log_path = Path(event_log_path) if event_log_path else None
         self.runtime = runtime
-        self._lease_heartbeat_timer = QTimer(self)
-        self._lease_heartbeat_timer.timeout.connect(self._lease_heartbeat_tick)
+        self._health_timer = QTimer(self)
+        self._health_timer.timeout.connect(self._health_tick)
         self._velocity_refresh_timer = QTimer(self)
         self._velocity_refresh_timer.timeout.connect(self._velocity_refresh_tick)
         if self.runtime is not None:
@@ -289,7 +287,8 @@ class ConsoleController(QObject):
             self.state.chassis,
             link=LinkState.ONLINE,
             authenticated=True,
-            heartbeat_age_ms=20,
+            motion_permitted=True,
+            health_age_ms=20,
             reported_state="safe idle",
         )
         self._replace(chassis=chassis)
@@ -307,130 +306,11 @@ class ConsoleController(QObject):
         self._replace(chassis=ChassisState(reported_state="disconnected"))
         self._record("ESP32", "chassis.disconnect", Lifecycle.DONE, "disconnected")
 
-    def chassis_manual_transition(self):
-        return self._manual_chassis_transition
-
-    def can_start_chassis_manual(self):
-        chassis = self.state.chassis
-        return bool(
-            self._manual_chassis_transition is None
-            and (self.state.environment == Environment.SIMULATOR or self._hardware_manual_enabled())
-            and chassis.link == LinkState.ONLINE
-            and chassis.authenticated
-            and chassis.lease_owner in (None, self.chassis_lease_owner_id())
-            and not chassis.manual_unlocked
-        )
-
-    def can_end_chassis_manual(self):
-        chassis = self.state.chassis
-        return bool(
-            self._manual_chassis_transition is None
-            and chassis.link == LinkState.ONLINE
-            and (
-                chassis.lease_owner == self.chassis_lease_owner_id()
-                or chassis.motion_enabled
-                or chassis.manual_unlocked
-            )
-        )
-
-    def start_chassis_manual(self):
-        """Acquire and enable the attended manual session from one operator action."""
-        if not self.can_start_chassis_manual():
-            self._record("ESP32", "chassis.manual_start", Lifecycle.REJECTED, "manual_session_not_ready")
-            return False
-        if self.state.environment == Environment.SIMULATOR:
-            if self.state.chassis.lease_owner is None and not self.chassis_acquire():
-                return False
-            if not self.state.chassis.motion_enabled and not self.chassis_enable():
-                return False
-            return self.set_chassis_manual_unlock(True)
-        self._manual_chassis_transition = "starting"
-        self._record("ESP32", "chassis.manual_start", Lifecycle.ACCEPTED, "starting")
-        self._publish(self.state)
-        return self._advance_chassis_manual_start()
-
-    def _advance_chassis_manual_start(self):
-        if self._manual_chassis_transition != "starting" or self._manual_chassis_pending_command:
-            return False
-        chassis = self.state.chassis
-        owner_id = self.chassis_lease_owner_id()
-        if not self._hardware_manual_session_ready() or chassis.lease_owner not in (None, owner_id):
-            self._finish_chassis_manual_transition(Lifecycle.REJECTED, "manual_session_not_ready")
-            return False
-        if chassis.lease_owner is None:
-            self._manual_chassis_pending_command = "acquire"
-            accepted = self.runtime.request_chassis_manual(
-                "acquire", {"lease_ms": self.runtime.config.manual_chassis.lease_ms}
-            )
-            if not accepted:
-                self._manual_chassis_pending_command = None
-                self._finish_chassis_manual_transition(Lifecycle.REJECTED, "motion_not_admitted")
-            return accepted
-        self._start_lease_heartbeat()
-        if not chassis.motion_permitted:
-            self._finish_chassis_manual_transition(Lifecycle.REJECTED, "motion_disabled")
-            return False
-        if not chassis.motion_enabled:
-            self._manual_chassis_pending_command = "enable"
-            accepted = self.runtime.request_chassis_manual("enable")
-            if not accepted:
-                self._manual_chassis_pending_command = None
-                self._finish_chassis_manual_transition(Lifecycle.REJECTED, "motion_not_admitted")
-            return accepted
-        self._replace(chassis=replace(chassis, manual_unlocked=True, velocity=(0, 0, 0)))
-        self._finish_chassis_manual_transition(Lifecycle.DONE, "ready")
-        return True
-
-    def end_chassis_manual(self):
-        """Stop, disable, and release the attended session from one operator action."""
-        if not self.can_end_chassis_manual():
-            self._record("ESP32", "chassis.manual_end", Lifecycle.REJECTED, "manual_session_not_active")
-            return False
-        if self.state.environment == Environment.SIMULATOR:
-            self.chassis_stop()
-            self.chassis_disable()
-            self.chassis_release()
-            return True
-        self._stop_manual_chassis_timers()
-        self._manual_chassis_transition = "ending"
-        self._manual_chassis_pending_command = "stop"
-        self._replace(chassis=replace(self.state.chassis, manual_unlocked=False, velocity=(0, 0, 0), reported_state="stopping"))
-        self._record("ESP32", "chassis.manual_end", Lifecycle.ACCEPTED, "stopping")
-        accepted = self.runtime.request_chassis_manual("stop")
-        if not accepted:
-            self._finish_chassis_manual_transition(Lifecycle.REJECTED, "motion_not_admitted")
-        return accepted
-
-    def _finish_chassis_manual_transition(self, lifecycle, code):
-        transition = self._manual_chassis_transition
-        self._manual_chassis_transition = None
-        self._manual_chassis_pending_command = None
-        self._record("ESP32", "chassis.manual_%s" % ("start" if transition == "starting" else "end"), lifecycle, code)
-        self._publish(self.state)
-
-    def chassis_acquire(self):
-        if self.state.environment == Environment.HARDWARE:
-            chassis = self.state.chassis
-            if not self._hardware_manual_session_ready() or chassis.lease_owner is not None:
-                self._record("ESP32", "chassis.acquire", Lifecycle.REJECTED, "manual_session_not_ready")
-                return False
-            return self.runtime.request_chassis_manual(
-                "acquire", {"lease_ms": self.runtime.config.manual_chassis.lease_ms}
-            )
-        chassis = self.state.chassis
-        if chassis.link != LinkState.ONLINE or not chassis.authenticated:
-            self._record("ESP32", "chassis.acquire", Lifecycle.REJECTED, "not_connected")
-            return False
-        self._replace(chassis=replace(chassis, lease_owner="console", lease_remaining_ms=1_000))
-        self._record("ESP32", "chassis.acquire", Lifecycle.DONE, "lease_acquired")
-        return True
-
     def chassis_enable(self):
         if self.state.environment == Environment.HARDWARE:
             chassis = self.state.chassis
             if not (
                 self._hardware_manual_session_ready()
-                and chassis.lease_owner == self.chassis_lease_owner_id()
                 and chassis.motion_permitted
                 and not chassis.motion_enabled
             ):
@@ -438,8 +318,8 @@ class ConsoleController(QObject):
                 return False
             return self.runtime.request_chassis_manual("enable")
         chassis = self.state.chassis
-        if chassis.lease_owner != "console":
-            self._record("ESP32", "chassis.enable", Lifecycle.REJECTED, "lease_required")
+        if chassis.link != LinkState.ONLINE or not chassis.authenticated:
+            self._record("ESP32", "chassis.enable", Lifecycle.REJECTED, "not_connected")
             return False
         self._replace(chassis=replace(chassis, motion_enabled=True, reported_state="safe idle"))
         self._record("ESP32", "chassis.enable", Lifecycle.DONE, "simulator_enabled")
@@ -448,71 +328,27 @@ class ConsoleController(QObject):
     def chassis_disable(self):
         if self.state.environment == Environment.HARDWARE:
             self._held_chassis_velocity = None
+            self._velocity_refresh_timer.stop()
             if not self._hardware_manual_session_ready():
                 self._record("ESP32", "chassis.disable", Lifecycle.REJECTED, "manual_session_not_ready")
                 return False
             return self.runtime.request_chassis_manual("disable")
         chassis = self.state.chassis
-        self._replace(chassis=replace(chassis, motion_enabled=False, manual_unlocked=False, velocity=(0, 0, 0), reported_state="safe idle"))
+        self._replace(chassis=replace(chassis, motion_enabled=False, velocity=(0, 0, 0), reported_state="safe idle"))
         self._record("ESP32", "chassis.disable", Lifecycle.DONE, "disabled")
-
-    def chassis_release(self):
-        if self.state.environment == Environment.HARDWARE:
-            self._stop_manual_chassis_timers()
-            if not self._hardware_manual_session_ready():
-                self._record("ESP32", "chassis.release", Lifecycle.REJECTED, "manual_session_not_ready")
-                return False
-            return self.runtime.request_chassis_manual("release")
-        chassis = self.state.chassis
-        self._replace(chassis=replace(chassis, lease_owner=None, lease_remaining_ms=None, motion_enabled=False, manual_unlocked=False, velocity=(0, 0, 0)))
-        self._record("ESP32", "chassis.release", Lifecycle.DONE, "released")
-
-    def set_chassis_manual_unlock(self, unlocked):
-        chassis = self.state.chassis
-        if self.state.environment == Environment.HARDWARE:
-            allowed = bool(
-                unlocked
-                and self._hardware_manual_enabled()
-                and chassis.link == LinkState.ONLINE
-                and chassis.authenticated
-                and chassis.lease_owner == self.chassis_lease_owner_id()
-                and chassis.motion_permitted
-                and chassis.motion_enabled
-            )
-            if allowed:
-                self._replace(chassis=replace(chassis, manual_unlocked=True))
-                self._start_lease_heartbeat()
-                self.runtime.request_chassis_manual(
-                    "heartbeat", {"lease_ms": self.runtime.config.manual_chassis.lease_ms}
-                )
-            else:
-                self._held_chassis_velocity = None
-                self._velocity_refresh_timer.stop()
-                self._replace(chassis=replace(chassis, manual_unlocked=False, velocity=(0, 0, 0)))
-                if self._hardware_manual_session_ready():
-                    self.runtime.request_chassis_manual("stop")
-            self._record("Console", "chassis.manual_unlock", Lifecycle.DONE if allowed or not unlocked else Lifecycle.REJECTED, str(allowed).lower())
-            return allowed
-        allowed = bool(
-            unlocked
-            and self.state.environment == Environment.SIMULATOR
-            and chassis.link == LinkState.ONLINE
-            and chassis.lease_owner == self.chassis_lease_owner_id()
-            and chassis.motion_enabled
-        )
-        self._replace(chassis=replace(chassis, manual_unlocked=allowed))
-        self._record("Console", "chassis.manual_unlock", Lifecycle.DONE if allowed or not unlocked else Lifecycle.REJECTED, str(allowed).lower())
-        return allowed
 
     def can_chassis_move(self):
         chassis = self.state.chassis
         return bool(
             (self.state.environment == Environment.SIMULATOR or self._hardware_manual_enabled())
             and chassis.link == LinkState.ONLINE
-            and chassis.lease_owner == self.chassis_lease_owner_id()
+            and chassis.authenticated
+            and chassis.motion_permitted
             and chassis.motion_enabled
-            and chassis.manual_unlocked
-            and not any(fault.severity == "fault" for fault in self.state.faults)
+            and not any(
+                fault.severity == "fault" and fault.source in {"chassis", "esp32"}
+                for fault in self.state.faults
+            )
         )
 
     def chassis_velocity(self, vx_mm_s, vy_mm_s, omega_mrad_s):
@@ -542,7 +378,7 @@ class ConsoleController(QObject):
             self._record("ESP32", "chassis.velocity", Lifecycle.RUNNING, "hardware_velocity_requested")
             return True
         state_name = "moving" if velocity != (0, 0, 0) else "safe idle"
-        self._replace(chassis=replace(self.state.chassis, velocity=velocity, reported_state=state_name, heartbeat_age_ms=10))
+        self._replace(chassis=replace(self.state.chassis, velocity=velocity, reported_state=state_name, health_age_ms=10))
         self._record("ESP32", "chassis.velocity", Lifecycle.RUNNING, "simulated_velocity")
         return True
 
@@ -571,15 +407,6 @@ class ConsoleController(QObject):
             and getattr(self.runtime, "manual_chassis_enabled", False)
         )
 
-    def chassis_lease_owner_id(self):
-        """Return the owner name that the selected environment must report."""
-        if self.state.environment == Environment.HARDWARE and self.runtime is not None:
-            chassis = getattr(getattr(self.runtime, "config", None), "chassis", None)
-            client_id = getattr(chassis, "client_id", None)
-            if isinstance(client_id, str) and client_id:
-                return client_id
-        return "console"
-
     def _hardware_manual_session_ready(self):
         chassis = self.state.chassis
         return bool(
@@ -588,33 +415,25 @@ class ConsoleController(QObject):
             and chassis.authenticated
         )
 
-    def _hardware_manual_lease_owned(self):
-        chassis = self.state.chassis
-        return bool(
-            self._hardware_manual_session_ready()
-            and chassis.lease_owner == self.chassis_lease_owner_id()
-        )
-
     def _stop_manual_chassis_timers(self):
         self._held_chassis_velocity = None
-        self._lease_heartbeat_timer.stop()
+        self._health_timer.stop()
         self._velocity_refresh_timer.stop()
 
     def _reset_manual_chassis_runtime(self):
         self._stop_manual_chassis_timers()
-        self._manual_chassis_transition = None
-        self._manual_chassis_pending_command = None
 
-    def _start_lease_heartbeat(self):
-        interval = self.runtime.config.manual_chassis.heartbeat_interval_ms
-        self._lease_heartbeat_timer.start(interval)
+    def _start_health_polling(self):
+        if self.state.environment == Environment.HARDWARE and self._hardware_manual_session_ready():
+            self._health_timer.start(
+                self.runtime.config.manual_chassis.health_interval_ms
+            )
 
-    def _lease_heartbeat_tick(self):
-        if not self._hardware_manual_lease_owned():
+    def _health_tick(self):
+        if not self._hardware_manual_session_ready():
             self._stop_manual_chassis_timers()
             return
-        limits = self.runtime.config.manual_chassis
-        self.runtime.request_chassis_manual("heartbeat", {"lease_ms": limits.lease_ms})
+        self.runtime.request_chassis_health()
 
     def _velocity_refresh_tick(self):
         if not self.can_chassis_move() or self._held_chassis_velocity is None:
@@ -768,8 +587,7 @@ class ConsoleController(QObject):
             video = replace(video, frame_id=video.frame_id + 1, last_frame_age_ms=0)
             changed = True
         if chassis.link == LinkState.ONLINE:
-            lease_remaining = max(0, (chassis.lease_remaining_ms or 0) - 100) if chassis.lease_owner else None
-            chassis = replace(chassis, lease_remaining_ms=lease_remaining, heartbeat_age_ms=20)
+            chassis = replace(chassis, health_age_ms=20)
             changed = True
         if arm.gateway == LinkState.ONLINE:
             arm = replace(arm, last_status_age_ms=40)
@@ -797,7 +615,7 @@ class ConsoleController(QObject):
         if self.state.environment != Environment.HARDWARE:
             return
         if state == "online":
-            chassis = replace(self.state.chassis, link=LinkState.ONLINE, authenticated=True, heartbeat_age_ms=None, reported_state="status pending")
+            chassis = replace(self.state.chassis, link=LinkState.ONLINE, authenticated=True, health_age_ms=None, reported_state="status pending")
             self._replace(chassis=chassis)
             self.runtime.request_chassis_status()
         elif state == "connecting":
@@ -828,38 +646,22 @@ class ConsoleController(QObject):
     def _on_hardware_result(self, result):
         if self.state.environment != Environment.HARDWARE or not isinstance(result, SessionResult):
             return
-        if result.command != "heartbeat":
+        if result.command != "ping":
             self._record(result.target, result.command, result.lifecycle, result.code)
         if result.target == "ESP32" and result.command == "status" and result.lifecycle == Lifecycle.DONE:
             self._apply_chassis_status(result.payload)
-        elif result.target == "ESP32" and result.command in {"acquire", "enable", "stop", "disable", "release"}:
+        elif result.target == "ESP32" and result.command in {"enable", "stop", "disable"}:
             if result.lifecycle == Lifecycle.DONE:
-                if result.command == self._manual_chassis_pending_command:
-                    self._manual_chassis_pending_command = None
-                if self._manual_chassis_transition == "ending":
-                    next_command = {"stop": "disable", "disable": "release"}.get(result.command)
-                    if next_command is not None:
-                        self._manual_chassis_pending_command = next_command
-                        self.runtime.request_chassis_manual(next_command)
-                    else:
-                        self._finish_chassis_manual_transition(Lifecycle.DONE, "ended")
-                        self.runtime.request_chassis_status()
-                else:
-                    self.runtime.request_chassis_status()
-            else:
-                if result.command == self._manual_chassis_pending_command:
-                    self._manual_chassis_pending_command = None
-                if self._manual_chassis_transition is not None:
-                    self._finish_chassis_manual_transition(result.lifecycle, result.code)
-                if result.command in {"disable", "release"}:
-                    self._stop_manual_chassis_timers()
+                if result.command == "disable":
+                    self._held_chassis_velocity = None
+                    self._velocity_refresh_timer.stop()
+                self.runtime.request_chassis_status()
         elif result.target == "ESP32" and result.command == "velocity" and result.lifecycle != Lifecycle.DONE:
             self._held_chassis_velocity = None
             self._velocity_refresh_timer.stop()
             self._replace(chassis=replace(self.state.chassis, velocity=(0, 0, 0), reported_state="enabled stopped"))
-        elif result.target == "ESP32" and result.command == "heartbeat" and result.lifecycle != Lifecycle.DONE:
-            self._stop_manual_chassis_timers()
-            self._replace(chassis=replace(self.state.chassis, manual_unlocked=False, velocity=(0, 0, 0)))
+        elif result.target == "ESP32" and result.command == "ping" and result.lifecycle == Lifecycle.DONE:
+            self._replace(chassis=replace(self.state.chassis, health_age_ms=0))
         if result.target == "MaixCam" and result.command in {"move_joint", "move_linear", "jog_joint", "jog_xyz", "gripper"}:
             self._apply_hardware_arm_motion_result(result)
         elif result.target == "MaixCam" and result.command == "status" and result.lifecycle == Lifecycle.DONE:
@@ -894,35 +696,24 @@ class ConsoleController(QObject):
             status = parse_chassis_status(payload)
         except StatusMappingError as error:
             self._raise_fault(error.args[0], "fault", "esp32", "ESP32 returned an invalid status payload.")
-            if self._manual_chassis_transition == "starting":
-                self._finish_chassis_manual_transition(Lifecycle.REJECTED, error.args[0])
             return
-        owner = status.lease_owner if status.lease_active else None
         chassis = replace(
             self.state.chassis,
             authenticated=status.authenticated,
-            lease_owner=owner,
-            lease_remaining_ms=status.lease_remaining_ms if owner else None,
             motion_permitted=status.motion_permitted,
             motion_enabled=status.motion_enabled,
-            heartbeat_age_ms=0,
+            health_age_ms=0,
             reported_state=status.chassis_state.replace("_", " "),
             last_error=status.last_error,
         )
-        if chassis.lease_owner != self.chassis_lease_owner_id():
-            chassis = replace(chassis, manual_unlocked=False, velocity=(0, 0, 0))
-            self._stop_manual_chassis_timers()
-        else:
-            if not (chassis.motion_enabled and chassis.motion_permitted):
-                chassis = replace(chassis, manual_unlocked=False, velocity=(0, 0, 0))
-                self._held_chassis_velocity = None
-                self._velocity_refresh_timer.stop()
-            self._start_lease_heartbeat()
+        if not (chassis.motion_enabled and chassis.motion_permitted):
+            chassis = replace(chassis, velocity=(0, 0, 0))
+            self._held_chassis_velocity = None
+            self._velocity_refresh_timer.stop()
         self._replace(chassis=chassis)
+        self._start_health_polling()
         if status.service_state == "ready" and status.last_error == "none":
             self._clear_recovered_esp32_faults()
-        if self._manual_chassis_transition == "starting":
-            self._advance_chassis_manual_start()
 
     def _apply_arm_status(self, payload):
         try:

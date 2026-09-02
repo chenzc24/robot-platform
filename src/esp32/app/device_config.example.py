@@ -3,12 +3,12 @@
 RUN_MODE = "safe_idle"
 DEVICE_NAME = "chassis-esp32"
 CONTROL_PORT = 8765
-HEARTBEAT_TIMEOUT_MS = 500
+RUNTIME_HEALTH_TIMEOUT_MS = 2000
 
-# First deployment candidate. `tcp_v2_l2` may serve only PING/STATUS/lease
-# diagnostics because its composition uses NoMotionChassis. `safe_idle` remains
-# the default. No CAN runtime mode is supplied until a separate L3 goal.
-RUNTIME_MODE = "safe_idle"  # allowed: safe_idle, tcp_v2_l2
+# `tcp_v3_l2` may serve only authenticated PING/STATUS diagnostics because its
+# composition uses NoMotionChassis. `tcp_v3_l3` is present for a separately
+# authorized CAN deployment. `safe_idle` remains the committed default.
+RUNTIME_MODE = "safe_idle"  # allowed: safe_idle, tcp_v3_l2, tcp_v3_l3
 RUNTIME_BIND_ADDRESS = "0.0.0.0"
 
 # Existing hardware assignments are documentation until verified on the board.

@@ -22,7 +22,7 @@ The UI is an orchestration and debugging surface. It does not replace the ESP32 
 ## 2. Design principles
 
 1. **Video is primary.** The camera occupies the largest region and keeps an overlay layer for future recognition boxes, masks, targets, and coordinate annotations.
-2. **Chassis and arm remain separate.** Their connection, ownership, command lifecycle, and failure state are visible independently.
+2. **Chassis and arm remain separate.** Their connection, command lifecycle, and failure state are visible independently.
 3. **Current state precedes controls.** An operator sees why a control is disabled without opening logs.
 4. **One persistent fault surface.** Active faults never disappear into transient notifications.
 5. **Progressive disclosure.** Common debug actions remain visible; raw envelopes, network settings, and exact target fields live in drawers or tabs.
@@ -38,7 +38,7 @@ The reference layout targets a 1440 x 900 or larger desktop and remains usable a
 | Robot Console | SIM/LIVE | system states | session | CHASSIS SOFTWARE STOP     |
 +----------------------------------------------+---------------------------------+
 |                                              | Chassis                         |
-| Camera                                       | connection / lease / motion     |
+| Camera                                       | connection / enable / motion    |
 |                                              | directional hold controls       |
 |  live image, clockwise 90 degree display     | speed limits / exact command    |
 |  future detection and target overlays        +---------------------------------+
@@ -49,7 +49,7 @@ The reference layout targets a 1440 x 900 or larger desktop and remains usable a
 | Command and event journal                                 | Active faults      |
 | time / target / command / lifecycle / latency / result    | cause / action     |
 +-----------------------------------------------------------+--------------------+
-| video age | ESP32 heartbeat | arm heartbeat | log state | local time           |
+| video age | ESP32 health | arm heartbeat | log state | local time              |
 +--------------------------------------------------------------------------------+
 ```
 
@@ -125,11 +125,11 @@ Video loss changes vision validity to `stale` immediately, but it never blocks t
 The header shows:
 
 - ESP32 address label and measured round-trip time;
-- TCP state, authentication state, lease owner, lease remaining time, motion-enabled state, and last heartbeat age;
+- TCP state, authentication state, motion-enabled state, and last health-response age;
 - chassis state and fault code reported by ESP32;
 - explicit `Unknown` when physical motor feedback is unavailable.
 
-Session actions are `Connect`, `Acquire`, `Enable`, `Disable`, and `Release`. Only actions legal in the current state are enabled.
+Session actions are `Connect`/`Disconnect` and `Enable`/`Disable`. The authenticated TCP connection is the control session; no acquire/release lease exists. Only actions legal in the current state are enabled.
 
 ### 6.2 Manual control
 
@@ -157,11 +157,9 @@ Velocity controls require all of the following:
 
 - hardware or simulator environment selected deliberately;
 - ESP32 session connected and authenticated;
-- valid control lease owned by this console;
-- fresh heartbeat;
+- fresh connection-health response;
 - motion enabled by ESP32;
-- no blocking chassis, arm-position, or coordinated-task fault;
-- operator has unlocked manual motion for the current session.
+- no blocking chassis or ESP32 fault.
 
 `Chassis software stop` remains available whenever an ESP32 socket can be opened or is already open, even when ordinary motion controls are locked.
 
@@ -282,13 +280,13 @@ ConsoleController
     `-- VideoWorker ---------> PyAV / local RTSP relay
 ```
 
-Each worker owns exactly one blocking resource and communicates with the controller through queued signals. A slow video decoder cannot delay a heartbeat, and an arm request cannot block the chassis stop path.
+Each worker owns exactly one blocking resource and communicates with the controller through queued signals. A slow video decoder cannot delay chassis health polling, and an arm request cannot block the chassis stop path.
 
 The state store keeps separate domains:
 
 - `connection`: socket and transport health;
 - `service`: reported process state;
-- `control`: authentication, ownership, lease, and admission;
+- `control`: authentication, enable state, and admission;
 - `task`: command lifecycle;
 - `physical`: pose, velocity, limit, and feedback evidence;
 - `vision`: frame and inference freshness;
@@ -300,11 +298,10 @@ UI controls subscribe to derived view state. They do not infer readiness from bu
 
 | UI intent | Existing computer-side call | Binding status |
 |---|---|---|
-| ESP32 ping/status | `ping()`, `status()` | available for L1; real v2 endpoint not deployed |
-| Chassis ownership | `acquire()`, `heartbeat()`, `release()` | available for L1 |
-| Chassis motion gate | `enable()`, `disable()` | available for L1; real motion remains disabled |
-| Chassis manual request | `velocity()` | available for L1; no measured wheel completion |
-| Chassis software stop | `stop()` | available for L1; physical validation pending |
+| ESP32 connect/ping/status | `connect()`, `ping()`, `status()` | RCP/TCP v3 binding available; v3 deployment pending |
+| Chassis motion gate | `enable()`, `disable()` | available after authentication and reported permission |
+| Chassis manual request | `velocity()` | available after enable; no measured wheel completion |
+| Chassis software stop | `stop()` | available on the current authenticated session |
 | Arm ping/status | `ping()`, `status()` | available for L1; endpoint not deployed |
 | Arm joint target | `move_joint()` | available for L1; default admission rejects motion |
 | Arm Cartesian target | `move_linear()` | available for L1; default admission rejects motion |
@@ -366,11 +363,11 @@ separate L4 orchestrator.
 - explicit connection, safe `PING`/`STATUS`, disconnect, terminal fault propagation, and no automatic retry;
 - direct RTSP decode worker that copies RGB frames into Qt-owned images, applies the UI display rotation, and supports configured local snapshots;
 - secret-free settings template with ignored local overrides;
-- Hardware-mode UI wiring for configuration-gated connection/status/preview only. No lease, heartbeat, enable, velocity, arm primitive, or chassis software-stop call is admitted.
+- Hardware-mode UI wiring for configuration-gated connection/status/preview only. At this historical phase no motion call was admitted.
 
-Bounded polling, any motion admission, deployed endpoint tests, and heartbeat scheduling remain later work. They must not be inferred from this L1 foundation.
+Bounded polling and motion admission were added in later phases and are covered by the current implementation and tests.
 
-The Phase B hardening pass accepts only the exact current status schemas: ESP32 RCP/TCP v2 `STATE`, and the terminal MaixCam `arm.status` lifecycle envelope containing the RPA2 arm-service state. Invalid status leaves the last trustworthy state unchanged and creates a persistent fault. Video frames are copied before crossing into the GUI thread; decoder failure, bounded shutdown, repeat start/stop, low frame rate, and snapshot path rejection are covered with local fakes. Snapshots are constrained below the local `logs/` root. Hardware-mode controls remain default-deny even if a reported endpoint says motion is permitted.
+The current hardening pass accepts only the exact current status schemas: ESP32 RCP/TCP v3 `STATE`, and the terminal MaixCam `arm.status` lifecycle envelope containing the RPA2 arm-service state. Invalid status leaves the last trustworthy state unchanged and creates a persistent fault. Video frames are copied before crossing into the GUI thread; decoder failure, bounded shutdown, repeat start/stop, low frame rate, and snapshot path rejection are covered with local fakes. Snapshots are constrained below the local `logs/` root.
 
 ### Phase C: hardware connectivity, L2
 
@@ -382,7 +379,7 @@ The Phase B hardening pass accepts only the exact current status schemas: ESP32 
 
 - enable bounded chassis control after CAN and stop validation;
 - enable arm primitives only after limits, terminal evidence, and cancel policy are validated;
-- keep each device's unlock and acceptance independent.
+- keep each device's connection, enablement, and acceptance independent.
 
 ### Phase E: coordinated operation and vision, L4
 
@@ -399,7 +396,7 @@ The Phase B hardening pass accepts only the exact current status schemas: ESP32 
 - Simulator and hardware modes are visually unmistakable.
 - Video, ESP32, MaixCam, and arm state can disagree without being collapsed into one green indicator.
 - Faults remain visible and traceable to sanitized command evidence.
-- The interface restores no chassis lease, velocity, arm target, or pending action after restart.
+- The interface restores no chassis enable state, velocity, arm target, or pending action after restart.
 - At 1280 x 720, video and both device panels remain reachable without clipped essential actions.
 - Real motion remains impossible until its separate safety and validation gate is satisfied.
 
@@ -407,6 +404,6 @@ The Phase B hardening pass accepts only the exact current status schemas: ESP32 
 
 1. Accept PySide6 as the desktop toolkit and PyAV as the first video decoder.
 2. Accept the video-left, controls-right, diagnostics-bottom layout.
-3. Accept a chassis session unlock and an independent arm YOLO/manual mode.
+3. Accept direct chassis Connect/Enable controls and an independent arm YOLO/manual mode.
 4. Accept that the initial arm panel exposes joint, Cartesian, and gripper targets only; named actions arrive after their protocol exists.
 5. Accept that the current top-level stop is explicitly chassis-only until an arm cancel contract is implemented and validated.

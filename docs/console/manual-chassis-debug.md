@@ -7,51 +7,49 @@ keeps it `false`.
 ## Normal operator flow
 
 ```text
-Connect → Start manual control → hold a direction → release to stop
-                                      │
-                                      └──────────→ STOP is always available
+Connect → Enable → hold a direction → release to stop
+               │
+               └──────────→ STOP is always available
 
-End manual control → STOP → Disable → Release
+Finish motion → STOP → Disable → Disconnect
 ```
 
-`Start manual control` performs Acquire and Enable as one asynchronous operator
-action. It renews the lease in the background and unlocks the direction controls
-only after ESP32 status confirms ownership and enabled state. Repeated clicks are
-blocked while this transition is pending.
+The successful authenticated TCP connection is the control session. There is no
+separate acquire, release, manual-unlock, or operator lease. `Enable` is available
+after the ESP32 reports an authenticated connection and motion permission.
 
-Holding a direction sends the first bounded velocity immediately and refreshes it
-independently of the lease heartbeat. The refresh interval is at most 100 ms and
+Holding a direction sends the first bounded velocity immediately and refreshes it.
+The refresh interval is at most 100 ms and
 is always derived to be well inside the configured velocity hold. Releasing the
 button stops refresh and immediately queues STOP.
 
-`End manual control` runs STOP, Disable, and Release in order. The raw Acquire,
-Enable, Disable, Release, and manual-unlock controls remain under **Advanced
-protocol controls** for protocol diagnosis; they are not part of routine manual
-operation.
+`STOP` zeros the requested velocity and leaves the motors enabled for the next
+jog. `Disable` stops and disables the chassis but keeps the authenticated TCP
+connection available, so the operator can use `Enable` again. `Disconnect`
+ends the session; reconnecting requires only `HELLO` authentication and `Enable`.
 
 ## Minimal runtime protection
 
 The default attended settings are:
 
 ```text
-lease:              2000 ms
-lease heartbeat:     500 ms
+connection health:  2000 ms
+health ping:          500 ms
 velocity refresh:    100 ms maximum
 velocity hold:       500 ms
 linear range:       10–200 mm/s (starts at 80)
 angular range:      10–400 mrad/s (starts at 240)
 ```
 
-The normal panel keeps only connection, start/end control, the direction pad,
-STOP, and the two speed sliders visible. Raw protocol operations and manual
-unlock are collapsed under **Advanced**.
+The normal panel keeps only Connect/Disconnect, Enable/Disable, the direction
+pad, STOP, and the two speed sliders visible.
 
 The two timeout classes have deliberately different results:
 
-- Velocity hold expiry sends zero speed and leaves the chassis enabled and the
-  lease owned. The operator can jog again without repeating session setup.
-- Lease expiry, connection loss, malformed transport, or local execution failure
-  sends stop and disable. These conditions require recovery or reconnection.
+- Velocity hold expiry sends zero speed and leaves the authenticated chassis
+  enabled. The operator can jog again without repeating session setup.
+- Connection-health timeout, connection loss, malformed transport, or local
+  execution failure sends stop and disable and closes the session.
 
 An explicit ESP32 `ERROR` is reported as `REJECTED` and does not disconnect the
 session. A transport failure during a state-changing request remains `UNKNOWN`

@@ -6,7 +6,7 @@ This project unifies development and control of an ESP32-S3 mobile chassis, a Ma
 
 - Computer: development, deployment, debugging, vision inference, logging, high-level task orchestration, direct ESP32 chassis control, and MaixCam arm/video control.
 - MaixCam: video, vision capture, the robot-arm command/status endpoint, and the UART/TCP232 gateway to robot-arm LAN1. It no longer routes chassis commands.
-- ESP32-S3: receives production chassis commands directly from the computer over a dedicated Wi-Fi/TCP runtime service and owns CAN, motors, sensors, heartbeat stop, and low-level safety. WebREPL remains maintenance-only.
+- ESP32-S3: receives production chassis commands directly from the computer over a dedicated Wi-Fi/TCP runtime service and owns CAN, motors, sensors, connection-health stop, and low-level safety. WebREPL remains maintenance-only.
 - Robot arm: receives runtime commands on LAN1 through MaixCam and TCP232. LAN2 is reserved for computer maintenance, deployment, and teaching.
 - Network: the computer, MaixCam, and ESP32 join the controlled LAN during normal operation. Robot-arm LAN1 remains behind MaixCam/TCP232, and LAN2 remains a maintenance path.
 

@@ -1,13 +1,15 @@
-"""RCP/TCP v2 chassis service with injected authentication and motion hardware."""
+"""Lease-free RCP/TCP v3 chassis service with authenticated link health."""
 
 import time
 
-from chassis_tcp_v2 import (
+from chassis_tcp_v3 import (
     CONTROL_TYPES,
     MessageStreamDecoder,
     encode_message,
 )
-from control_lease import ControlLeaseError
+
+
+DEFAULT_HEALTH_TIMEOUT_MS = 2000
 
 try:
     _TIMEOUT_ERROR = TimeoutError
@@ -77,20 +79,22 @@ class ChassisMotionTcpService:
         self,
         transport,
         chassis,
-        lease,
         authorize=None,
         motion_permitted=False,
         clock_ms=None,
+        health_timeout_ms=DEFAULT_HEALTH_TIMEOUT_MS,
         max_linear_mm_s=None,
         max_omega_mrad_s=None,
         max_hold_ms=None,
     ):
         self.transport = transport
         self.chassis = chassis
-        self.lease = lease
         self.authorize = authorize
         self.motion_permitted = motion_permitted is True
         self._clock_ms = clock_ms or _clock_ms
+        self.health_timeout_ms = self._optional_positive_int(
+            health_timeout_ms, "health_timeout_ms"
+        )
         self.max_linear_mm_s = self._optional_positive_int(
             max_linear_mm_s, "max_linear_mm_s"
         )
@@ -111,6 +115,7 @@ class ChassisMotionTcpService:
         self._last_responses = None
         self._hold_deadline_ms = None
         self._active_velocity_sequence = None
+        self._health_deadline_ms = None
 
     @staticmethod
     def _optional_positive_int(value, name):
@@ -151,9 +156,6 @@ class ChassisMotionTcpService:
                 self.force_safe("tcp_short_write")
                 raise OSError("tcp_short_write")
 
-    def _lease_owner(self):
-        return self.client_id if self.authenticated else None
-
     def _stop_and_disable(self):
         failed = False
         try:
@@ -166,14 +168,7 @@ class ChassisMotionTcpService:
             failed = True
         return not failed
 
-    def _require_owner(self):
-        owner = self._lease_owner()
-        if owner is None or self.lease.owner != owner:
-            raise ChassisMotionRequestError("control_not_owned")
-        return owner
-
     def _status_payload(self, now_ms):
-        lease_status = self.lease.status()
         hold_remaining_ms = 0
         if self._hold_deadline_ms is not None:
             hold_remaining_ms = max(
@@ -184,9 +179,6 @@ class ChassisMotionTcpService:
             "chassis_state": getattr(self.chassis, "state", "unknown"),
             "motion_permitted": self.motion_permitted,
             "authenticated": self.authenticated,
-            "lease_active": lease_status["active"],
-            "lease_owner": lease_status["owner"] or "none",
-            "lease_remaining_ms": min(2000, lease_status["remaining_ms"]),
             "hold_remaining_ms": min(500, hold_remaining_ms),
             "last_error": self.error_code or "none",
         }
@@ -206,6 +198,9 @@ class ChassisMotionTcpService:
             return self._error(request, "authentication_failed")
         self.client_id = payload["client"]
         self.authenticated = True
+        self._health_deadline_ms = _ticks_add(
+            self._clock_ms(), self.health_timeout_ms
+        )
         self.service_state = "ready"
         self.error_code = None
         return (
@@ -214,7 +209,7 @@ class ChassisMotionTcpService:
                 "WELCOME",
                 {
                     "service": "chassis",
-                    "protocol": 2,
+                    "protocol": 3,
                     "motion_permitted": self.motion_permitted,
                 },
             ),
@@ -239,22 +234,10 @@ class ChassisMotionTcpService:
         try:
             if request_type == "PING":
                 self.error_code = None if self.service_state != "fault" else self.error_code
-                return (self._response(request, "PONG", {"protocol": 2}),)
+                return (self._response(request, "PONG", {"protocol": 3}),)
             if request_type == "STATUS":
                 return (self._response(request, "STATE", self._status_payload(now_ms)),)
-            if request_type == "ACQUIRE":
-                if self.lease.owner is not None and self.lease.owner != self.client_id:
-                    raise ChassisMotionRequestError("control_owned")
-                self.lease.acquire(self.client_id, request["payload"]["lease_ms"])
-                self.error_code = None
-                return self._phases(request, "owned")
-            if request_type == "HEARTBEAT":
-                self._require_owner()
-                self.lease.renew(self.client_id, request["payload"]["lease_ms"])
-                self.error_code = None
-                return self._phases(request, "owned")
             if request_type == "ENABLE":
-                self._require_owner()
                 if not self.motion_permitted:
                     raise ChassisMotionRequestError("motion_disabled")
                 if getattr(self.chassis, "state", None) != "disabled":
@@ -263,7 +246,6 @@ class ChassisMotionTcpService:
                 self.error_code = None
                 return self._phases(request, "enabled_stopped")
             if request_type == "VELOCITY":
-                self._require_owner()
                 if not self.motion_permitted:
                     raise ChassisMotionRequestError("motion_disabled")
                 if getattr(self.chassis, "state", None) not in (
@@ -311,19 +293,8 @@ class ChassisMotionTcpService:
                 return self._phases(
                     request, getattr(self.chassis, "state", "unknown")
                 )
-            if request_type == "RELEASE":
-                owner = self._require_owner()
-                self._hold_deadline_ms = None
-                self._active_velocity_sequence = None
-                if not self._stop_and_disable():
-                    raise RuntimeError("safe_output_failed")
-                self.lease.release(owner)
-                self.error_code = None
-                return self._phases(request, "released")
         except ChassisMotionRequestError as error:
             return self._error(request, str(error))
-        except ControlLeaseError:
-            return self._error(request, "lease_rejected")
         except Exception:
             self.force_safe("execution_failed")
             return self._error(request, "execution_failed")
@@ -359,6 +330,8 @@ class ChassisMotionTcpService:
             self._write_responses(responses)
             return responses
         responses = self._execute(request, received_at_ms, now_ms)
+        if self.authenticated:
+            self._health_deadline_ms = _ticks_add(now_ms, self.health_timeout_ms)
         self.last_sequence = sequence
         self._last_fingerprint = fingerprint
         self._last_responses = responses if fingerprint is not None else None
@@ -390,25 +363,29 @@ class ChassisMotionTcpService:
         return tuple(responses), errors
 
     def poll_safety(self, now_ms=None):
-        """Stop stale velocity; disable only when the control lease is lost."""
+        """Stop stale velocity; stop and disable when link health expires."""
         now_ms = self._clock_ms() if now_ms is None else now_ms
-        expired_owner = self.lease.expire_if_needed()
+        health_expired = (
+            self.authenticated
+            and self._health_deadline_ms is not None
+            and _ticks_diff(now_ms, self._health_deadline_ms) >= 0
+        )
         hold_expired = self._hold_deadline_ms is not None and _ticks_diff(
             now_ms, self._hold_deadline_ms
         ) >= 0
-        if expired_owner is None and not hold_expired:
+        if not health_expired and not hold_expired:
             return None
-        reason = "lease_expired" if expired_owner is not None else "velocity_hold_expired"
+        reason = "health_timeout" if health_expired else "velocity_hold_expired"
         sequence = self._active_velocity_sequence
         self._hold_deadline_ms = None
         self._active_velocity_sequence = None
         try:
-            if expired_owner is not None:
-                if not self._stop_and_disable():
+            if health_expired:
+                if not self.force_safe(reason):
                     raise RuntimeError("safe_output_failed")
             else:
                 self.chassis.stop()
-            self.error_code = reason
+                self.error_code = reason
             return {
                 "sequence": sequence,
                 "event": reason,
@@ -424,20 +401,12 @@ class ChassisMotionTcpService:
                 "state": "fault",
             }
 
-    def _clear_lease(self):
-        owner = self.lease.owner
-        if owner is not None:
-            try:
-                self.lease.release(owner)
-            except Exception:
-                pass
-
     def force_safe(self, error_code):
         """Best-effort local stop/disable and require connection replacement."""
         self._hold_deadline_ms = None
         self._active_velocity_sequence = None
         self.error_code = error_code if self._stop_and_disable() else "safe_output_failed"
-        self._clear_lease()
+        self._health_deadline_ms = None
         self.service_state = "fault"
         self.close_required = True
         return self.error_code == error_code
@@ -445,9 +414,9 @@ class ChassisMotionTcpService:
     def on_disconnect(self):
         """Clear the session only after attempting local safe output."""
         safe = self._stop_and_disable()
-        self._clear_lease()
         self._hold_deadline_ms = None
         self._active_velocity_sequence = None
+        self._health_deadline_ms = None
         self.client_id = None
         self.authenticated = False
         self.last_sequence = 0
@@ -461,7 +430,7 @@ class ChassisMotionTcpService:
 
     def reset_for_connection(self, transport):
         """Attach a fresh connection only after the previous session is safely closed."""
-        if self.authenticated or self.lease.owner is not None:
+        if self.authenticated:
             raise RuntimeError("session_active")
         if self.service_state == "fault":
             raise RuntimeError("service_fault")
@@ -483,6 +452,8 @@ class ChassisMotionTcpRuntime:
 
     def poll_once(self):
         event = self.service.poll_safety()
+        if self.service.close_required:
+            raise OSError("session_close_required")
         try:
             data = self.connection.recv(512)
         except Exception as error:

@@ -1,9 +1,10 @@
 """Non-secret configuration for the first guarded ESP32 chassis L3 release."""
 
 RUN_MODE = "safe_idle"
-RUNTIME_MODE = "tcp_v2_l3"
+RUNTIME_MODE = "tcp_v3_l3"
 CONTROL_PORT = 8765
 RUNTIME_BIND_ADDRESS = "0.0.0.0"
+RUNTIME_HEALTH_TIMEOUT_MS = 2000
 
 CAN_BUS_ID = 0
 CAN_BAUDRATE = 1000000

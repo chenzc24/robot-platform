@@ -1,8 +1,8 @@
-"""Computer-side non-retrying client for direct RCP/TCP v2 chassis control."""
+"""Computer-side non-retrying client for lease-free RCP/TCP v3 control."""
 
 import socket
 
-from chassis_tcp_v2 import (
+from chassis_tcp_v3 import (
     CONTROL_TYPES,
     MAX_SEQUENCE,
     MessageStreamDecoder,
@@ -11,7 +11,7 @@ from chassis_tcp_v2 import (
 
 
 class ChassisMotionTcpClientError(RuntimeError):
-    """Base error for a locally rejected or invalid v2 exchange."""
+    """Base error for a locally rejected or invalid v3 exchange."""
 
     def __init__(self, code):
         RuntimeError.__init__(self, code)
@@ -29,7 +29,7 @@ class ChassisMotionTcpUnknown(ChassisMotionTcpClientError):
 
 
 class ChassisMotionTcpClient:
-    """Hold one authenticated ESP32 connection and correlate one request at a time."""
+    """Hold the single authenticated ESP32 connection and serialize requests."""
 
     def __init__(self, connection):
         self.connection = connection
@@ -37,7 +37,6 @@ class ChassisMotionTcpClient:
         self.next_sequence = 1
         self._pending_messages = []
         self.authenticated = False
-        self.owner_active = False
         self.last_response = None
 
     def _allocate_sequence(self):
@@ -132,14 +131,6 @@ class ChassisMotionTcpClient:
     def status(self, ttl_ms=1000):
         return self.exchange("STATUS", {}, ttl_ms)
 
-    def acquire(self, lease_ms=1000, ttl_ms=1000):
-        response = self.exchange("ACQUIRE", {"lease_ms": lease_ms}, ttl_ms)
-        self.owner_active = True
-        return response
-
-    def heartbeat(self, lease_ms=1000, ttl_ms=1000):
-        return self.exchange("HEARTBEAT", {"lease_ms": lease_ms}, ttl_ms)
-
     def enable(self, ttl_ms=1000):
         return self.exchange("ENABLE", {}, ttl_ms)
 
@@ -167,11 +158,6 @@ class ChassisMotionTcpClient:
 
     def disable(self, ttl_ms=1000):
         return self.exchange("DISABLE", {}, ttl_ms)
-
-    def release(self, ttl_ms=1000):
-        response = self.exchange("RELEASE", {}, ttl_ms)
-        self.owner_active = False
-        return response
 
 
 def open_connection(host, port, timeout_seconds=3.0):

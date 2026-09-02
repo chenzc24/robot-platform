@@ -1,4 +1,4 @@
-"""MicroPython-compatible RCP/TCP v2 framing for direct chassis motion."""
+"""MicroPython-compatible RCP/TCP v3 framing for direct chassis motion."""
 
 try:
     import ujson as json
@@ -6,13 +6,11 @@ except ImportError:
     import json
 
 
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3
 MAX_FRAME_BYTES = 512
 MAX_SEQUENCE = 2147483647
 MIN_REQUEST_TTL_MS = 100
 MAX_REQUEST_TTL_MS = 5000
-MIN_LEASE_MS = 250
-MAX_LEASE_MS = 2000
 MIN_HOLD_MS = 100
 MAX_HOLD_MS = 500
 MAX_LINEAR_MM_S = 600
@@ -22,20 +20,17 @@ MAX_CREDENTIAL_BYTES = 64
 
 QUERY_TYPES = ("HELLO", "PING", "STATUS")
 CONTROL_TYPES = (
-    "ACQUIRE",
-    "HEARTBEAT",
     "ENABLE",
     "VELOCITY",
     "STOP",
     "DISABLE",
-    "RELEASE",
 )
 REQUEST_TYPES = QUERY_TYPES + CONTROL_TYPES
 RESPONSE_TYPES = ("WELCOME", "PONG", "STATE", "ACK", "DONE", "ERROR")
 VALID_TYPES = REQUEST_TYPES + RESPONSE_TYPES
 
 
-class ChassisTcpV2FrameError(ValueError):
+class ChassisTcpV3FrameError(ValueError):
     """Describe a rejected frame without retaining raw input or credentials."""
 
     def __init__(self, code):
@@ -45,15 +40,15 @@ class ChassisTcpV2FrameError(ValueError):
 
 def _integer(value, low, high, code):
     if isinstance(value, bool) or not isinstance(value, int):
-        raise ChassisTcpV2FrameError(code)
+        raise ChassisTcpV3FrameError(code)
     if value < low or value > high:
-        raise ChassisTcpV2FrameError(code)
+        raise ChassisTcpV3FrameError(code)
     return value
 
 
 def _boolean(value, code):
     if not isinstance(value, bool):
-        raise ChassisTcpV2FrameError(code)
+        raise ChassisTcpV3FrameError(code)
     return value
 
 
@@ -61,39 +56,39 @@ def _token(value, code, max_bytes=64, allow_none=False):
     if allow_none and value == "none":
         return value
     if not isinstance(value, str):
-        raise ChassisTcpV2FrameError(code)
+        raise ChassisTcpV3FrameError(code)
     try:
         encoded = value.encode("ascii")
     except UnicodeError:
-        raise ChassisTcpV2FrameError(code)
+        raise ChassisTcpV3FrameError(code)
     allowed = "abcdefghijklmnopqrstuvwxyz0123456789_.-"
     if not encoded or len(encoded) > max_bytes:
-        raise ChassisTcpV2FrameError(code)
+        raise ChassisTcpV3FrameError(code)
     if value[0] < "a" or value[0] > "z":
-        raise ChassisTcpV2FrameError(code)
+        raise ChassisTcpV3FrameError(code)
     if not all(character in allowed for character in value):
-        raise ChassisTcpV2FrameError(code)
+        raise ChassisTcpV3FrameError(code)
     return value
 
 
 def _credential(value):
     if not isinstance(value, str):
-        raise ChassisTcpV2FrameError("invalid_credential")
+        raise ChassisTcpV3FrameError("invalid_credential")
     try:
         encoded = value.encode("ascii")
     except UnicodeError:
-        raise ChassisTcpV2FrameError("invalid_credential")
+        raise ChassisTcpV3FrameError("invalid_credential")
     allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-"
     if len(encoded) < MIN_CREDENTIAL_BYTES or len(encoded) > MAX_CREDENTIAL_BYTES:
-        raise ChassisTcpV2FrameError("invalid_credential")
+        raise ChassisTcpV3FrameError("invalid_credential")
     if not all(character in allowed for character in value):
-        raise ChassisTcpV2FrameError("invalid_credential")
+        raise ChassisTcpV3FrameError("invalid_credential")
     return value
 
 
 def _exact(payload, fields):
     if not isinstance(payload, dict) or set(payload) != set(fields):
-        raise ChassisTcpV2FrameError("invalid_payload")
+        raise ChassisTcpV3FrameError("invalid_payload")
 
 
 def _validate_payload(message_type, payload):
@@ -103,16 +98,9 @@ def _validate_payload(message_type, payload):
             "client": _token(payload["client"], "invalid_client", 32),
             "credential": _credential(payload["credential"]),
         }
-    if message_type in ("PING", "STATUS", "ENABLE", "STOP", "DISABLE", "RELEASE"):
+    if message_type in ("PING", "STATUS", "ENABLE", "STOP", "DISABLE"):
         _exact(payload, ())
         return {}
-    if message_type in ("ACQUIRE", "HEARTBEAT"):
-        _exact(payload, ("lease_ms",))
-        return {
-            "lease_ms": _integer(
-                payload["lease_ms"], MIN_LEASE_MS, MAX_LEASE_MS, "invalid_lease"
-            )
-        }
     if message_type == "VELOCITY":
         _exact(payload, ("vx_mm_s", "vy_mm_s", "omega_mrad_s", "hold_ms"))
         return {
@@ -135,7 +123,7 @@ def _validate_payload(message_type, payload):
     if message_type == "WELCOME":
         _exact(payload, ("service", "protocol", "motion_permitted"))
         if payload["service"] != "chassis" or payload["protocol"] != PROTOCOL_VERSION:
-            raise ChassisTcpV2FrameError("invalid_payload")
+            raise ChassisTcpV3FrameError("invalid_payload")
         return {
             "service": "chassis",
             "protocol": PROTOCOL_VERSION,
@@ -146,7 +134,7 @@ def _validate_payload(message_type, payload):
     if message_type == "PONG":
         _exact(payload, ("protocol",))
         if payload["protocol"] != PROTOCOL_VERSION:
-            raise ChassisTcpV2FrameError("invalid_payload")
+            raise ChassisTcpV3FrameError("invalid_payload")
         return {"protocol": PROTOCOL_VERSION}
     if message_type == "STATE":
         fields = (
@@ -154,9 +142,6 @@ def _validate_payload(message_type, payload):
             "chassis_state",
             "motion_permitted",
             "authenticated",
-            "lease_active",
-            "lease_owner",
-            "lease_remaining_ms",
             "hold_remaining_ms",
             "last_error",
         )
@@ -166,11 +151,6 @@ def _validate_payload(message_type, payload):
             "chassis_state": _token(payload["chassis_state"], "invalid_state", 32),
             "motion_permitted": _boolean(payload["motion_permitted"], "invalid_state"),
             "authenticated": _boolean(payload["authenticated"], "invalid_state"),
-            "lease_active": _boolean(payload["lease_active"], "invalid_state"),
-            "lease_owner": _token(payload["lease_owner"], "invalid_state", 32, True),
-            "lease_remaining_ms": _integer(
-                payload["lease_remaining_ms"], 0, MAX_LEASE_MS, "invalid_state"
-            ),
             "hold_remaining_ms": _integer(
                 payload["hold_remaining_ms"], 0, MAX_HOLD_MS, "invalid_state"
             ),
@@ -180,7 +160,7 @@ def _validate_payload(message_type, payload):
         _exact(payload, ("command", "state"))
         command = payload["command"]
         if command not in CONTROL_TYPES:
-            raise ChassisTcpV2FrameError("invalid_payload")
+            raise ChassisTcpV3FrameError("invalid_payload")
         return {
             "command": command,
             "state": _token(payload["state"], "invalid_state", 32),
@@ -191,21 +171,21 @@ def _validate_payload(message_type, payload):
             "code": _token(payload["code"], "invalid_error_code", 64),
             "retryable": _boolean(payload["retryable"], "invalid_payload"),
         }
-    raise ChassisTcpV2FrameError("unsupported_type")
+    raise ChassisTcpV3FrameError("unsupported_type")
 
 
 def validate_message(message):
     """Validate one decoded message and return a normalized copy."""
     if not isinstance(message, dict):
-        raise ChassisTcpV2FrameError("invalid_message")
+        raise ChassisTcpV3FrameError("invalid_message")
     required = {"version", "sequence", "type", "ttl_ms", "payload"}
     if set(message) != required:
-        raise ChassisTcpV2FrameError("invalid_fields")
+        raise ChassisTcpV3FrameError("invalid_fields")
     if message["version"] != PROTOCOL_VERSION or isinstance(message["version"], bool):
-        raise ChassisTcpV2FrameError("unsupported_version")
+        raise ChassisTcpV3FrameError("unsupported_version")
     message_type = message["type"]
     if message_type not in VALID_TYPES:
-        raise ChassisTcpV2FrameError("unsupported_type")
+        raise ChassisTcpV3FrameError("unsupported_type")
     sequence = _integer(message["sequence"], 1, MAX_SEQUENCE, "invalid_sequence")
     ttl_ms = message["ttl_ms"]
     if message_type in REQUEST_TYPES:
@@ -213,7 +193,7 @@ def validate_message(message):
             ttl_ms, MIN_REQUEST_TTL_MS, MAX_REQUEST_TTL_MS, "invalid_ttl"
         )
     elif ttl_ms != 0 or isinstance(ttl_ms, bool):
-        raise ChassisTcpV2FrameError("invalid_ttl")
+        raise ChassisTcpV3FrameError("invalid_ttl")
     return {
         "version": PROTOCOL_VERSION,
         "sequence": sequence,
@@ -229,10 +209,8 @@ def _payload_text(message_type, payload):
             payload["client"],
             payload["credential"],
         )
-    if message_type in ("PING", "STATUS", "ENABLE", "STOP", "DISABLE", "RELEASE"):
+    if message_type in ("PING", "STATUS", "ENABLE", "STOP", "DISABLE"):
         return "{}"
-    if message_type in ("ACQUIRE", "HEARTBEAT"):
-        return '{"lease_ms":%d}' % payload["lease_ms"]
     if message_type == "VELOCITY":
         return (
             '{"vx_mm_s":%d,"vy_mm_s":%d,"omega_mrad_s":%d,"hold_ms":%d}'
@@ -244,25 +222,21 @@ def _payload_text(message_type, payload):
             )
         )
     if message_type == "WELCOME":
-        return '{"service":"chassis","protocol":2,"motion_permitted":%s}' % (
+        return '{"service":"chassis","protocol":3,"motion_permitted":%s}' % (
             "true" if payload["motion_permitted"] else "false"
         )
     if message_type == "PONG":
-        return '{"protocol":2}'
+        return '{"protocol":3}'
     if message_type == "STATE":
         return (
             '{"service_state":"%s","chassis_state":"%s",'
-            '"motion_permitted":%s,"authenticated":%s,"lease_active":%s,'
-            '"lease_owner":"%s","lease_remaining_ms":%d,'
+            '"motion_permitted":%s,"authenticated":%s,'
             '"hold_remaining_ms":%d,"last_error":"%s"}'
             % (
                 payload["service_state"],
                 payload["chassis_state"],
                 "true" if payload["motion_permitted"] else "false",
                 "true" if payload["authenticated"] else "false",
-                "true" if payload["lease_active"] else "false",
-                payload["lease_owner"],
-                payload["lease_remaining_ms"],
                 payload["hold_remaining_ms"],
                 payload["last_error"],
             )
@@ -277,7 +251,7 @@ def _payload_text(message_type, payload):
             payload["code"],
             "true" if payload["retryable"] else "false",
         )
-    raise ChassisTcpV2FrameError("unsupported_type")
+    raise ChassisTcpV3FrameError("unsupported_type")
 
 
 def encode_message(message_type, sequence, ttl_ms, payload=None):
@@ -303,32 +277,32 @@ def encode_message(message_type, sequence, ttl_ms, payload=None):
     )
     frame = text.encode("ascii")
     if len(frame) > MAX_FRAME_BYTES:
-        raise ChassisTcpV2FrameError("frame_too_long")
+        raise ChassisTcpV3FrameError("frame_too_long")
     return frame
 
 
 def decode_message(frame):
     """Decode and validate one complete newline-delimited JSON frame."""
     if not isinstance(frame, (bytes, bytearray)):
-        raise ChassisTcpV2FrameError("invalid_frame_type")
+        raise ChassisTcpV3FrameError("invalid_frame_type")
     frame = bytes(frame)
     if len(frame) > MAX_FRAME_BYTES:
-        raise ChassisTcpV2FrameError("frame_too_long")
+        raise ChassisTcpV3FrameError("frame_too_long")
     if not frame.endswith(b"\n") or b"\r" in frame:
-        raise ChassisTcpV2FrameError("invalid_terminator")
+        raise ChassisTcpV3FrameError("invalid_terminator")
     try:
         text = frame[:-1].decode("ascii")
     except UnicodeError:
-        raise ChassisTcpV2FrameError("non_ascii_frame")
+        raise ChassisTcpV3FrameError("non_ascii_frame")
     try:
         message = json.loads(text)
     except (TypeError, ValueError):
-        raise ChassisTcpV2FrameError("invalid_json")
+        raise ChassisTcpV3FrameError("invalid_json")
     return validate_message(message)
 
 
 class MessageStreamDecoder:
-    """Recover bounded v2 messages from fragmented or combined TCP reads."""
+    """Recover bounded v3 messages from fragmented or combined TCP reads."""
 
     def __init__(self):
         self._buffer = bytearray()
@@ -336,7 +310,7 @@ class MessageStreamDecoder:
 
     def feed(self, data):
         if not isinstance(data, (bytes, bytearray)):
-            raise ChassisTcpV2FrameError("invalid_frame_type")
+            raise ChassisTcpV3FrameError("invalid_frame_type")
         messages = []
         errors = []
         for value in data:
@@ -356,6 +330,6 @@ class MessageStreamDecoder:
             self._buffer = bytearray()
             try:
                 messages.append(decode_message(frame))
-            except ChassisTcpV2FrameError as error:
+            except ChassisTcpV3FrameError as error:
                 errors.append(error.code)
         return messages, errors

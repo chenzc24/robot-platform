@@ -8,7 +8,6 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QButtonGroup,
-    QCheckBox,
     QComboBox,
     QDoubleSpinBox,
     QFrame,
@@ -333,9 +332,8 @@ class MainWindow(QMainWindow):
         status_grid.setContentsMargins(10, 7, 10, 3)
         status_grid.setSpacing(8)
         self.chassis_tcp_value = _label("Offline", "value")
-        self.chassis_lease_value = _label("None", "value")
         self.chassis_motion_value = _label("Locked", "value")
-        for name, value in (("Link", self.chassis_tcp_value), ("Owner", self.chassis_lease_value), ("Drive", self.chassis_motion_value)):
+        for name, value in (("Link", self.chassis_tcp_value), ("Drive", self.chassis_motion_value)):
             status_grid.addWidget(_label(name))
             status_grid.addWidget(value)
         status_grid.addStretch(1)
@@ -345,31 +343,12 @@ class MainWindow(QMainWindow):
         session.setContentsMargins(10, 4, 10, 6)
         session.setSpacing(6)
         self.chassis_connect_button = QPushButton("Connect")
-        self.chassis_start_button = QPushButton("Start control")
-        self.chassis_end_button = QPushButton("End control")
-        for widget in (self.chassis_connect_button, self.chassis_start_button, self.chassis_end_button):
+        self.chassis_enable_button = QPushButton("Enable")
+        self.chassis_disable_button = QPushButton("Disable")
+        for widget in (self.chassis_connect_button, self.chassis_enable_button, self.chassis_disable_button):
             session.addWidget(widget)
         session.addStretch(1)
         layout.addLayout(session)
-
-        self.chassis_advanced_toggle = QToolButton()
-        self.chassis_advanced_toggle.setText("Advanced")
-        self.chassis_advanced_toggle.setCheckable(True)
-        self.chassis_advanced_toggle.setArrowType(Qt.ArrowType.RightArrow)
-        self.chassis_advanced_toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.chassis_advanced = QWidget()
-        self.chassis_advanced.setVisible(False)
-        advanced = QHBoxLayout(self.chassis_advanced)
-        advanced.setContentsMargins(10, 0, 10, 5)
-        advanced.setSpacing(6)
-        self.chassis_acquire_button = QPushButton("Acquire")
-        self.chassis_enable_button = QPushButton("Enable")
-        self.chassis_disable_button = QPushButton("Disable")
-        self.chassis_release_button = QPushButton("Release")
-        self.chassis_unlock = QCheckBox("Manual unlock")
-        for widget in (self.chassis_acquire_button, self.chassis_enable_button, self.chassis_disable_button, self.chassis_release_button, self.chassis_unlock):
-            advanced.addWidget(widget)
-        advanced.addStretch(1)
 
         controls = QHBoxLayout()
         controls.setContentsMargins(10, 4, 10, 8)
@@ -412,8 +391,6 @@ class MainWindow(QMainWindow):
             limits.addWidget(widget)
         controls.addLayout(limits, 1)
         layout.addLayout(controls)
-        layout.addWidget(self.chassis_advanced_toggle)
-        layout.addWidget(self.chassis_advanced)
         return panel
 
     def _spin(self, value, minimum=-360.0, maximum=360.0, suffix=" deg"):
@@ -592,14 +569,8 @@ class MainWindow(QMainWindow):
         self.overlay_button.clicked.connect(self.controller.toggle_overlays)
         self.freeze_button.clicked.connect(self.controller.toggle_video_freeze)
         self.chassis_connect_button.clicked.connect(self._toggle_chassis_connection)
-        self.chassis_advanced_toggle.toggled.connect(self._toggle_chassis_advanced)
-        self.chassis_start_button.clicked.connect(self.controller.start_chassis_manual)
-        self.chassis_end_button.clicked.connect(self.controller.end_chassis_manual)
-        self.chassis_acquire_button.clicked.connect(self.controller.chassis_acquire)
         self.chassis_enable_button.clicked.connect(self.controller.chassis_enable)
         self.chassis_disable_button.clicked.connect(self.controller.chassis_disable)
-        self.chassis_release_button.clicked.connect(self.controller.chassis_release)
-        self.chassis_unlock.toggled.connect(self.controller.set_chassis_manual_unlock)
         self.linear_slider.valueChanged.connect(self._update_limit_labels)
         self.angular_slider.valueChanged.connect(self._update_limit_labels)
         self.arm_connect_button.clicked.connect(self._toggle_arm_connection)
@@ -645,12 +616,6 @@ class MainWindow(QMainWindow):
     def _update_limit_labels(self):
         self.linear_limit_label.setText("Speed %d mm/s" % self.linear_slider.value())
         self.angular_limit_label.setText("Turn %d mrad/s" % self.angular_slider.value())
-
-    def _toggle_chassis_advanced(self, expanded):
-        self.chassis_advanced_toggle.setArrowType(
-            Qt.ArrowType.DownArrow if expanded else Qt.ArrowType.RightArrow
-        )
-        self.chassis_advanced.setVisible(expanded)
 
     def _start_chassis_hold(self, direction):
         linear = self.linear_slider.value()
@@ -746,36 +711,15 @@ class MainWindow(QMainWindow):
         chassis = state.chassis
         self._set_chip(self.chassis_panel_status, chassis.reported_state, chassis.link)
         self.chassis_tcp_value.setText(self._state_text(chassis.link))
-        self.chassis_lease_value.setText(
-            "%s / %s" % (chassis.lease_owner, chassis.lease_remaining_ms)
-            if chassis.lease_owner
-            else "None"
-        )
-        self.chassis_motion_value.setText("Enabled" if chassis.motion_enabled else "Permitted (locked)" if chassis.motion_permitted else "Locked")
+        self.chassis_motion_value.setText("Enabled" if chassis.motion_enabled else "Disabled" if chassis.motion_permitted else "Locked")
         self.chassis_connect_button.setText("Disconnect" if chassis.link != LinkState.OFFLINE else "Connect")
         manual_mode = state.environment == Environment.SIMULATOR or self.controller._hardware_manual_enabled()
-        transition = self.controller.chassis_manual_transition()
-        self.chassis_start_button.setText("Starting..." if transition == "starting" else "Start control")
-        self.chassis_end_button.setText("Ending..." if transition == "ending" else "End control")
-        self.chassis_start_button.setEnabled(self.controller.can_start_chassis_manual())
-        self.chassis_end_button.setEnabled(self.controller.can_end_chassis_manual())
-        self.chassis_unlock.setText(
-            "Manual unlock (attended L3)"
-            if state.environment == Environment.HARDWARE
-            else "Manual unlock (simulator)"
-        )
         if state.environment == Environment.HARDWARE and self.controller._hardware_manual_enabled():
             limits = self.controller.runtime.config.manual_chassis
             self.linear_slider.setMaximum(limits.linear_limit_mm_s)
             self.angular_slider.setMaximum(limits.angular_limit_mrad_s)
-        self.chassis_acquire_button.setEnabled(manual_mode and chassis.link == LinkState.ONLINE and chassis.lease_owner is None)
-        self.chassis_enable_button.setEnabled(manual_mode and chassis.lease_owner == self.controller.chassis_lease_owner_id() and chassis.motion_permitted and not chassis.motion_enabled)
+        self.chassis_enable_button.setEnabled(manual_mode and chassis.link == LinkState.ONLINE and chassis.authenticated and chassis.motion_permitted and not chassis.motion_enabled)
         self.chassis_disable_button.setEnabled(manual_mode and chassis.motion_enabled)
-        self.chassis_release_button.setEnabled(manual_mode and chassis.lease_owner is not None)
-        self.chassis_unlock.blockSignals(True)
-        self.chassis_unlock.setChecked(chassis.manual_unlocked)
-        self.chassis_unlock.blockSignals(False)
-        self.chassis_unlock.setEnabled(chassis.motion_enabled and chassis.motion_permitted and manual_mode)
         self.chassis_vector_label.setText(
             "Cmd %d / %d / %d"
             % chassis.velocity
@@ -806,8 +750,8 @@ class MainWindow(QMainWindow):
         self.arm_runtime_detail.setText(detail)
 
         self.video_health_label.setText("Video %s" % self._state_text(state.video.link).lower())
-        heartbeat = "%d ms" % chassis.heartbeat_age_ms if chassis.heartbeat_age_ms is not None else "unavailable"
-        self.esp_health_label.setText("ESP32 heartbeat %s" % heartbeat)
+        health_age = "%d ms" % chassis.health_age_ms if chassis.health_age_ms is not None else "unavailable"
+        self.esp_health_label.setText("ESP32 health %s" % health_age)
         arm_age = "%d ms" % arm.last_status_age_ms if arm.last_status_age_ms is not None else "unavailable"
         self.arm_health_label.setText("Arm status age %s" % arm_age)
 
@@ -859,7 +803,6 @@ class MainWindow(QMainWindow):
         state = self.controller.state
         assert state.environment == Environment.SIMULATOR
         assert state.chassis.motion_enabled is False
-        assert state.chassis.manual_unlocked is False
         assert state.arm.manual_unlocked is False
         assert self.joint_execute_button.isEnabled() is False
         assert self.video_canvas.minimumWidth() > 0
@@ -893,8 +836,6 @@ def _stylesheet():
     QPushButton#stopButton { color: #ff8787; border-color: #d84a4a; background: #402020; font-weight: 600; }
     QPushButton#directionButton, QPushButton#localStopButton { min-width: 40px; min-height: 32px; padding: 2px; font-size: 11px; }
     QPushButton#localStopButton { color: #ff8787; }
-    QCheckBox { color: #cbd5e1; }
-    QCheckBox::indicator { width: 16px; height: 16px; }
     QSlider::groove:horizontal { height: 5px; background: #445064; border-radius: 2px; }
     QSlider::handle:horizontal { width: 14px; margin: -5px 0; border-radius: 7px; background: #4f8cff; }
     QDoubleSpinBox, QComboBox { background: #0d1117; border: 1px solid #2a3442; border-radius: 6px; padding: 4px 6px; min-height: 23px; }

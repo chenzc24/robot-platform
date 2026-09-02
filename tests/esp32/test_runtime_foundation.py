@@ -1,4 +1,4 @@
-"""Lifecycle and control-lease tests for the ESP32 runtime foundation."""
+"""Lifecycle tests for the ESP32 runtime foundation."""
 
 import json
 import pathlib
@@ -10,7 +10,6 @@ APP_DIR = pathlib.Path(__file__).resolve().parents[2] / "src" / "esp32" / "app"
 sys.path.insert(0, str(APP_DIR))
 
 from application import Esp32Application
-from control_lease import ControlLease, ControlLeaseError
 from esp_runtime_status import RuntimeStatus
 
 
@@ -58,42 +57,6 @@ class ApplicationLifecycleTests(unittest.TestCase):
         self.assertEqual(event["event"], "application_ready")
         self.assertEqual(event["state"], "safe_idle")
         self.assertIsNone(event["error_code"])
-
-
-class ControlLeaseTests(unittest.TestCase):
-    def setUp(self):
-        self.clock = FakeClock()
-        self.lease = ControlLease(clock_ms=self.clock)
-
-    def test_only_one_owner_can_hold_the_lease(self):
-        self.lease.acquire("console", 500)
-        with self.assertRaises(ControlLeaseError):
-            self.lease.acquire("ps2", 500)
-        self.assertEqual(self.lease.status()["owner"], "console")
-
-    def test_expiration_clears_owner_and_allows_a_new_owner(self):
-        self.lease.acquire("console", 500)
-        self.clock.advance(500)
-        self.assertEqual(self.lease.expire_if_needed(), "console")
-        self.lease.acquire("ps2", 500)
-        self.assertEqual(self.lease.status()["owner"], "ps2")
-
-    def test_only_the_owner_can_renew_or_release(self):
-        self.lease.acquire("console", 500)
-        with self.assertRaises(ControlLeaseError):
-            self.lease.renew("other", 500)
-        with self.assertRaises(ControlLeaseError):
-            self.lease.release("other")
-        self.lease.renew("console", 800)
-        self.assertGreater(self.lease.status()["remaining_ms"], 0)
-        self.lease.release("console")
-        self.assertFalse(self.lease.status()["active"])
-
-    def test_timeout_bounds_are_enforced(self):
-        with self.assertRaises(ValueError):
-            self.lease.acquire("console", 50)
-        with self.assertRaises(ValueError):
-            self.lease.acquire("console", 20_000)
 
 
 if __name__ == "__main__":

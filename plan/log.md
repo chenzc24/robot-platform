@@ -750,3 +750,31 @@ entry format:
   unchanged, unstaged, and uncommitted in the canonical worktree.
 - Commit status: this consolidation record is committed directly to `main` and
   pushed with the current main history.
+
+## 2026-09-02 - Remove the chassis acquire/release lease layer
+
+- Goal: flatten manual and programmatic ESP32 chassis control to authenticated
+  Connect, Enable, velocity/Stop, Disable, and Disconnect operations.
+- Modified scope: the active chassis wire contract, ESP32 service/composition,
+  computer client/router/runtime/UI, deployment templates, active architecture
+  and operator documentation, focused tests, and the L3 test utility. MaixCam,
+  robot-arm, TCP232, CAN assignments, credentials, physical limits, raw
+  resources, and the user's `.vscode/settings.json` were not changed.
+- Implementation: RCP/TCP v3 removes `ACQUIRE`, `HEARTBEAT`, `RELEASE`, and all
+  lease status fields. The authenticated one-client TCP connection is the
+  controller. `STOP` preserves enablement, `DISABLE` preserves the connection,
+  and background coalesced `PING` requests maintain link health. Disconnect or
+  health timeout stops and disables; velocity-hold timeout stops only. The UI
+  now presents Connect/Disconnect and Enable/Disable directly, and chassis
+  admission is independent of arm/video faults.
+- Validation: L1 passed 225 tests plus 8 subtests across protocol, ESP32,
+  console, development tooling, MaixCam, and robot-arm suites; 36 Python files
+  passed source checking; offscreen UI smoke construction and ignored local
+  console schema-2 loading passed; `git diff --check` passed. No hardware
+  connection, device write, or motion occurred.
+- Deployment status: pending. The existing ESP32 runtime remains the older v2
+  contract until a separately authorized v3 L2 deployment and subsequent L3
+  confirmation. A v3 console must not control an old v2 device.
+- Commit status: prepared on `target/remove-chassis-lease` with intent
+  `refactor(chassis): remove lease control layer`; commit and push follow this
+  record.

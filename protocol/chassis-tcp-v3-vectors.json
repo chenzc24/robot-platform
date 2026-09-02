@@ -1,6 +1,6 @@
 {
   "protocol": "RCP/TCP",
-  "version": 2,
+  "version": 3,
   "vectors": [
     {
       "name": "authenticated_hello",
@@ -11,7 +11,7 @@
         "client": "console",
         "credential": "test-credential-0001"
       },
-      "frame": "{\"version\":2,\"sequence\":1,\"type\":\"HELLO\",\"ttl_ms\":1000,\"payload\":{\"client\":\"console\",\"credential\":\"test-credential-0001\"}}\n"
+      "frame": "{\"version\":3,\"sequence\":1,\"type\":\"HELLO\",\"ttl_ms\":1000,\"payload\":{\"client\":\"console\",\"credential\":\"test-credential-0001\"}}\n"
     },
     {
       "name": "bounded_velocity",
@@ -24,7 +24,7 @@
         "omega_mrad_s": 0,
         "hold_ms": 250
       },
-      "frame": "{\"version\":2,\"sequence\":7,\"type\":\"VELOCITY\",\"ttl_ms\":500,\"payload\":{\"vx_mm_s\":100,\"vy_mm_s\":0,\"omega_mrad_s\":0,\"hold_ms\":250}}\n"
+      "frame": "{\"version\":3,\"sequence\":7,\"type\":\"VELOCITY\",\"ttl_ms\":500,\"payload\":{\"vx_mm_s\":100,\"vy_mm_s\":0,\"omega_mrad_s\":0,\"hold_ms\":250}}\n"
     }
   ]
 }

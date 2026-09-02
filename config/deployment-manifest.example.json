@@ -1,20 +1,19 @@
 {
   "release_id": "replace-with-git-commit-or-tag",
   "protocols": {
-    "chassis": "RCP/TCP-v2",
+    "chassis": "RCP/TCP-v3",
     "computer_to_maixcam": "control-envelope-v1",
     "arm": "RPA2"
   },
   "esp32": {
-    "mode": "tcp_v2_l2",
+    "mode": "tcp_v3_l2",
     "motion_permitted": false,
     "can_constructed": false,
     "files": [
-      "protocol/chassis_tcp_v2.py",
+      "protocol/chassis_tcp_v3.py",
       "src/esp32/app/chassis_motion_tcp_service.py",
       "src/esp32/app/chassis_motion_tcp_server.py",
       "src/esp32/app/chassis_runtime_factory.py",
-      "src/esp32/app/control_lease.py",
       "src/esp32/app/main.py"
     ]
   },

@@ -1,6 +1,6 @@
 # ESP32 Chassis Safety Core
 
-- Implementation: `src/esp32/app/main.py`, `application.py`, `chassis_control.py`, `control_lease.py`
+- Implementation: `src/esp32/app/main.py`, `application.py`, `chassis_control.py`, `chassis_motion_tcp_service.py`
 - Current validation: L1 with a fake MotorBus; no real CAN or motors
 - Deployment status: not deployed; the device still runs the historical program
 
@@ -67,7 +67,9 @@ The production `MotorBus` has passed fake-CAN tests for frames, explicit zero wr
 
 `SafeMecanumChassis.status_snapshot()` exposes state, four wheel targets, and the last error. `MotorBus.status_snapshot()` exposes sent-frame count, send failure, and the explicit absence of ACK support.
 
-`ControlLease` implements one controller, bounded expiry, renewal, and release, but lease expiry is not yet wired to real hardware stopping.
+RCP/TCP v3 treats the authenticated TCP connection as the single controller.
+Its local health deadline stops and disables the chassis if the connection stops
+producing valid requests; there is no acquire/release lease object.
 
 ## 5. Local Validation
 
@@ -77,13 +79,13 @@ Run `ESP32: Run safety tests` in VS Code or:
 .\.venv\Scripts\python.exe -m unittest discover -s tests\esp32 -p "test_*.py" -v
 ```
 
-Coverage includes safe-idle fallback, stop from disabled, drive rejection while disabled, zero-before-enable ordering, active-state transitions, four-wheel limiting, explicit zero-speed stop, post-disable rejection, fault rollback, non-finite input rejection, structured status, CAN send counts, and control-lease behavior.
+Coverage includes safe-idle fallback, stop from disabled, drive rejection while disabled, zero-before-enable ordering, active-state transitions, four-wheel limiting, explicit zero-speed stop, post-disable rejection, fault rollback, non-finite input rejection, structured status, CAN send counts, authenticated-session behavior, and connection-health timeout.
 
 ## 6. Not Yet Covered
 
 - MicroPython CAN, real CAN, and motor-driver feedback.
-- PS2 input, 250 ms link-loss stopping, and control arbitration.
-- Computer-facing TCP motion control, authentication, heartbeat-driven local stop, sensors, homing, and servos.
+- PS2 input and multi-client control arbitration.
+- Sensors, homing, servos, and measured motor feedback.
 - Real motor enable/disable, stop, fault, and link-loss behavior.
 
 L1 results do not replace L2 connectivity validation or the L3 motion safety gate.

@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "chassis": {
     "host": "",
     "port": 0,
@@ -9,8 +9,7 @@
   },
   "manual_chassis": {
     "enabled": false,
-    "lease_ms": 2000,
-    "heartbeat_interval_ms": 500,
+    "health_interval_ms": 500,
     "velocity_hold_ms": 500,
     "linear_limit_mm_s": 200,
     "angular_limit_mrad_s": 400

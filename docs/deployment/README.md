@@ -104,7 +104,7 @@ TCP232 only transports bytes. The MaixCam gateway and robot-arm project must imp
 
 For a cross-device protocol-version change, publish from execution endpoints toward the user-facing endpoint:
 
-1. Stop automatic tasks and confirm chassis stop, arm safe pose, and release of old ownership.
+1. Stop automatic tasks, confirm chassis stop and arm safe pose, and close old control sessions.
 2. Run local protocol vectors, simulators, and all relevant tests.
 3. Deploy a compatible arm project through LAN2; leave it stopped or permit only non-motion handshake.
 4. Deploy the compatible ESP32 version through WebREPL, reset to `safe_idle`, and close REPL.

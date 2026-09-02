@@ -226,6 +226,9 @@ class FakeRuntime(QObject):
     def request_chassis_status(self):
         self.calls.append("request_chassis_status")
 
+    def request_chassis_health(self):
+        self.calls.append("request_chassis_health")
+
     def request_arm_status(self):
         self.calls.append("request_arm_status")
 
@@ -248,8 +251,7 @@ class ManualRuntime(FakeRuntime):
         self.config = SimpleNamespace(
             chassis=SimpleNamespace(client_id="console-l2"),
             manual_chassis=SimpleNamespace(
-                lease_ms=2000,
-                heartbeat_interval_ms=500,
+                health_interval_ms=500,
                 velocity_hold_ms=500,
                 linear_limit_mm_s=200,
                 angular_limit_mrad_s=400,
@@ -274,9 +276,9 @@ class RuntimeConfigTests(unittest.TestCase):
 
     def test_loader_accepts_secret_free_template_shape(self):
         source = {
-            "schema_version": 1,
+            "schema_version": 2,
             "chassis": {"host": "", "port": 0, "client_id": "console", "credential_env": "ROBOT_CHASSIS_CREDENTIAL", "connect_timeout_seconds": 3.0},
-            "manual_chassis": {"enabled": False, "lease_ms": 2000, "heartbeat_interval_ms": 250, "velocity_hold_ms": 150, "linear_limit_mm_s": 50, "angular_limit_mrad_s": 100},
+            "manual_chassis": {"enabled": False, "health_interval_ms": 250, "velocity_hold_ms": 150, "linear_limit_mm_s": 50, "angular_limit_mrad_s": 100},
             "arm": {"host": "", "port": 0, "session_id": "console", "connect_timeout_seconds": 3.0},
             "video": {"rtsp_url": "", "connect_timeout_seconds": 3.0, "snapshot_directory": ""},
         }
@@ -298,9 +300,9 @@ class RuntimeConfigTests(unittest.TestCase):
 
     def test_loader_rejects_non_boolean_manual_enable(self):
         source = {
-            "schema_version": 1,
+            "schema_version": 2,
             "chassis": {"host": "", "port": 0, "client_id": "console", "credential_env": "ROBOT_CHASSIS_CREDENTIAL", "connect_timeout_seconds": 3.0},
-            "manual_chassis": {"enabled": "true", "lease_ms": 2000, "heartbeat_interval_ms": 250, "velocity_hold_ms": 150, "linear_limit_mm_s": 50, "angular_limit_mrad_s": 100},
+            "manual_chassis": {"enabled": "true", "health_interval_ms": 250, "velocity_hold_ms": 150, "linear_limit_mm_s": 50, "angular_limit_mrad_s": 100},
             "arm": {"host": "", "port": 0, "session_id": "console", "connect_timeout_seconds": 3.0},
             "video": {"rtsp_url": "", "connect_timeout_seconds": 3.0, "snapshot_directory": ""},
         }
@@ -310,18 +312,18 @@ class RuntimeConfigTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeConfigError, "manual_chassis.enabled"):
                 load_runtime_config(path)
 
-    def test_loader_rejects_manual_lease_above_protocol_limit(self):
+    def test_loader_rejects_health_interval_above_supported_limit(self):
         source = {
-            "schema_version": 1,
+            "schema_version": 2,
             "chassis": {"host": "", "port": 0, "client_id": "console", "credential_env": "ROBOT_CHASSIS_CREDENTIAL", "connect_timeout_seconds": 3.0},
-            "manual_chassis": {"enabled": False, "lease_ms": 2001, "heartbeat_interval_ms": 250, "velocity_hold_ms": 150, "linear_limit_mm_s": 50, "angular_limit_mrad_s": 100},
+            "manual_chassis": {"enabled": False, "health_interval_ms": 1001, "velocity_hold_ms": 150, "linear_limit_mm_s": 50, "angular_limit_mrad_s": 100},
             "arm": {"host": "", "port": 0, "session_id": "console", "connect_timeout_seconds": 3.0},
             "video": {"rtsp_url": "", "connect_timeout_seconds": 3.0, "snapshot_directory": ""},
         }
         with tempfile.TemporaryDirectory() as directory:
             path = pathlib.Path(directory) / "console.local.json"
             path.write_text(json.dumps(source), encoding="utf-8")
-            with self.assertRaisesRegex(RuntimeConfigError, "manual_chassis.lease_ms"):
+            with self.assertRaisesRegex(RuntimeConfigError, "manual_chassis.health_interval_ms"):
                 load_runtime_config(path)
 
 
@@ -562,7 +564,7 @@ class RuntimeWorkerTests(unittest.TestCase):
             root = pathlib.Path(directory) / "logs"
             config = RuntimeConfig(
                 ChassisConfig("", 0, 1.0, "console", "ROBOT_CHASSIS_CREDENTIAL"),
-                ManualChassisConfig(False, 1000, 250, 150, 50, 100),
+                ManualChassisConfig(False, 250, 150, 50, 100),
                 ArmConfig("", 0, 1.0, "console"),
                 VideoConfig("", 1.0, "session"),
             )
@@ -600,11 +602,10 @@ class RuntimeWorkerTests(unittest.TestCase):
         self.assertFalse(controller.chassis_velocity(1, 0, 0))
 
         runtime.result_ready.emit(SessionResult("ESP32", "status", Lifecycle.DONE, "completed", {
-            "version": 2, "sequence": 2, "type": "STATE", "ttl_ms": 0,
+            "version": 3, "sequence": 2, "type": "STATE", "ttl_ms": 0,
             "payload": {
                 "service_state": "safe_idle", "chassis_state": "disabled", "motion_permitted": False,
-                "authenticated": True, "lease_active": False, "lease_owner": "none", "lease_remaining_ms": 0,
-                "hold_remaining_ms": 0, "last_error": "none",
+                "authenticated": True, "hold_remaining_ms": 0, "last_error": "none",
             },
         }))
         self.assertEqual(controller.state.chassis.reported_state, "disabled")
@@ -626,7 +627,7 @@ class RuntimeWorkerTests(unittest.TestCase):
         self.assertEqual(controller.state.video.link, LinkState.ONLINE)
         self.assertEqual(controller.state.video.resolution, (1, 1))
 
-    def test_hardware_manual_configuration_requires_explicit_session_and_bounds_velocity(self):
+    def test_hardware_manual_enable_disable_and_velocity_bounds(self):
         runtime = ManualRuntime()
         controller = ConsoleController(runtime=runtime)
         controller.set_environment(Environment.HARDWARE)
@@ -635,18 +636,7 @@ class RuntimeWorkerTests(unittest.TestCase):
         controller._replace(chassis=controller.state.chassis.__class__(
             link=LinkState.ONLINE,
             authenticated=True,
-            lease_owner=None,
             motion_permitted=True,
-            reported_state="disabled",
-        ))
-        self.assertTrue(controller.chassis_acquire())
-        self.assertEqual(runtime.calls[-1], ("acquire", {"lease_ms": 2000}))
-        controller._replace(chassis=controller.state.chassis.__class__(
-            link=LinkState.ONLINE,
-            authenticated=True,
-            lease_owner="console-l2",
-            motion_permitted=True,
-            motion_enabled=False,
             reported_state="disabled",
         ))
         self.assertTrue(controller.chassis_enable())
@@ -654,14 +644,10 @@ class RuntimeWorkerTests(unittest.TestCase):
         controller._replace(chassis=controller.state.chassis.__class__(
             link=LinkState.ONLINE,
             authenticated=True,
-            lease_owner="console-l2",
             motion_permitted=True,
             motion_enabled=True,
             reported_state="enabled stopped",
         ))
-        self.assertTrue(controller.set_chassis_manual_unlock(True))
-        self.assertEqual(runtime.calls[-1], ("heartbeat", {"lease_ms": 2000}))
-        self.assertEqual(controller._lease_heartbeat_timer.interval(), 500)
         self.assertTrue(controller.chassis_velocity(200, 0, 0))
         self.assertEqual(runtime.calls[-1][0], "velocity")
         self.assertEqual(controller._velocity_refresh_timer.interval(), 100)
@@ -670,66 +656,13 @@ class RuntimeWorkerTests(unittest.TestCase):
         self.assertEqual(len(runtime.calls), before_refresh + 1)
         self.assertEqual(runtime.calls[-1][0], "velocity")
         self.assertFalse(controller.chassis_velocity(201, 0, 0))
-        self.assertFalse(controller.set_chassis_manual_unlock(False))
-        self.assertEqual(runtime.calls[-1], ("stop", {}))
-        self.assertFalse(controller._velocity_refresh_timer.isActive())
         self.assertTrue(controller.chassis_stop())
         self.assertEqual(runtime.calls[-1], ("stop", {}))
-        controller._stop_manual_chassis_timers()
-
-    def test_flat_manual_start_and_end_automate_protocol_steps(self):
-        runtime = ManualRuntime()
-        controller = ConsoleController(runtime=runtime)
-        controller.set_environment(Environment.HARDWARE)
-        controller._replace(chassis=controller.state.chassis.__class__(
-            link=LinkState.ONLINE,
-            authenticated=True,
-            lease_owner=None,
-            motion_permitted=True,
-            reported_state="disabled",
-        ))
-
-        self.assertTrue(controller.start_chassis_manual())
-        self.assertEqual(runtime.calls[-1], ("acquire", {"lease_ms": 2000}))
-        self.assertFalse(controller.start_chassis_manual())
-
-        runtime.result_ready.emit(SessionResult("ESP32", "acquire", Lifecycle.DONE, "completed"))
-        self.assertEqual(runtime.calls[-1], "request_chassis_status")
-        runtime.result_ready.emit(SessionResult("ESP32", "status", Lifecycle.DONE, "completed", {
-            "version": 2, "sequence": 2, "type": "STATE", "ttl_ms": 0,
-            "payload": {
-                "service_state": "ready", "chassis_state": "disabled", "motion_permitted": True,
-                "authenticated": True, "lease_active": True, "lease_owner": "console-l2",
-                "lease_remaining_ms": 1900, "hold_remaining_ms": 0, "last_error": "none",
-            },
-        }))
-        self.assertEqual(runtime.calls[-1], ("enable", {}))
-
-        runtime.result_ready.emit(SessionResult("ESP32", "enable", Lifecycle.DONE, "completed"))
-        runtime.result_ready.emit(SessionResult("ESP32", "status", Lifecycle.DONE, "completed", {
-            "version": 2, "sequence": 4, "type": "STATE", "ttl_ms": 0,
-            "payload": {
-                "service_state": "ready", "chassis_state": "enabled_stopped", "motion_permitted": True,
-                "authenticated": True, "lease_active": True, "lease_owner": "console-l2",
-                "lease_remaining_ms": 1900, "hold_remaining_ms": 0, "last_error": "none",
-            },
-        }))
-        self.assertTrue(controller.state.chassis.manual_unlocked)
-        self.assertIsNone(controller.chassis_manual_transition())
-        self.assertTrue(controller.can_chassis_move())
-
-        self.assertTrue(controller.end_chassis_manual())
-        self.assertEqual(runtime.calls[-1], ("stop", {}))
-        runtime.result_ready.emit(SessionResult("ESP32", "stop", Lifecycle.DONE, "completed"))
+        self.assertFalse(controller._velocity_refresh_timer.isActive())
+        self.assertTrue(controller.chassis_disable())
         self.assertEqual(runtime.calls[-1], ("disable", {}))
-        runtime.result_ready.emit(SessionResult("ESP32", "disable", Lifecycle.DONE, "completed"))
-        self.assertEqual(runtime.calls[-1], ("release", {}))
-        runtime.result_ready.emit(SessionResult("ESP32", "release", Lifecycle.DONE, "completed"))
-        self.assertIsNone(controller.chassis_manual_transition())
-        self.assertFalse(controller._lease_heartbeat_timer.isActive())
-        self.assertEqual(runtime.calls[-1], "request_chassis_status")
 
-    def test_owned_hardware_lease_renews_without_enabling_or_velocity(self):
+    def test_health_polling_is_background_and_does_not_enable_motion(self):
         runtime = ManualRuntime()
         controller = ConsoleController(runtime=runtime)
         controller.set_environment(Environment.HARDWARE)
@@ -740,26 +673,17 @@ class RuntimeWorkerTests(unittest.TestCase):
             reported_state="status pending",
         ))
         controller._apply_chassis_status({
-            "version": 2, "sequence": 1, "type": "STATE", "ttl_ms": 0,
+            "version": 3, "sequence": 1, "type": "STATE", "ttl_ms": 0,
             "payload": {
                 "service_state": "ready", "chassis_state": "disabled", "motion_permitted": True,
-                "authenticated": True, "lease_active": True, "lease_owner": "console-l2",
-                "lease_remaining_ms": 1800, "hold_remaining_ms": 0, "last_error": "none",
+                "authenticated": True, "hold_remaining_ms": 0, "last_error": "none",
             },
         })
-        self.assertTrue(controller._lease_heartbeat_timer.isActive())
+        self.assertTrue(controller._health_timer.isActive())
+        self.assertEqual(controller._health_timer.interval(), 500)
         self.assertFalse(controller.can_chassis_move())
-        controller._lease_heartbeat_tick()
-        self.assertEqual(runtime.calls, [("heartbeat", {"lease_ms": 2000})])
-        controller._apply_chassis_status({
-            "version": 2, "sequence": 2, "type": "STATE", "ttl_ms": 0,
-            "payload": {
-                "service_state": "ready", "chassis_state": "disabled", "motion_permitted": True,
-                "authenticated": True, "lease_active": False, "lease_owner": "none",
-                "lease_remaining_ms": 0, "hold_remaining_ms": 0, "last_error": "none",
-            },
-        })
-        self.assertFalse(controller._lease_heartbeat_timer.isActive())
+        controller._health_tick()
+        self.assertEqual(runtime.calls, ["request_chassis_health"])
 
     def test_clean_esp32_state_clears_only_recovered_esp32_faults(self):
         controller = ConsoleController(runtime=ManualRuntime())
@@ -768,38 +692,32 @@ class RuntimeWorkerTests(unittest.TestCase):
         controller._raise_fault("enable_outcome_unknown", "unknown", "esp32", "inspect device")
         controller._raise_fault("arm_route_fault", "fault", "arm", "arm fault")
         controller._apply_chassis_status({
-            "version": 2, "sequence": 1, "type": "STATE", "ttl_ms": 0,
+            "version": 3, "sequence": 1, "type": "STATE", "ttl_ms": 0,
             "payload": {
                 "service_state": "ready", "chassis_state": "disabled", "motion_permitted": True,
-                "authenticated": True, "lease_active": False, "lease_owner": "none",
-                "lease_remaining_ms": 0, "hold_remaining_ms": 0, "last_error": "none",
+                "authenticated": True, "hold_remaining_ms": 0, "last_error": "none",
             },
         })
         self.assertNotIn("invalid_chassis_state", controller._faults)
         self.assertIn("enable_outcome_unknown", controller._faults)
         self.assertIn("arm_route_fault", controller._faults)
 
-    def test_hardware_enable_view_uses_configured_chassis_client_id(self):
+    def test_hardware_enable_view_uses_authenticated_session(self):
         runtime = ManualRuntime()
         controller = ConsoleController(runtime=runtime)
         controller.set_environment(Environment.HARDWARE)
         controller._replace(chassis=controller.state.chassis.__class__(
             link=LinkState.ONLINE,
             authenticated=True,
-            lease_owner="console-l2",
             motion_permitted=True,
             motion_enabled=False,
             reported_state="disabled",
         ))
         window = MainWindow(controller)
         try:
-            self.assertEqual(controller.chassis_lease_owner_id(), "console-l2")
             self.assertTrue(window.chassis_enable_button.isEnabled())
             self.assertEqual(window.linear_slider.maximum(), 200)
             self.assertEqual(window.angular_slider.maximum(), 400)
-            self.assertTrue(window.chassis_advanced.isHidden())
-            window.chassis_advanced_toggle.setChecked(True)
-            self.assertFalse(window.chassis_advanced.isHidden())
             self.assertEqual(window.chassis_vector_label.text(), "Cmd 0 / 0 / 0")
         finally:
             window.close()
@@ -906,9 +824,7 @@ class RuntimeWorkerTests(unittest.TestCase):
             self.assertTrue(any(item.code == "invalid_chassis_status_response" for item in controller.state.faults))
             controller.recheck()
             self.assertTrue(any(item.code == "invalid_chassis_status_response" for item in controller.state.faults))
-            self.assertFalse(window.chassis_acquire_button.isEnabled())
             self.assertFalse(window.chassis_enable_button.isEnabled())
-            self.assertFalse(window.chassis_unlock.isEnabled())
             self.assertFalse(window.joint_execute_button.isEnabled())
         finally:
             window.close()

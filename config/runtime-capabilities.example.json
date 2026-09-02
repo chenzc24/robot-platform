@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "chassis": {
-    "direct_tcp_v2": true,
+    "direct_tcp_v3": true,
     "can_command_write": true,
     "can_command_acknowledgement": false,
     "measured_chassis_feedback": false

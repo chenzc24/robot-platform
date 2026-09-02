@@ -50,7 +50,7 @@ Maintenance endpoints never become a second runtime control owner.
 |---|---|---|
 | Computer | VS Code, deployment, vision inference, unified console, logs, task orchestration, direct ESP32 chassis session, MaixCam arm/video session | No direct CAN or robot-arm LAN1 access; not the final emergency stop or real-time interlock |
 | MaixCam | Video, vision capture, robot-arm validation/routing, arm status, UART0/TCP232 gateway | No chassis command routing; no unchecked arm pass-through; does not replace local safety |
-| ESP32-S3 | Wi-Fi/TCP runtime input, chassis motion, CAN, motors, sensors, heartbeat stop, status | WebREPL is not runtime control; no arm control |
+| ESP32-S3 | Wi-Fi/TCP runtime input, chassis motion, CAN, motors, sensors, connection-health stop, status | WebREPL is not runtime control; no arm control |
 | TCP232 | Transparent UART-to-arm-LAN1 TCP transport | No application state machine |
 | Robot arm | Motion execution, controller state, taught points, controller safety | No runtime dependency on hotspot or LAN2 |
 
@@ -76,7 +76,7 @@ See [Network Baseline](network/README.md) for detailed addressing, failure behav
 
 - USB: initial firmware, Wi-Fi bootstrap, backup, and recovery.
 - WebREPL: routine file synchronization and soft reset on a trusted development LAN.
-- Production runtime: dedicated computer-to-ESP32 Wi-Fi/TCP service with ownership, velocity, stop, status, heartbeat, and fault handling. WebREPL uses a separate maintenance port and lifecycle.
+- Production runtime: dedicated computer-to-ESP32 Wi-Fi/TCP service with authenticated connection, enable/disable, velocity, stop, status, health polling, and fault handling. WebREPL uses a separate maintenance port and lifecycle.
 
 ### MaixCam
 
@@ -99,7 +99,7 @@ Arm:     computer → Wi-Fi → MaixCam → UART → TCP232 → LAN1
 Status:  ESP32 → Wi-Fi/TCP → computer; arm → MaixCam → Wi-Fi → computer
 ```
 
-The computer orchestrator combines independently reported chassis and arm state and enforces cross-device gates such as requiring confirmed chassis stop before an arm task. ESP32 validates chassis commands and retains final limits, ownership, heartbeat, and stop behavior. MaixCam validates robot-arm tasks, and the arm retains controller limits and body safety.
+The computer orchestrator combines independently reported chassis and arm state and enforces cross-device gates such as requiring confirmed chassis stop before an arm task. ESP32 validates chassis commands and retains final limits, authenticated-session health, and stop behavior. MaixCam validates robot-arm tasks, and the arm retains controller limits and body safety.
 
 The first high-level task sequence is:
 

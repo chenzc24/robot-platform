@@ -1,4 +1,4 @@
-"""Local end-to-end tests for the computer RCP/TCP v2 client and router."""
+"""Local end-to-end tests for the computer RCP/TCP v3 client and router."""
 
 import pathlib
 import sys
@@ -19,9 +19,8 @@ from chassis_motion_tcp_service import (
     ChassisMotionTcpService,
     fixed_credential_verifier,
 )
-from chassis_tcp_v2 import decode_message, encode_message
-from chassis_tcp_v2 import MAX_SEQUENCE
-from control_lease import ControlLease
+from chassis_tcp_v3 import decode_message, encode_message
+from chassis_tcp_v3 import MAX_SEQUENCE
 from motion_router import DualSessionMotionRouter, MotionRouterError
 
 
@@ -59,7 +58,6 @@ class LoopbackConnection:
         self.service = ChassisMotionTcpService(
             self,
             self.chassis,
-            ControlLease(),
             authorize=fixed_credential_verifier(CREDENTIAL),
             motion_permitted=motion_permitted,
         )
@@ -78,16 +76,15 @@ class LoopbackConnection:
 
 
 class ChassisMotionTcpClientTests(unittest.TestCase):
-    def test_authenticated_owned_motion_lifecycle_is_correlated(self):
+    def test_authenticated_motion_lifecycle_is_correlated(self):
         connection = LoopbackConnection()
         client = ChassisMotionTcpClient(connection)
         self.assertEqual(client.hello("console", CREDENTIAL)["type"], "WELCOME")
-        self.assertEqual(client.acquire(1000)["type"], "DONE")
         self.assertEqual(client.enable()["payload"]["state"], "enabled_stopped")
         result = client.velocity(100, 0, 0, 250, 500)
         self.assertEqual(result["type"], "DONE")
         self.assertEqual(result["payload"]["command"], "VELOCITY")
-        self.assertEqual(len(connection.sent), 4)
+        self.assertEqual(len(connection.sent), 3)
 
     def test_authentication_rejection_is_explicit(self):
         client = ChassisMotionTcpClient(LoopbackConnection())

@@ -23,9 +23,7 @@ class ConsoleControllerTests(unittest.TestCase):
 
     def _ready_chassis(self):
         self.assertTrue(self.controller.connect_chassis())
-        self.assertTrue(self.controller.chassis_acquire())
         self.assertTrue(self.controller.chassis_enable())
-        self.assertTrue(self.controller.set_chassis_manual_unlock(True))
 
     def _ready_arm(self):
         self.assertTrue(self.controller.connect_arm())
@@ -35,21 +33,22 @@ class ConsoleControllerTests(unittest.TestCase):
         self.assertEqual(state.environment, Environment.SIMULATOR)
         self.assertEqual(state.video.link, LinkState.OFFLINE)
         self.assertFalse(state.chassis.motion_enabled)
-        self.assertFalse(state.chassis.manual_unlocked)
         self.assertFalse(state.arm.motion_permitted)
         self.assertFalse(self.controller.can_chassis_move())
         self.assertFalse(self.controller.can_arm_move())
         self.assertFalse(self.controller.chassis_velocity(1, 0, 0))
 
-    def test_chassis_simulator_requires_session_then_stops_on_release(self):
+    def test_chassis_simulator_stops_then_disables_without_releasing_connection(self):
         self._ready_chassis()
         self.assertTrue(self.controller.can_chassis_move())
         self.assertTrue(self.controller.chassis_velocity(80, 0, 0))
         self.assertEqual(self.controller.state.chassis.velocity, (80, 0, 0))
         self.assertTrue(self.controller.chassis_stop())
         self.assertEqual(self.controller.state.chassis.velocity, (0, 0, 0))
-        self.controller.chassis_release()
+        self.controller.chassis_disable()
         self.assertFalse(self.controller.can_chassis_move())
+        self.assertEqual(self.controller.state.chassis.link, LinkState.ONLINE)
+        self.assertTrue(self.controller.state.chassis.authenticated)
         self.assertEqual(self.controller.state.chassis.velocity, (0, 0, 0))
 
     def test_video_failure_does_not_prevent_simulated_chassis_stop(self):

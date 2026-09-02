@@ -1,5 +1,9 @@
 # ESP32 RCP/TCP v2 L2 Deployment Record
 
+> Historical record only. RCP/TCP v3 replaced this deployed contract and
+> removed its acquire/heartbeat/release lease fields. Do not use this record as
+> a current deployment manifest.
+
 ## Scope
 
 This is the first resident deployment of the direct computer-to-ESP32 RCP/TCP

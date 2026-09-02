@@ -44,9 +44,6 @@ class ChassisStatus:
     chassis_state: str
     motion_permitted: bool
     authenticated: bool
-    lease_active: bool
-    lease_owner: str
-    lease_remaining_ms: int
     hold_remaining_ms: int
     last_error: str
 
@@ -67,11 +64,11 @@ class ArmStatus:
 
 
 def parse_chassis_status(response):
-    """Parse the exact RCP/TCP v2 `STATE` response shape."""
+    """Parse the exact RCP/TCP v3 `STATE` response shape."""
     response = _mapping(response, "invalid_chassis_status_response")
     _exact(response, ("version", "sequence", "type", "ttl_ms", "payload"), "invalid_chassis_status_response")
     sequence = _nonnegative_integer(response["sequence"], "invalid_chassis_status_response")
-    if response["version"] != 2 or sequence == 0 or response["ttl_ms"] != 0 or response["type"] != "STATE":
+    if response["version"] != 3 or sequence == 0 or response["ttl_ms"] != 0 or response["type"] != "STATE":
         raise StatusMappingError("invalid_chassis_status_type")
     payload = _mapping(response["payload"], "invalid_chassis_status_payload")
     fields = (
@@ -79,25 +76,15 @@ def parse_chassis_status(response):
         "chassis_state",
         "motion_permitted",
         "authenticated",
-        "lease_active",
-        "lease_owner",
-        "lease_remaining_ms",
         "hold_remaining_ms",
         "last_error",
     )
     _exact(payload, fields, "invalid_chassis_status_payload")
-    lease_active = _flag(payload["lease_active"], "invalid_chassis_status_payload")
-    owner = _token(payload["lease_owner"], "invalid_chassis_status_payload", allow_none=True)
-    if (lease_active and owner == "none") or (not lease_active and owner != "none"):
-        raise StatusMappingError("invalid_chassis_lease_state")
     return ChassisStatus(
         service_state=_token(payload["service_state"], "invalid_chassis_status_payload"),
         chassis_state=_token(payload["chassis_state"], "invalid_chassis_status_payload"),
         motion_permitted=_flag(payload["motion_permitted"], "invalid_chassis_status_payload"),
         authenticated=_flag(payload["authenticated"], "invalid_chassis_status_payload"),
-        lease_active=lease_active,
-        lease_owner=owner,
-        lease_remaining_ms=_nonnegative_integer(payload["lease_remaining_ms"], "invalid_chassis_status_payload"),
         hold_remaining_ms=_nonnegative_integer(payload["hold_remaining_ms"], "invalid_chassis_status_payload"),
         last_error=_token(payload["last_error"], "invalid_chassis_status_payload", allow_none=True),
     )

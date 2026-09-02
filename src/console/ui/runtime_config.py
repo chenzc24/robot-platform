@@ -29,8 +29,7 @@ class ChassisConfig(EndpointConfig):
 @dataclass(frozen=True)
 class ManualChassisConfig:
     enabled: bool
-    lease_ms: int
-    heartbeat_interval_ms: int
+    health_interval_ms: int
     velocity_hold_ms: int
     linear_limit_mm_s: int
     angular_limit_mrad_s: int
@@ -107,7 +106,7 @@ def load_runtime_config(path):
         raise RuntimeConfigError("local configuration cannot be read") from error
     if set(raw) != {"schema_version", "chassis", "manual_chassis", "arm", "video"}:
         raise RuntimeConfigError("unexpected configuration fields")
-    if raw["schema_version"] != 1:
+    if raw["schema_version"] != 2:
         raise RuntimeConfigError("unsupported configuration schema")
     chassis = _mapping(raw["chassis"], "chassis")
     manual_chassis = _mapping(raw["manual_chassis"], "manual_chassis")
@@ -115,7 +114,7 @@ def load_runtime_config(path):
     video = _mapping(raw["video"], "video")
     if set(chassis) != {"host", "port", "client_id", "credential_env", "connect_timeout_seconds"}:
         raise RuntimeConfigError("unexpected chassis configuration fields")
-    if set(manual_chassis) != {"enabled", "lease_ms", "heartbeat_interval_ms", "velocity_hold_ms", "linear_limit_mm_s", "angular_limit_mrad_s"}:
+    if set(manual_chassis) != {"enabled", "health_interval_ms", "velocity_hold_ms", "linear_limit_mm_s", "angular_limit_mrad_s"}:
         raise RuntimeConfigError("unexpected manual chassis configuration fields")
     if set(arm) != {"host", "port", "session_id", "connect_timeout_seconds"}:
         raise RuntimeConfigError("unexpected arm configuration fields")
@@ -131,9 +130,8 @@ def load_runtime_config(path):
         ),
         manual_chassis=ManualChassisConfig(
             enabled=_boolean(manual_chassis["enabled"], "manual_chassis.enabled"),
-            lease_ms=_positive_int(manual_chassis["lease_ms"], "manual_chassis.lease_ms", 250, 2_000),
-            heartbeat_interval_ms=_positive_int(manual_chassis["heartbeat_interval_ms"], "manual_chassis.heartbeat_interval_ms", 50, 1_000),
-            velocity_hold_ms=_positive_int(manual_chassis["velocity_hold_ms"], "manual_chassis.velocity_hold_ms", 50, 500),
+            health_interval_ms=_positive_int(manual_chassis["health_interval_ms"], "manual_chassis.health_interval_ms", 100, 1_000),
+            velocity_hold_ms=_positive_int(manual_chassis["velocity_hold_ms"], "manual_chassis.velocity_hold_ms", 100, 500),
             linear_limit_mm_s=_positive_int(manual_chassis["linear_limit_mm_s"], "manual_chassis.linear_limit_mm_s", 1, 600),
             angular_limit_mrad_s=_positive_int(manual_chassis["angular_limit_mrad_s"], "manual_chassis.angular_limit_mrad_s", 1, 800),
         ),

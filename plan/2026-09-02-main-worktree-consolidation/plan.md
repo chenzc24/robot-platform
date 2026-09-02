@@ -1,6 +1,6 @@
 # Main Branch and Worktree Consolidation
 
-- Status: `in-progress`
+- Status: `completed`
 - Responsible: `joint`
 - Highest validation level: `L1`
 
@@ -72,3 +72,35 @@ be merged into `main`:
 docs(plan): prepare main worktree consolidation
 docs(plan): record main worktree consolidation
 ```
+
+## Actual results
+
+- `E:\Device Network` was switched from the merged ESP32 foundation branch to
+  `main` without altering or staging the user's `.vscode/settings.json` change.
+- `main` fast-forwarded from `e07080c` to `f89cbba`, including the complete
+  YOLO arm implementation and this consolidation plan. The focused L1 suite
+  passed 172 tests plus 6 subtests; UI smoke construction, Python compilation,
+  and `git diff --check` passed before publication.
+- `origin/main` was fast-forwarded to the same integrated history.
+- Copied and SHA-256 verified the console local configuration, ESP32 device
+  configuration, six-file YOLO arm build, 32 device-backup files, 11 log files,
+  31 generated/probe temporary files, and two device-cache files into
+  non-conflicting locations under the canonical worktree.
+- The old worktree's MediaMTX process was identified by executable/config path
+  and stopped through the managed `robot stop relay` operation before logs or
+  the worktree were removed. No device or motion operation occurred.
+- Verified the old worktree's 71 tool-runtime files were identical to the
+  canonical `.tools` copy. Its virtual environment was intentionally treated
+  as reproducible.
+- Removed all eleven secondary worktrees. Only `E:\Device Network` remains.
+- Removed nineteen synchronized local target branches. Five unmerged,
+  superseded branch tips remain available on `origin` and were not merged or
+  deleted remotely. All accepted implementation history is reachable from
+  `main`.
+
+## Residual local state
+
+- `.vscode/settings.json` remains modified, unstaged, and user-owned. It is the
+  only visible Git worktree change.
+- Historical remote target branches remain available until the user explicitly
+  requests remote branch deletion.

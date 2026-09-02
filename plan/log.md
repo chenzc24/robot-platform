@@ -722,3 +722,31 @@ entry format:
 - Commit status: committed on `target/arm-yolo-manual-control` with
   `feat(arm): add repeatable YOLO manual jog control` and pushed to
   `origin/target/arm-yolo-manual-control`.
+
+## 2026-09-02 - Consolidate accepted work into one main worktree
+
+- Goal: integrate the accepted YOLO arm branch, preserve relevant ignored
+  deployment artifacts, and reduce twelve local worktrees and twenty local
+  branches to one canonical `main` checkout.
+- Integration: `main` fast-forwarded from `e07080c` through the YOLO feature and
+  planning commits to `f89cbba`; `origin/main` was updated. The five other
+  unmerged lines were classified as superseded UI, integration-map,
+  MaixCam-to-ESP32 UART, motion-service, or protocol/deployment experiments and
+  were not merged.
+- Preservation: SHA-256 verification passed for the copied console/ESP32 local
+  configuration, YOLO build, device backups, logs, generated probes, and device
+  cache. Existing canonical files were not overwritten. The duplicate tool
+  runtime matched exactly; virtual environments and temporary document
+  extraction were treated as reproducible.
+- Cleanup: MediaMTX running from the old console worktree was stopped through
+  the managed CLI. Eleven secondary worktrees and nineteen synchronized local
+  target branches were removed. Corresponding remote branches remain available
+  for recovery and historical inspection.
+- Validation: 172 tests plus 6 subtests, offscreen UI smoke construction,
+  Python compilation, diff-format checks, branch synchronization, and final
+  worktree inventory passed. No device connection, deployment, or motion was
+  performed.
+- Local exception: the user's `.vscode/settings.json` modification remains
+  unchanged, unstaged, and uncommitted in the canonical worktree.
+- Commit status: this consolidation record is committed directly to `main` and
+  pushed with the current main history.

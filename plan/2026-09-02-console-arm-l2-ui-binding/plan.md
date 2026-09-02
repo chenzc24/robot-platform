@@ -1,6 +1,6 @@
 # Console Arm L2 UI Binding and Diagnostics
 
-- Status: `in-progress`
+- Status: `completed`
 - Responsible: `joint`
 - Highest validation level: `L2`
 
@@ -48,11 +48,20 @@ The repository is clean at `12ba775`. The resident MaixCam arm gateway remains r
 ## Actual results
 
 - The ignored local configuration parses with the MaixCam endpoint. The UI started, entered Hardware mode, and recorded the requested arm connection, but then failed locally with `No module named 'maixcam_arm_client'`. The endpoint did not receive an arm request and no motion was sent. Root cause: the packaged UI runtime adds `protocol/` to `sys.path` but not its sibling `src/console/` client-module directory.
-- The runtime import-path correction and its local regression test are present but not yet committed. CLI implementation and validation are pending.
-- The first CLI runs revealed an intermittent arm-gateway defect: a delayed reply for a previously timed-out safe request can be treated as a sequence mismatch against a later request, leaving the gateway pending and causing `request_in_flight`. The device service source will be repaired and separately revalidated before any UI recheck.
+- Added the sibling console-client import path and a regression test, so the hardware UI can create its arm client after the CLI path is healthy. The UI was not re-opened for this goal because the diagnostic contract is now CLI-first.
+- Added `robot arm ping`, `status`, `check`, and `reject-motion`, with concise text output and optional stable JSON. Every CLI socket is closed after its one request or one `PING`/`STATUS` pair; all CLI requests are non-retrying.
+- The first CLI runs exposed a real intermittent arm-gateway defect: a delayed reply for a previously timed-out safe request was treated as a sequence mismatch against a later request, leaving the gateway pending and causing `request_in_flight`. The gateway now discards only lower, expired downstream responses; a higher mismatched response still faults and clears the pending request. A new focused test covers timeout, stale PONG, and successful next STATUS.
+- Before deployment, SSH confirmed MaixCam arm service PID `1182`, its wrapper PID `1170`, UART0 ownership, TCP `8780` listener, and the remote source hashes. The two reviewed files were copied only to `/root/robot-platform/arm/`, their SHA-256 readback matched local source, the previous wrapper was terminated through its verified child PID, and its trap restored the launcher supervisor. The guarded launcher then started the replacement service as wrapper PID `1446` and server PID `1458`; the server regained UART0 and TCP `8780`.
+- L1 passed: 25 development tests, 45 console tests, and 50 MaixCam tests; all edited Python modules compile and `git diff --check` passed.
+- L2 passed: after deployment, five independent `robot arm check --json` calls and one `robot arm status --json` call all returned `READY`, `PING/STATUS DONE`, `service_state=ready`, `motion_enabled=0`, and `active_sequence=0`. No GUI action, LAN2 operation, controller configuration, motion request, or UART motion frame was sent. The controller's `last_error=sequence_replay` is historical evidence from earlier recovery testing, not an active task or current gateway fault.
+
+## Outstanding matters
+
+- The UI import correction is locally tested but not rechecked visually; future UI work should use `robot arm check --json` first and only use the UI to validate presentation and manual controls.
+- `robot arm reject-motion` is implemented and locally tested but deliberately was not run against hardware in this goal. Its syntactically valid request is expected to be denied before UART, but it remains an arm-command test and needs an explicit current authorization if hardware revalidation is desired.
 
 ## Intent to submit
 
 ```text
-test(console): bind hardware UI to default-deny arm gateway
+fix(console): add arm CLI diagnostics
 ```

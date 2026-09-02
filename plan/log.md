@@ -639,3 +639,31 @@ entry format:
   is `ready` with no active task and `motion_enabled=0`.
 - Commit status: implementation committed and pushed to `main` as `ffa4935`
   (`deploy(robot-arm): prove default-deny RPA2 route`).
+
+## 2026-09-02 - Add CLI-first MaixCam arm diagnostics and recover stale replies
+
+- Goal: replace screenshot-driven arm diagnosis with a flat CLI, repair the
+  console's local arm-client import, and correct the intermittent non-motion
+  MaixCam UART response recovery exposed by the CLI.
+- Modified scope: `robot arm` diagnostics and tests, console runtime import
+  setup, MaixCam arm-gateway stale-response handling and tests, development
+  documentation, and the goal plan/log. No protocol definition, arm controller
+  project, TCP232 configuration, ESP32, CAN, LAN2, credential, raw resource, or
+  user-owned primary-worktree file changed.
+- Implementation: `robot arm ping`, `status`, `check`, and `reject-motion`
+  provide concise text plus optional JSON. `check` opens one MaixCam session for
+  PING then STATUS and closes it. The gateway discards a lower late UART response
+  from a timed-out safe request instead of faulting a newer request; higher
+  mismatches still fail closed.
+- Validation: L1 passed 25 development, 45 console, and 50 MaixCam tests,
+  Python compilation, and diff-format validation. L2 source hashes were read
+  back after an SSH/SCP deployment to `/root/robot-platform/arm/`; the prior
+  guarded service restored launcher ownership, and the replacement process owns
+  UART0 and TCP 8780. Five consecutive `robot arm check --json` calls plus one
+  standalone `status` all returned ready, `motion_enabled=0`, and no active task.
+- Hardware: MaixCam arm gateway only. The user-installed default-deny arm
+  controller project remained running; LAN2 stayed disconnected. No motion,
+  gripper, configuration, TCP232, or controller write was sent. The expected
+  rejection CLI is intentionally not hardware-run in this goal.
+- Commit status: implementation committed locally as `861aae1`
+  (`fix(console): add arm CLI diagnostics`); final record push pending.

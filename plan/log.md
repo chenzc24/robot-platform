@@ -693,8 +693,8 @@ entry format:
   controller retained. No physical arm action, controller configuration,
   TCP232 write, or LAN2 operation was sent.
 - Commit status: included in the current
-  `feat(arm): add repeatable YOLO manual jog control` feature commit; push
-  pending.
+  `feat(arm): add repeatable YOLO manual jog control` feature branch, pushed to
+  `origin/target/arm-yolo-manual-control`.
 
 ## 2026-09-02 - Replace one-use arm permission with YOLO manual control
 
@@ -720,4 +720,5 @@ entry format:
   was performed for the YOLO build. The ignored import package is available at
   `build/robot-arm-yolo` for the next explicitly requested L2/L3 session.
 - Commit status: committed on `target/arm-yolo-manual-control` with
-  `feat(arm): add repeatable YOLO manual jog control`; push pending.
+  `feat(arm): add repeatable YOLO manual jog control` and pushed to
+  `origin/target/arm-yolo-manual-control`.

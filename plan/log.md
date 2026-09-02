@@ -856,3 +856,21 @@ entry format:
   `c58cd54` (`feat(console): migrate operator UI to localhost web`). This
   factual record was committed as `e4a6e0e`; the branch was then fast-forwarded
   into `main` for remote synchronization.
+
+## 2026-09-02 - Record relevant Dobot controller APIs
+
+- Goal: consolidate the user-provided motion-parameter, measured-state, path
+  validation, safety, and tool-IO excerpts into an English project reference.
+- Modified scope: `docs/reference_api.md` and this factual log only. Runtime
+  code, protocols, deployment artifacts, devices, and local configuration were
+  unchanged.
+- Evidence: the supplied instruction excerpts were cross-checked against the
+  read-only controller Python export tables. `GetPose` and `GetAngle` are
+  confirmed exports; `GetToolMode` is documented but absent from the inspected
+  export snapshot and is explicitly marked for L2 confirmation.
+- Validation: documentation formatting, English-language scan, link/scope
+  review, and `git diff --check`. No device connection, write, or motion was
+  performed.
+- Local exception: the user's `.vscode/settings.json` change remains untouched
+  and uncommitted.
+- Commit status: pending on `main`.

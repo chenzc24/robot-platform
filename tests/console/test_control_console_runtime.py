@@ -229,8 +229,9 @@ class FakeRuntime(QObject):
     def request_arm_status(self):
         self.calls.append("request_arm_status")
 
-    def request_arm_l3_j1_cycle(self):
-        self.calls.append("request_arm_l3_j1_cycle")
+    def request_arm_motion(self, command, payload=None):
+        self.calls.append((command, payload or {}))
+        return True
 
     def save_snapshot(self):
         self.calls.append("save_snapshot")
@@ -613,7 +614,7 @@ class RuntimeWorkerTests(unittest.TestCase):
         runtime.result_ready.emit(SessionResult("MaixCam", "status", Lifecycle.DONE, "completed", [{
             "version": 1, "kind": "lifecycle", "message_id": "console-2:done", "sequence": 2,
             "target": "arm", "name": "arm.status", "ttl_ms": 0,
-            "payload": {"downstream_sequence": 7, "terminal_position": "unknown", "downstream_payload": "service_state=ready;motion_enabled=0;active_sequence=0;last_error=none;terminal_position_supported=0;cancel_supported=0"},
+            "payload": {"downstream_sequence": 7, "terminal_position": "unknown", "downstream_payload": "service_state=ready;motion_enabled=0;control_mode=production;active_sequence=0;last_error=none;terminal_position_supported=0;cancel_supported=0"},
             "correlation_id": "console-2", "lifecycle": "DONE",
         }]))
         self.assertEqual(controller.state.arm.uart_lan1, LinkState.ONLINE)
@@ -803,7 +804,7 @@ class RuntimeWorkerTests(unittest.TestCase):
         finally:
             window.close()
 
-    def test_hardware_arm_view_hides_simulator_motion_forms_and_explains_default_deny(self):
+    def test_hardware_arm_view_shows_controls_but_disables_them_outside_yolo(self):
         runtime = ManualRuntime()
         controller = ConsoleController(runtime=runtime)
         controller.set_environment(Environment.HARDWARE)
@@ -818,48 +819,61 @@ class RuntimeWorkerTests(unittest.TestCase):
         ))
         window = MainWindow(controller)
         try:
-            self.assertTrue(window.arm_tabs.isHidden())
-            self.assertFalse(window.arm_unlock.isEnabled())
+            self.assertFalse(window.arm_tabs.isHidden())
             self.assertFalse(window.joint_execute_button.isEnabled())
-            self.assertIn("default-deny", window.arm_runtime_detail.text())
+            self.assertIn("not in YOLO", window.arm_runtime_detail.text())
         finally:
             window.close()
 
-    def test_hardware_l3_cycle_requires_arm_route_and_confirmed_chassis_stop(self):
+    def test_hardware_yolo_joint_jog_is_repeatable_and_independent_of_esp32(self):
         runtime = ManualRuntime()
         controller = ConsoleController(runtime=runtime)
         controller.set_environment(Environment.HARDWARE)
         controller._replace(
-            chassis=controller.state.chassis.__class__(
-                link=LinkState.ONLINE, reported_state="safe idle",
-            ),
             arm=controller.state.arm.__class__(
                 gateway=LinkState.ONLINE, uart_lan1=LinkState.ONLINE,
                 controller=LinkState.ONLINE, task=Lifecycle.IDLE,
-                reported_state="ready", motion_permitted=True,
+                reported_state="ready", motion_permitted=True, control_mode="yolo",
             ),
         )
         window = MainWindow(controller)
         try:
-            self.assertTrue(window.arm_l3_unlock.isEnabled())
-            self.assertFalse(window.arm_l3_execute_button.isEnabled())
-            self.assertTrue(controller.set_arm_manual_unlock(True))
-            self.assertTrue(window.arm_l3_execute_button.isEnabled())
-            self.assertTrue(controller.execute_hardware_arm_l3_test())
-            self.assertEqual(runtime.calls[-1], "request_arm_l3_j1_cycle")
-            self.assertFalse(controller.state.arm.manual_unlocked)
+            self.assertTrue(window.joint_jog_buttons[1].isEnabled())
+            self.assertEqual(window.joint_jog_step.value(), 2.0)
+            self.assertTrue(controller.jog_arm_joint(0, 2.0))
+            self.assertEqual(runtime.calls[-1], ("jog_joint", {"joint_delta_deg": [2.0, 0.0, 0.0, 0.0, 0.0, 0.0], "accel_pct": 5, "speed_pct": 5}))
             responses = [
                 {"lifecycle": "RECEIVED", "payload": {}},
                 {"lifecycle": "ACCEPTED", "payload": {"downstream_sequence": 8}},
                 {"lifecycle": "RUNNING", "payload": {"downstream_sequence": 8}},
                 {"lifecycle": "DONE", "payload": {"downstream_sequence": 8}},
             ]
-            runtime.result_ready.emit(SessionResult("MaixCam", "l3_j1_cycle", Lifecycle.DONE, "completed", responses))
+            runtime.result_ready.emit(SessionResult("MaixCam", "jog_joint", Lifecycle.DONE, "completed", responses))
             self.assertEqual(controller.state.arm.task, Lifecycle.IDLE)
             self.assertIn("request_arm_status", runtime.calls)
             self.assertEqual([event.lifecycle for event in controller.events[:4]], [Lifecycle.DONE, Lifecycle.RUNNING, Lifecycle.ACCEPTED, Lifecycle.RECEIVED])
+            controller._replace(arm=controller.state.arm.__class__(
+                gateway=LinkState.ONLINE, uart_lan1=LinkState.ONLINE,
+                controller=LinkState.ONLINE, task=Lifecycle.IDLE,
+                reported_state="ready", motion_permitted=True, control_mode="yolo",
+            ))
+            self.assertTrue(controller.jog_arm_joint(0, -2.0))
         finally:
             window.close()
+
+    def test_hardware_yolo_jog_does_not_depend_on_chassis_or_ui_fault_panel(self):
+        runtime = ManualRuntime()
+        controller = ConsoleController(runtime=runtime)
+        controller.set_environment(Environment.HARDWARE)
+        controller._replace(arm=controller.state.arm.__class__(
+            gateway=LinkState.ONLINE, uart_lan1=LinkState.ONLINE,
+            controller=LinkState.ONLINE, task=Lifecycle.IDLE,
+            reported_state="ready", motion_permitted=True, control_mode="yolo",
+        ))
+        controller._raise_fault("esp32_offline", "fault", "esp32", "not part of arm debug")
+        self.assertTrue(controller.can_arm_move())
+        controller._raise_fault("arm_route_fault", "fault", "arm", "arm route failed")
+        self.assertTrue(controller.can_arm_move())
 
     def test_live_event_log_records_only_sanitized_event_and_fault_fields(self):
         with tempfile.TemporaryDirectory() as directory:

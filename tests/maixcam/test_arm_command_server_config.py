@@ -25,14 +25,23 @@ class ArmCommandServerConfigTests(unittest.TestCase):
         self.assertEqual(config.LISTEN_PORT, 8780)
         self.assertEqual(config.UART_DEVICE, "/dev/ttyS0")
         self.assertEqual(config.UART_BAUD, 115200)
-        self.assertEqual(config.PERMITTED_MOTION_NAMES, ())
+        self.assertFalse(config.YOLO_MODE)
+
+    def test_yolo_mode_admits_motion_without_named_allowlist(self):
+        sys.modules.pop("arm_command_server", None)
+        server = importlib.import_module("arm_command_server")
+        gateway = server.ArmMotionGateway(lambda frame: len(frame))
+        config = type("Config", (), {"YOLO_MODE": True})()
+        service = server._service(gateway, config)
+        self.assertTrue(service.snapshot()["motion_enabled"])
+        self.assertTrue(service.admission({"name": "arm.jog_joint"}))
 
     def test_process_owned_gateway_keeps_rpa2_sequence_across_computer_sessions(self):
         sys.modules.pop("arm_command_server", None)
         server = importlib.import_module("arm_command_server")
         writes = []
         gateway = server.ArmMotionGateway(writes.append)
-        config = type("Config", (), {"PERMITTED_MOTION_NAMES": ()})()
+        config = type("Config", (), {"YOLO_MODE": False})()
         command = {
             "version": 1,
             "kind": "command",

@@ -11,64 +11,95 @@ from motion_link import decode_frame, encode_fields, encode_frame
 
 
 class FakeApi:
-    def __init__(self): self.calls = []
+    def __init__(self):
+        self.calls = []
+        self.motion_return = "nonempty_controller_return"
+
     def check_j(self, *_): return 0
-    def move_j(self, point, options): self.calls.append(("movj", point, options))
+    def move_j(self, point, options):
+        self.calls.append(("movj", point, options)); return self.motion_return
     def check_l(self, *_): return 0
-    def move_l(self, point, options): self.calls.append(("movl", point, options))
-    def gripper(self, width): self.calls.append(("gripper", width))
-    def relative_joint(self, joints, options): self.calls.append(("relative_joint", joints, options))
-    def wait(self, milliseconds): self.calls.append(("wait", milliseconds))
+    def move_l(self, point, options):
+        self.calls.append(("movl", point, options)); return self.motion_return
+    def gripper(self, width):
+        self.calls.append(("gripper", width)); return self.motion_return
+    def relative_joint(self, joints, options):
+        self.calls.append(("relative_joint", joints, options)); return self.motion_return
+    def relative_linear_user(self, pose, options):
+        self.calls.append(("relative_linear_user", pose, options)); return self.motion_return
 
 
 class ArmRuntimeTests(unittest.TestCase):
-    def service(self, enabled=False):
-        raw = FakeApi()
-        policy = ArmSafetyPolicy(enabled, (-10,) * 6 if enabled else None, (10,) * 6 if enabled else None,
-                                 (-10,) * 6 if enabled else None, (10,) * 6 if enabled else None)
-        api = DobotControllerApi(raw.check_j, raw.move_j, raw.check_l, raw.move_l, raw.gripper,
-                                 raw.relative_joint, raw.wait)
-        return ArmMotionService(api, policy), raw
-
-    def test_default_policy_answers_status_and_rejects_move_without_api_call(self):
-        service, raw = self.service()
-        state, _ = service.feed(encode_frame("RPA2", "STATUS", 1, 1000))
-        self.assertIn("motion_enabled=0", decode_frame(state[0])["payload"])
-        payload = encode_fields((("joint_deg", "0,0,0,0,0,0"), ("accel_pct", 5), ("speed_pct", 5), ("blend_pct", 0)))
-        replies, _ = service.feed(encode_frame("RPA2", "MOVEJ", 2, 1000, payload))
-        self.assertEqual(decode_frame(replies[-1])["type"], "ERROR")
-        self.assertEqual(raw.calls, [])
-
-    def test_enabled_policy_checks_then_marks_api_return_as_unknown_terminal_position(self):
-        service, raw = self.service(True)
-        payload = encode_fields((("joint_deg", "1,1,1,1,1,1"), ("accel_pct", 5), ("speed_pct", 5), ("blend_pct", 0)))
-        replies, _ = service.feed(encode_frame("RPA2", "MOVEJ", 1, 1000, payload))
-        self.assertEqual([decode_frame(reply)["type"] for reply in replies], ["ACK", "RUNNING", "DONE"])
-        self.assertIn("terminal_position=unknown", decode_frame(replies[-1])["payload"])
-        self.assertEqual(raw.calls[0][0], "movj")
-
-    def test_l3_relative_j1_cycle_is_one_use_and_never_enables_generic_movej(self):
+    def service(self, enabled=False, yolo=False):
         raw = FakeApi()
         policy = ArmSafetyPolicy(
-            False, None, None, None, None,
-            l3_test_action_enabled=True, l3_test_j1_step_deg=1.0,
-            l3_test_accel_pct=5, l3_test_speed_pct=5,
+            enabled,
+            (-10,) * 6 if enabled else None, (10,) * 6 if enabled else None,
+            (-10,) * 6 if enabled else None, (10,) * 6 if enabled else None,
+            yolo_mode=yolo,
         )
-        api = DobotControllerApi(raw.check_j, raw.move_j, raw.check_l, raw.move_l, raw.gripper,
-                                 raw.relative_joint, raw.wait)
-        service = ArmMotionService(api, policy)
+        api = DobotControllerApi(
+            raw.check_j, raw.move_j, raw.check_l, raw.move_l, raw.gripper,
+            raw.relative_joint, raw.relative_linear_user,
+        )
+        return ArmMotionService(api, policy), raw
+
+    def test_default_policy_answers_status_and_rejects_motion(self):
+        service, raw = self.service()
+        state, _ = service.feed(encode_frame("RPA2", "STATUS", 1, 1000))
+        payload = decode_frame(state[0])["payload"]
+        self.assertIn("motion_enabled=0", payload)
+        self.assertIn("control_mode=production", payload)
+        request = encode_fields((("joint_delta_deg", "2,0,0,0,0,0"), ("accel_pct", 5), ("speed_pct", 5), ("blend_pct", 0)))
+        replies, _ = service.feed(encode_frame("RPA2", "RELJOINT", 2, 1000, request))
+        self.assertIn("error_code=yolo_mode_required", decode_frame(replies[-1])["payload"])
+        self.assertEqual(raw.calls, [])
+
+    def test_yolo_relative_joint_is_repeatable_and_ignores_nonempty_api_return(self):
+        service, raw = self.service(yolo=True)
         status, _ = service.feed(encode_frame("RPA2", "STATUS", 1, 1000))
-        self.assertIn("motion_enabled=1", decode_frame(status[0])["payload"])
-        replies, _ = service.feed(encode_frame("RPA2", "L3J1CYCLE", 2, 15000))
-        self.assertEqual([decode_frame(reply)["type"] for reply in replies], ["ACK", "RUNNING", "DONE"])
+        self.assertIn("control_mode=yolo", decode_frame(status[0])["payload"])
+        request = encode_fields((("joint_delta_deg", "2,0,0,0,0,0"), ("accel_pct", 5), ("speed_pct", 5), ("blend_pct", 0)))
+        first, _ = service.feed(encode_frame("RPA2", "RELJOINT", 2, 60000, request))
+        second, _ = service.feed(encode_frame("RPA2", "RELJOINT", 3, 60000, request))
+        self.assertEqual([decode_frame(item)["type"] for item in first], ["ACK", "RUNNING", "DONE"])
+        self.assertEqual([decode_frame(item)["type"] for item in second], ["ACK", "RUNNING", "DONE"])
         self.assertEqual(raw.calls, [
-            ("relative_joint", [1.0, 0, 0, 0, 0, 0], {"a": 5, "v": 5, "cp": 0}),
-            ("wait", 1000),
-            ("relative_joint", [-1.0, 0, 0, 0, 0, 0], {"a": 5, "v": 5, "cp": 0}),
-            ("wait", 1),
+            ("relative_joint", [2.0, 0.0, 0.0, 0.0, 0.0, 0.0], {"a": 5, "v": 5, "cp": 0}),
+            ("relative_joint", [2.0, 0.0, 0.0, 0.0, 0.0, 0.0], {"a": 5, "v": 5, "cp": 0}),
         ])
-        again, _ = service.feed(encode_frame("RPA2", "L3J1CYCLE", 3, 15000))
-        self.assertEqual(decode_frame(again[-1])["payload"].split(";", 1)[0], "error_code=l3_test_not_armed")
-        generic = encode_fields((("joint_deg", "0,0,0,0,0,0"), ("accel_pct", 5), ("speed_pct", 5), ("blend_pct", 0)))
-        movej, _ = service.feed(encode_frame("RPA2", "MOVEJ", 4, 1000, generic))
-        self.assertIn("error_code=motion_disabled", decode_frame(movej[-1])["payload"])
+
+    def test_yolo_xyz_maps_to_relmovluser_with_zero_rotation(self):
+        service, raw = self.service(yolo=True)
+        request = encode_fields((("translation_mm", "0,-5,0"), ("user", 0), ("tool", 0), ("accel_pct", 6), ("speed_pct", 7), ("blend_mm", 0)))
+        replies, _ = service.feed(encode_frame("RPA2", "RELLINEAR", 1, 60000, request))
+        self.assertEqual(decode_frame(replies[-1])["type"], "DONE")
+        self.assertEqual(raw.calls, [
+            ("relative_linear_user", [0.0, -5.0, 0.0, 0, 0, 0], {"user": 0, "tool": 0, "a": 6, "v": 7, "r": 0}),
+        ])
+
+    def test_invalid_relative_vector_is_rejected_before_controller_call(self):
+        service, raw = self.service(yolo=True)
+        request = encode_fields((("joint_delta_deg", "2,0"), ("accel_pct", 5), ("speed_pct", 5), ("blend_pct", 0)))
+        replies, _ = service.feed(encode_frame("RPA2", "RELJOINT", 1, 1000, request))
+        self.assertIn("error_code=invalid_joint_delta", decode_frame(replies[-1])["payload"])
+        self.assertEqual(raw.calls, [])
+
+    def test_yolo_also_allows_absolute_programmatic_motion(self):
+        service, raw = self.service(yolo=True)
+        payload = encode_fields((("joint_deg", "1,1,1,1,1,1"), ("accel_pct", 80), ("speed_pct", 90), ("blend_pct", 0)))
+        replies, _ = service.feed(encode_frame("RPA2", "MOVEJ", 1, 1000, payload))
+        self.assertEqual(decode_frame(replies[-1])["type"], "DONE")
+        self.assertEqual(raw.calls[0][0], "movj")
+
+    def test_specific_controller_exception_reaches_protocol_log(self):
+        service, _ = self.service(yolo=True)
+        def fail(*_): raise RuntimeError("controller_movj_failed")
+        service.api.movj = fail
+        payload = encode_fields((("joint_deg", "1,1,1,1,1,1"), ("accel_pct", 5), ("speed_pct", 5), ("blend_pct", 0)))
+        replies, _ = service.feed(encode_frame("RPA2", "MOVEJ", 1, 1000, payload))
+        self.assertIn("error_code=controller_movj_failed", decode_frame(replies[-1])["payload"])
+
+
+if __name__ == "__main__":
+    unittest.main()

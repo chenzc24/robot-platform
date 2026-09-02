@@ -659,69 +659,25 @@ class ConsoleController(QObject):
     def _chassis_is_idle(self):
         return self.state.chassis.velocity == (0, 0, 0) and self.state.chassis.reported_state == "safe idle"
 
-    def set_arm_manual_unlock(self, unlocked):
-        arm = self.state.arm
-        simulator_ready = (
-            self.state.environment == Environment.SIMULATOR
-            and arm.gateway == LinkState.ONLINE
-            and arm.uart_lan1 == LinkState.ONLINE
-            and arm.controller == LinkState.ONLINE
-            and arm.task == Lifecycle.IDLE
-            and self._chassis_is_idle()
-        )
-        allowed = bool(unlocked and (simulator_ready or self._hardware_arm_l3_ready()))
-        self._replace(arm=replace(arm, manual_unlocked=allowed))
-        self._record("Console", "arm.manual_unlock", Lifecycle.DONE if allowed or not unlocked else Lifecycle.REJECTED, str(allowed).lower())
-        return allowed
-
-    def _hardware_arm_l3_ready(self):
-        """Gate the one reviewed test action; it is not a generic arm enable."""
-        arm, chassis = self.state.arm, self.state.chassis
-        blocking_fault = any(
-            fault.severity in ("fault", "unknown") and fault.source in {"arm", "maixcam", "esp32"}
-            for fault in self.state.faults
-        )
-        return bool(
-            self.state.environment == Environment.HARDWARE
-            and self.runtime is not None
-            and arm.gateway == LinkState.ONLINE
-            and arm.uart_lan1 == LinkState.ONLINE
-            and arm.controller == LinkState.ONLINE
-            and arm.task == Lifecycle.IDLE
-            and arm.motion_permitted
-            and chassis.link == LinkState.ONLINE
-            and chassis.reported_state == "safe idle"
-            and not blocking_fault
-        )
-
-    def can_hardware_arm_l3_test(self):
-        return bool(self._hardware_arm_l3_ready() and self.state.arm.manual_unlocked)
-
-    def execute_hardware_arm_l3_test(self):
-        if not self.can_hardware_arm_l3_test():
-            self._record("Arm", "arm.l3_j1_cycle", Lifecycle.REJECTED, "l3_test_locked")
-            return False
-        self._replace(arm=replace(self.state.arm, task=Lifecycle.RECEIVED, manual_unlocked=False))
-        self.runtime.request_arm_l3_j1_cycle()
-        return True
-
     def can_arm_move(self):
         arm = self.state.arm
         return bool(
-            self.state.environment == Environment.SIMULATOR
-            and arm.gateway == LinkState.ONLINE
+            arm.gateway == LinkState.ONLINE
             and arm.uart_lan1 == LinkState.ONLINE
             and arm.controller == LinkState.ONLINE
             and arm.task == Lifecycle.IDLE
-            and arm.manual_unlocked
-            and self._chassis_is_idle()
-            and not any(fault.severity in ("fault", "unknown") for fault in self.state.faults)
+            and (self.state.environment == Environment.SIMULATOR or arm.motion_permitted)
         )
 
-    def execute_arm(self, command, detail):
+    def execute_arm(self, command, detail, payload=None):
         if not self.can_arm_move():
             self._record("Arm", command, Lifecycle.REJECTED, "motion_locked", detail)
             return False
+        if self.state.environment == Environment.HARDWARE:
+            runtime_command = command.removeprefix("arm.")
+            self._replace(arm=replace(self.state.arm, task=Lifecycle.RECEIVED))
+            self.runtime.request_arm_motion(runtime_command, payload or {})
+            return True
         if self.state.scenario == "arm_rejected":
             self._record("Arm", command, Lifecycle.REJECTED, "simulated_rejection", detail)
             return False
@@ -741,6 +697,29 @@ class ConsoleController(QObject):
         self._record("Arm", command, Lifecycle.ACCEPTED, "simulator_accepted", detail, correlation_id)
         self._record("Arm", command, Lifecycle.RUNNING, "simulator_running", detail, correlation_id)
         return True
+
+    def jog_arm_joint(self, joint_index, delta_deg, accel_pct=5, speed_pct=5):
+        if isinstance(joint_index, bool) or not isinstance(joint_index, int) or not 0 <= joint_index < 6:
+            raise ValueError("invalid_joint_index")
+        delta = [0.0] * 6
+        delta[joint_index] = float(delta_deg)
+        detail = "J%d %+.3f deg" % (joint_index + 1, float(delta_deg))
+        return self.execute_arm(
+            "arm.jog_joint", detail,
+            {"joint_delta_deg": delta, "accel_pct": int(accel_pct), "speed_pct": int(speed_pct)},
+        )
+
+    def jog_arm_xyz(self, axis_index, delta_mm, accel_pct=5, speed_pct=5, user=0, tool=0):
+        if isinstance(axis_index, bool) or not isinstance(axis_index, int) or not 0 <= axis_index < 3:
+            raise ValueError("invalid_axis_index")
+        delta = [0.0] * 3
+        delta[axis_index] = float(delta_mm)
+        detail = "%s %+.3f mm" % ("XYZ"[axis_index], float(delta_mm))
+        return self.execute_arm(
+            "arm.jog_xyz", detail,
+            {"translation_mm": delta, "user": int(user), "tool": int(tool),
+             "accel_pct": int(accel_pct), "speed_pct": int(speed_pct)},
+        )
 
     def complete_arm_command(self):
         if self.state.arm.task != Lifecycle.RUNNING:
@@ -881,12 +860,12 @@ class ConsoleController(QObject):
         elif result.target == "ESP32" and result.command == "heartbeat" and result.lifecycle != Lifecycle.DONE:
             self._stop_manual_chassis_timers()
             self._replace(chassis=replace(self.state.chassis, manual_unlocked=False, velocity=(0, 0, 0)))
-        if result.target == "MaixCam" and result.command == "l3_j1_cycle":
-            self._apply_hardware_arm_l3_result(result)
+        if result.target == "MaixCam" and result.command in {"move_joint", "move_linear", "jog_joint", "jog_xyz", "gripper"}:
+            self._apply_hardware_arm_motion_result(result)
         elif result.target == "MaixCam" and result.command == "status" and result.lifecycle == Lifecycle.DONE:
             self._apply_arm_status(result.payload)
 
-    def _apply_hardware_arm_l3_result(self, result):
+    def _apply_hardware_arm_motion_result(self, result):
         """Record returned MaixCam lifecycle evidence without fabricating pose proof."""
         if result.lifecycle == Lifecycle.DONE and isinstance(result.payload, (list, tuple)):
             for response in result.payload:
@@ -899,14 +878,15 @@ class ConsoleController(QObject):
                     continue
                 payload = response.get("payload") or {}
                 code = payload.get("error_code") or "downstream_%s" % lifecycle.value
-                self._record("Arm", "arm.l3_j1_cycle", lifecycle, code)
+                self._record("Arm", "arm.%s" % result.command, lifecycle, code)
             terminal = result.payload[-1] if result.payload else {}
             terminal_state = terminal.get("lifecycle") if isinstance(terminal, dict) else ""
             task = Lifecycle.IDLE if terminal_state == "DONE" else Lifecycle.FAULT
-            self._replace(arm=replace(self.state.arm, task=task, manual_unlocked=False))
+            self._replace(arm=replace(self.state.arm, task=task))
             self.runtime.request_arm_status()
             return
-        self._replace(arm=replace(self.state.arm, task=Lifecycle.IDLE, manual_unlocked=False))
+        task = Lifecycle.IDLE if result.lifecycle in {Lifecycle.DONE, Lifecycle.REJECTED} else result.lifecycle
+        self._replace(arm=replace(self.state.arm, task=task))
         self.runtime.request_arm_status()
 
     def _apply_chassis_status(self, payload):
@@ -963,6 +943,7 @@ class ConsoleController(QObject):
             task=task,
             reported_state=status.service_state,
             motion_permitted=status.motion_permitted,
+            control_mode=status.control_mode,
             last_error=status.last_error,
             last_status_age_ms=0,
         )

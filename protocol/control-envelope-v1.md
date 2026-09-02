@@ -12,6 +12,12 @@ RECEIVED → REJECTED
 
 `UNKNOWN` means that an arm-affecting result cannot be established. It is never retried automatically. A TCP write, UART write, or TCP232 write is not `DONE`.
 
-The initial command names are `arm.ping`, `arm.status`, `arm.move_joint`, `arm.move_linear`, and `arm.gripper`. The endpoint validates exact payload fields, conservative limits, target/name consistency, one-in-flight ownership, and remaining TTL before it creates an RPA2 request.
+The command names are `arm.ping`, `arm.status`, `arm.jog_joint`, `arm.jog_xyz`,
+`arm.move_joint`, `arm.move_linear`, and `arm.gripper`. The endpoint validates
+exact payload fields, target/name consistency, one-in-flight transport ordering,
+and remaining TTL before it creates an RPA2 request.
 
-Site policy is not carried in commands. The arm controller retains `MOTION_ENABLED=false` until a local policy supplies reviewed joint bounds, Cartesian bounds, user/tool frames, load/tool data, and limits. Missing policy rejects motion.
+Site policy is not carried in commands. The committed templates remain
+default-deny. A device-local `YOLO_MODE=true` deployment enables repeatable
+manual/programmatic motion without an application lease, single-use grant, or
+chassis interlock. The controller's native safeguards remain in force.

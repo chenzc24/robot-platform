@@ -22,6 +22,7 @@ Subsystem and operating documentation:
 - [Daily development session and troubleshooting](docs/development-session.md)
 - [Shared runtime foundation](docs/runtime-foundation.md)
 - [MaixCam-to-arm LAN1 diagnostics and controlled L3 validation](docs/robot-arm/lan1-diagnostic.md)
+- [Robot-arm YOLO manual control](docs/robot-arm/yolo-manual-control.md)
 
 Use the flat CLI from the repository root for routine connection management:
 

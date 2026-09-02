@@ -117,6 +117,14 @@ class FakeArmClient:
         self.calls.append(("move_joint", tuple(joint_deg), accel_pct, speed_pct))
         return self.outcomes["move_joint"]
 
+    def jog_joint(self, joint_delta_deg, accel_pct=5, speed_pct=5):
+        self.calls.append(("jog_joint", tuple(joint_delta_deg), accel_pct, speed_pct))
+        return self.outcomes["jog_joint"]
+
+    def jog_xyz(self, translation_mm, user=0, tool=0, accel_pct=5, speed_pct=5):
+        self.calls.append(("jog_xyz", tuple(translation_mm), user, tool, accel_pct, speed_pct))
+        return self.outcomes["jog_xyz"]
+
 
 def lifecycle(state, payload=None):
     return [{"lifecycle": state, "payload": payload or {}}]
@@ -223,35 +231,32 @@ class RobotCliTests(unittest.TestCase):
         self.assertEqual(clients[0].calls, ["ping", "status"])
         self.assertTrue(clients[0].connection.closed)
 
-    def test_arm_reject_motion_requires_exact_default_deny_response(self):
-        created = []
+    def test_arm_yolo_jog_commands_expose_signed_joint_and_xyz_deltas(self):
         outcomes = {
-            "ping": lifecycle("DONE"),
-            "status": lifecycle("DONE"),
-            "move_joint": lifecycle("REJECTED", {"error_code": "admission_rejected"}),
+            "ping": lifecycle("DONE"), "status": lifecycle("DONE"),
+            "move_joint": lifecycle("DONE"), "jog_joint": lifecycle("DONE"),
+            "jog_xyz": lifecycle("DONE"),
         }
         clients = []
-
-        def factory(host, port, timeout, session_id):
+        def factory(*_args):
             client = FakeArmClient(outcomes)
             clients.append(client)
             return client
 
-        exit_code, output, _manager = run_cli(
-            ["arm", "reject-motion", "--json"], arm_client_factory=factory
+        exit_code, output, _ = run_cli(
+            ["arm", "jog-joint", "--joint", "6", "--delta", "-2", "--speed", "8", "--accel", "7", "--json"],
+            arm_client_factory=factory,
         )
-        payload = json.loads(output)
         self.assertEqual(exit_code, 0)
-        self.assertEqual(payload["code"], "motion_rejected")
-        self.assertEqual(clients[0].calls, [("move_joint", (0, 0, 0, 0, 0, 0), 5, 5)])
-        self.assertTrue(clients[0].connection.closed)
+        self.assertEqual(json.loads(output)["operation"], "arm.jog-joint")
+        self.assertEqual(clients[-1].calls, [("jog_joint", (0.0, 0.0, 0.0, 0.0, 0.0, -2.0), 7, 8)])
 
-        outcomes["move_joint"] = lifecycle("DONE")
-        exit_code, output, _manager = run_cli(
-            ["arm", "reject-motion", "--json"], arm_client_factory=factory
+        exit_code, _output, _ = run_cli(
+            ["arm", "jog-xyz", "--axis", "z", "--delta", "5", "--user", "1", "--tool", "2", "--json"],
+            arm_client_factory=factory,
         )
-        self.assertEqual(exit_code, 1)
-        self.assertEqual(json.loads(output)["code"], "unexpected_motion_outcome")
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(clients[-1].calls, [("jog_xyz", (0.0, 0.0, 5.0), 1, 2, 5, 5)])
 
 
 if __name__ == "__main__":

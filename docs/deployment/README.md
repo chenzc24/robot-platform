@@ -75,6 +75,13 @@ controller project, taught points, and configuration
 
 LAN2 is used to import, save, start, and debug the project; configure taught points, load, safety settings, and controller mode; bind the controller Run/Stop button to a project; and inspect faults and actual state. The observed DobotStudio workflow accepts only `main.py` and `var.py` as code files; build that project with `tools/robot_arm/build_dobotstudio_project.py` from reviewed modular source. The output also includes required import metadata, `prj.json` and an empty `point.json`. Import it as a separate project, preserving the existing controller project when an export backup is not available.
 
+For attended manual engineering, generate the repeatable-motion project with
+`python tools/robot_arm/build_dobotstudio_project.py --output build/robot-arm-yolo --yolo`.
+The matching ignored MaixCam `arm_service_config.py` must set `YOLO_MODE = True`;
+the committed example remains false. Restart the MaixCam arm service after
+deployment, then verify `arm.status` reports `control_mode=yolo` and
+`motion_enabled=1`. No application lease or one-use authorization is involved.
+
 After the project is saved and started, LAN2 can be unplugged and runtime data continues through MaixCam-TCP232-LAN1. RPA1 has passed PING and one fixed action with LAN2 physically disconnected.
 
 Do not infer automatic project start from cold boot. The current power-on sequence requires an on-site person to verify the initial pose, enable the arm, start the project using the configured controller button, and wait for MaixCam's non-motion handshake. Any future auto-start mode requires a separate vendor-supported safety-validation goal.

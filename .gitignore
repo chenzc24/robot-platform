@@ -18,7 +18,6 @@ secrets.*
 /src/esp32/app/secrets.py
 /src/esp32/app/device_config.py
 /src/maixcam/arm/arm_service_config.py
-/src/maixcam/arm/arm_l3_admission.py
 
 # Python
 __pycache__/

@@ -45,7 +45,7 @@ class MaixCamArmClient:
         message_id = "%s-%d" % (self.session_id, sequence)
         command = {"version": 1, "kind": "command", "message_id": message_id, "sequence": sequence,
                    "target": "arm", "name": name, "ttl_ms": ttl_ms, "payload": payload or {}}
-        state_changing = name in ("arm.move_joint", "arm.move_linear", "arm.gripper", "arm.l3_j1_cycle")
+        state_changing = name in ("arm.move_joint", "arm.move_linear", "arm.jog_joint", "arm.jog_xyz", "arm.gripper")
         try:
             self._send_all(encode_message(command))
             states = []
@@ -71,8 +71,11 @@ class MaixCamArmClient:
         return self.command("arm.move_joint", {"joint_deg": list(joint_deg), "accel_pct": accel_pct, "speed_pct": speed_pct}, ttl_ms)
     def move_linear(self, pose, user=0, tool=0, accel_pct=5, speed_pct=5, ttl_ms=60000):
         return self.command("arm.move_linear", {"pose": list(pose), "user": user, "tool": tool, "accel_pct": accel_pct, "speed_pct": speed_pct}, ttl_ms)
+    def jog_joint(self, joint_delta_deg, accel_pct=5, speed_pct=5, ttl_ms=60000):
+        return self.command("arm.jog_joint", {"joint_delta_deg": list(joint_delta_deg), "accel_pct": accel_pct, "speed_pct": speed_pct}, ttl_ms)
+    def jog_xyz(self, translation_mm, user=0, tool=0, accel_pct=5, speed_pct=5, ttl_ms=60000):
+        return self.command("arm.jog_xyz", {"translation_mm": list(translation_mm), "user": user, "tool": tool, "accel_pct": accel_pct, "speed_pct": speed_pct}, ttl_ms)
     def gripper(self, width_mm, ttl_ms=2000): return self.command("arm.gripper", {"width_mm": width_mm}, ttl_ms)
-    def l3_j1_cycle(self, ttl_ms=15000): return self.command("arm.l3_j1_cycle", {}, ttl_ms)
 
 
 def open_connection(host, port, timeout_seconds=3):

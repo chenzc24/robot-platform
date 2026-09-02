@@ -71,6 +71,7 @@ class ArmState:
     task: Lifecycle = Lifecycle.IDLE
     reported_state: str = "unknown"
     motion_permitted: bool = False
+    control_mode: str = "production"
     last_error: str = "none"
     manual_unlocked: bool = False
     last_status_age_ms: Optional[int] = None

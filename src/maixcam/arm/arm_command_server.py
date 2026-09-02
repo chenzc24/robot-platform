@@ -32,16 +32,12 @@ def _deny_motion(_message):
 
 def _service(gateway, config):
     """Create a computer session while retaining process-owned RPA2 sequencing."""
-    permitted = getattr(config, "PERMITTED_MOTION_NAMES", ())
-    try:
-        import arm_l3_admission
-        permitted = getattr(arm_l3_admission, "PERMITTED_MOTION_NAMES", permitted)
-    except ImportError:
-        pass
-    if not isinstance(permitted, (list, tuple, set)):
-        permitted = ()
-    permitted = frozenset(item for item in permitted if isinstance(item, str))
-    return ArmCommandService(gateway, admission=lambda message: message["name"] in permitted)
+    yolo_mode = getattr(config, "YOLO_MODE", False) is True
+    return ArmCommandService(
+        gateway,
+        admission=(lambda _message: yolo_mode),
+        motion_enabled=yolo_mode,
+    )
 
 
 def _initial_downstream_sequence(clock=None):
@@ -67,8 +63,6 @@ def serve_forever(socket_module=None, uart_factory=None):
             connection, _ = listener.accept()
             try:
                 connection.settimeout(0.05)
-                # Default deny. A future L3 goal must separately supply a reviewed
-                # controller policy and computer-side cross-device admission.
                 service = _service(gateway, config)
                 runtime = ArmCommandRuntime(service, connection, uart)
                 runtime.run_forever()

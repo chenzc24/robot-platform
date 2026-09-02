@@ -6,8 +6,15 @@ Queries use `PING → PONG` and `STATUS → STATE`. Accepted state-changing requ
 
 MaixCam never retries a state-changing RPA2 frame. A write followed by timeout maps to `UNKNOWN` at the computer boundary.
 
-`L3J1CYCLE` is a temporary, parameterless RPA2 request for the attended console
-L3 validation only. A reviewed controller project may arm it exactly once;
-it executes relative J1 `+1°`, waits one second, then `-1°` at 5% speed and
-acceleration. Generic motion commands remain independently denied. It must not
-be enabled or sent outside a current on-site L3 safety gate.
+The engineering project sets `YOLO_MODE=true` and accepts repeatable commands:
+
+- `RELJOINT`: `joint_delta_deg` has six finite values and maps directly to
+  `RelJointMovJ`.
+- `RELLINEAR`: `translation_mm` has three finite X/Y/Z values and maps to
+  `RelMovLUser` with zero rotational delta.
+- `MOVEJ`, `MOVEL`, and `GRIPPER` remain available to programmatic clients.
+
+Acceleration and speed are integer percentages from 1 through 100. Blending is
+disabled. The application does not add a lease, one-use token, repeated enable,
+or chassis-state gate in YOLO mode. Dobot controller limits, collision handling,
+emergency stop, and recovery remain authoritative.

@@ -39,13 +39,24 @@ class ArmCommandServiceTests(unittest.TestCase):
         self.assertEqual(result[-1]["payload"]["error_code"], "admission_rejected")
         self.assertEqual(self.writes, [])
 
-    def test_named_l3_cycle_is_the_only_motion_allowed_by_its_admission(self):
-        service = ArmCommandService(self.gateway, admission=lambda message: message["name"] == "arm.l3_j1_cycle")
-        rejected = self.messages(service.feed_computer(encode_message(command("arm.gripper", {"width_mm": 10}))))
-        self.assertEqual(rejected[-1]["payload"]["error_code"], "admission_rejected")
-        accepted = self.messages(service.feed_computer(encode_message(command("arm.l3_j1_cycle", sequence=2))))
+    def test_yolo_admission_allows_repeatable_joint_jog(self):
+        service = ArmCommandService(self.gateway, admission=lambda _message: True, motion_enabled=True)
+        payload = {"joint_delta_deg": [2, 0, 0, 0, 0, 0], "accel_pct": 5, "speed_pct": 5}
+        accepted = self.messages(service.feed_computer(encode_message(command("arm.jog_joint", payload))))
         self.assertEqual([item["lifecycle"] for item in accepted], ["RECEIVED", "ACCEPTED"])
-        self.assertEqual(decode_frame(self.writes[-1])["type"], "L3J1CYCLE")
+        self.assertEqual(decode_frame(self.writes[-1])["type"], "RELJOINT")
+        service.feed_uart(encode_frame("RPA2", "ACK", 1, 0))
+        service.feed_uart(encode_frame("RPA2", "RUNNING", 1, 0))
+        service.feed_uart(encode_frame("RPA2", "DONE", 1, 0))
+        again = self.messages(service.feed_computer(encode_message(command("arm.jog_joint", payload, sequence=2))))
+        self.assertEqual([item["lifecycle"] for item in again], ["RECEIVED", "ACCEPTED"])
+        self.assertTrue(service.snapshot()["motion_enabled"])
+
+    def test_xyz_jog_maps_to_relative_linear(self):
+        service = ArmCommandService(self.gateway, admission=lambda _message: True)
+        payload = {"translation_mm": [0, 0, 5], "user": 0, "tool": 0, "accel_pct": 5, "speed_pct": 5}
+        service.feed_computer(encode_message(command("arm.jog_xyz", payload)))
+        self.assertEqual(decode_frame(self.writes[-1])["type"], "RELLINEAR")
 
     def test_motion_timeout_is_unknown_and_not_retried(self):
         clock = [0]

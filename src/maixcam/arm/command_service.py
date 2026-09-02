@@ -4,12 +4,13 @@ from control_envelope import EnvelopeStreamDecoder, encode_message, lifecycle, v
 from arm_motion_gateway import ArmMotionGatewayError, arm_payload
 
 
-MOTION_NAMES = {"arm.move_joint", "arm.move_linear", "arm.gripper", "arm.l3_j1_cycle"}
+MOTION_NAMES = {"arm.move_joint", "arm.move_linear", "arm.jog_joint", "arm.jog_xyz", "arm.gripper"}
 
 
 class ArmCommandService:
-    def __init__(self, gateway, admission=None):
+    def __init__(self, gateway, admission=None, motion_enabled=False):
         self.gateway, self.admission = gateway, admission
+        self.motion_enabled = motion_enabled is True
         self.decoder, self.active = EnvelopeStreamDecoder(), None
         self.last_sequence = 0
 
@@ -84,4 +85,4 @@ class ArmCommandService:
 
     def snapshot(self):
         return {"gateway": self.gateway.snapshot(), "active_message_id": None if self.active is None else self.active["message_id"],
-                "motion_enabled": False, "terminal_position_supported": False, "cancel_supported": False}
+                "motion_enabled": self.motion_enabled, "terminal_position_supported": False, "cancel_supported": False}

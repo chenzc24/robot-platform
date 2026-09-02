@@ -179,27 +179,33 @@ Each hop can be `Online`, `Degraded`, `Offline`, or `Unknown`. The panel also sh
 
 ### 7.2 Control tabs
 
-The first implementation provides three tabs matching current candidate calls:
+The engineering UI provides five compact tabs:
 
-1. **Joint**: six target joint-angle fields, acceleration percentage, speed percentage, validation summary, and `Execute joint move`.
-2. **Cartesian**: `x`, `y`, `z`, `rx`, `ry`, `rz`, user frame, tool frame, acceleration percentage, speed percentage, and `Execute linear move`.
-3. **Gripper**: requested width in millimetres and `Set gripper width`.
+1. **J1-J6 jog**: repeatable `- / +` movement with a default 2-degree step.
+2. **XYZ jog**: repeatable user-coordinate `- / +` movement with a default 5-mm step.
+3. **Absolute J**: six target joint-angle fields and `Execute joint move`.
+4. **Absolute XYZ**: `x`, `y`, `z`, `rx`, `ry`, `rz` and `Execute linear move`.
+5. **Gripper**: requested width in millimetres and `Set gripper width`.
 
 Current and target values use separate rows. Until the arm returns measured pose, current values show `Unavailable`; they must never echo the command target as measured state.
 
-Named actions such as `Safe pose`, `Pick`, and `Place`, initialization, jogging, queue cancellation, and trajectory editing are future controls. They are not displayed as working actions until matching protocol commands and admission rules exist.
+Named actions such as `Safe pose`, `Pick`, and `Place`, queue cancellation, and
+trajectory editing remain future controls.
 
 ### 7.3 Arm command gate
 
-An arm motion command requires:
+In YOLO/manual engineering mode an arm motion command requires only:
 
 - computer-to-MaixCam session online;
 - MaixCam-to-arm non-motion readiness handshake fresh;
 - arm controller and project ready;
-- command parameters within configured bounds;
 - no command already running;
-- chassis confirmed stopped by trustworthy state evidence;
-- operator motion unlock for the current session.
+- the controller project and MaixCam endpoint both reporting motion enabled.
+
+It does not require an application lease, one-use permission, repeated enable,
+UI unlock checkbox, or ESP32/chassis state. Message shape and finite numeric
+validation remain active. Dobot controller limits, collision handling, recovery,
+and emergency stop remain authoritative.
 
 The command button changes to lifecycle status but does not become a second cancel control. `UNKNOWN` is terminal from the console's point of view: the UI locks further non-idempotent arm actions and asks the operator to inspect the device rather than retrying automatically.
 
@@ -329,7 +335,10 @@ The synchronous clients require worker wrappers, connection lifecycle management
 
 ### 12.3 Later single-device motion
 
-Only after a separate L3 safety gate, deploy and validate one device at low speed. The UI shows an explicit session-scoped motion unlock, limits, expected movement, and stop conditions. Chassis and arm are validated separately before any coordinated L4 task.
+Only after the current L3 safety gate, deploy and validate one device at low
+speed. The arm engineering UI does not add a session unlock; chassis and arm
+remain independent during manual debugging. Coordinated behavior belongs to a
+separate L4 orchestrator.
 
 ## 13. Visual language
 
@@ -390,7 +399,7 @@ The Phase B hardening pass accepts only the exact current status schemas: ESP32 
 - Simulator and hardware modes are visually unmistakable.
 - Video, ESP32, MaixCam, and arm state can disagree without being collapsed into one green indicator.
 - Faults remain visible and traceable to sanitized command evidence.
-- The interface restores no lease, unlock, velocity, arm target, or pending action after restart.
+- The interface restores no chassis lease, velocity, arm target, or pending action after restart.
 - At 1280 x 720, video and both device panels remain reachable without clipped essential actions.
 - Real motion remains impossible until its separate safety and validation gate is satisfied.
 
@@ -398,6 +407,6 @@ The Phase B hardening pass accepts only the exact current status schemas: ESP32 
 
 1. Accept PySide6 as the desktop toolkit and PyAV as the first video decoder.
 2. Accept the video-left, controls-right, diagnostics-bottom layout.
-3. Accept separate session-scoped motion unlocks for chassis and arm.
+3. Accept a chassis session unlock and an independent arm YOLO/manual mode.
 4. Accept that the initial arm panel exposes joint, Cartesian, and gripper targets only; named actions arrive after their protocol exists.
 5. Accept that the current top-level stop is explicitly chassis-only until an arm cancel contract is implemented and validated.

@@ -29,7 +29,17 @@ No credential, host address, or runtime port is hard-coded in these modules. Rea
 
 Phase A adds a PySide6 desktop shell in `ui/`. It implements the approved video-first layout, independent chassis and arm controls, command journal, persistent fault list, and deterministic simulator scenarios.
 
-Phase B adds local runtime foundations without admitting hardware motion: separate FIFO background sessions for the existing direct ESP32 and MaixCam-arm clients, a copied-frame PyAV RTSP worker, and a secret-free local configuration loader. No connection starts automatically and no action is retried automatically. In `Hardware` mode, the console may request an explicit connection, `PING`/`STATUS`, a disconnection, preview frames, and a local snapshot; lease, enable, velocity, arm movement, and chassis software stop remain disabled or rejected.
+Phase B adds separate background sessions for the direct ESP32 and MaixCam-arm
+clients, a copied-frame PyAV RTSP worker, and a secret-free local configuration
+loader. No connection starts automatically and no state-changing action is
+retried automatically.
+
+The Hardware arm panel supports YOLO/manual engineering mode. Once the MaixCam
+route and controller report `control_mode=yolo` and `motion_enabled=1`, J1-J6
+and X/Y/Z jogs, absolute joint/Cartesian requests, and gripper requests are
+available without an application lease, one-use grant, unlock checkbox, or
+chassis dependency. The same commands are exposed through
+`MaixCamArmClient` and `robot arm jog-joint` / `robot arm jog-xyz`.
 
 The optional [Hardware Manual Chassis Debug](../../docs/console/manual-chassis-debug.md)
 surface admits the deployed ESP32 L3 lifecycle only when the ignored local

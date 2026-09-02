@@ -164,4 +164,16 @@ Completed evidence as of 2026-09-01 includes ESP32 USB/WebREPL maintenance, PS2-
 7. Raw vendor-resource directories are excluded from Git.
 8. The unified console may hold independent chassis and arm sessions, but each device still permits only one authorized runtime owner.
 
+## 11. Manual Engineering Mode
+
+For attended development, the robot arm supports an explicit YOLO/manual
+engineering mode. This mode is independent of the chassis and permits the
+computer API and Hardware console to issue repeatable relative jog commands for
+J1-J6 and user-coordinate X/Y/Z. It does not use an application lease, one-use
+token, repeated software enable, or chassis-idle interlock. Protocol framing,
+numeric validation, sequence tracking, and error reporting remain active;
+physical joint limits, collision protection, emergency stop, and recovery stay
+with the Dobot controller. Coordinated production tasks remain a separate mode
+and may add orchestration interlocks above these independent device APIs.
+
 Update this document and obtain user confirmation before changing these decisions.

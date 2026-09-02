@@ -136,20 +136,30 @@ def build_parser():
 
     arm = subparsers.add_parser(
         "arm",
-        help="Run direct, non-motion diagnostics against the MaixCam arm endpoint",
+        help="Inspect or control the MaixCam robot-arm endpoint",
     )
     arm_commands = arm.add_subparsers(dest="arm_command", required=True)
     for command, help_text in (
         ("ping", "Send one arm PING and print its terminal lifecycle"),
         ("status", "Send one arm STATUS and print its terminal lifecycle"),
         ("check", "Run one PING then one STATUS on the same arm session"),
-        (
-            "reject-motion",
-            "Prove the deployed default-deny policy rejects a harmless test joint request",
-        ),
     ):
         subparser = arm_commands.add_parser(command, help=help_text)
         _add_arm_options(subparser)
+    jog_joint = arm_commands.add_parser("jog-joint", help="Move one joint by a signed relative angle")
+    jog_joint.add_argument("--joint", required=True, type=int, choices=range(1, 7))
+    jog_joint.add_argument("--delta", type=float, default=2.0, help="signed degrees")
+    jog_joint.add_argument("--speed", type=int, default=5, choices=range(1, 101))
+    jog_joint.add_argument("--accel", type=int, default=5, choices=range(1, 101))
+    _add_arm_options(jog_joint)
+    jog_xyz = arm_commands.add_parser("jog-xyz", help="Move one user-coordinate axis by a signed distance")
+    jog_xyz.add_argument("--axis", required=True, choices=("x", "y", "z"))
+    jog_xyz.add_argument("--delta", type=float, default=5.0, help="signed millimetres")
+    jog_xyz.add_argument("--user", type=int, default=0, choices=range(0, 10))
+    jog_xyz.add_argument("--tool", type=int, default=0, choices=range(0, 10))
+    jog_xyz.add_argument("--speed", type=int, default=5, choices=range(1, 101))
+    jog_xyz.add_argument("--accel", type=int, default=5, choices=range(1, 101))
+    _add_arm_options(jog_xyz)
     return parser
 
 
@@ -271,7 +281,7 @@ def _diagnostic_output(command, result):
 
 
 def _run_arm_diagnostic(args, arm_client_factory):
-    """Run a single non-retrying endpoint probe and always close its socket."""
+    """Run one non-retrying arm operation and always close its socket."""
     client = None
     operation = "arm.%s" % args.arm_command
     try:
@@ -311,12 +321,25 @@ def _run_arm_diagnostic(args, arm_client_factory):
             state = status_payload.get("downstream_payload", "unknown")
             return Feedback("READY", operation, "ok", "arm PING and STATUS completed", output=output, action="Controller state: %s" % state)
 
-        if args.arm_command == "reject-motion":
-            result = client.move_joint((0, 0, 0, 0, 0, 0), accel_pct=5, speed_pct=5)
+        if args.arm_command == "jog-joint":
+            delta = [0.0] * 6
+            delta[args.joint - 1] = args.delta
+            result = client.jog_joint(delta, accel_pct=args.accel, speed_pct=args.speed)
             lifecycle, payload = _terminal_lifecycle(result)
-            if lifecycle == "REJECTED" and payload.get("error_code") == "admission_rejected":
-                return Feedback("READY", operation, "motion_rejected", "default-deny motion policy confirmed", output=_diagnostic_output("arm.move_joint", result))
-            return Feedback("DEGRADED", operation, "unexpected_motion_outcome", "default-deny policy was not confirmed", output=_diagnostic_output("arm.move_joint", result), action="Do not send further arm commands; inspect MaixCam admission policy")
+            output = _diagnostic_output("arm.jog_joint", result)
+            if lifecycle == "DONE":
+                return Feedback("READY", operation, "ok", "joint jog completed", output=output)
+            return Feedback("DEGRADED", operation, payload.get("error_code", "unexpected_lifecycle"), "joint jog did not complete", output=output)
+
+        if args.arm_command == "jog-xyz":
+            delta = [0.0] * 3
+            delta[("x", "y", "z").index(args.axis)] = args.delta
+            result = client.jog_xyz(delta, user=args.user, tool=args.tool, accel_pct=args.accel, speed_pct=args.speed)
+            lifecycle, payload = _terminal_lifecycle(result)
+            output = _diagnostic_output("arm.jog_xyz", result)
+            if lifecycle == "DONE":
+                return Feedback("READY", operation, "ok", "XYZ jog completed", output=output)
+            return Feedback("DEGRADED", operation, payload.get("error_code", "unexpected_lifecycle"), "XYZ jog did not complete", output=output)
 
         raise ValueError("unsupported_arm_diagnostic")
     except Exception as error:

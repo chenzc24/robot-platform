@@ -112,10 +112,14 @@ def arm_payload(name, payload):
     if name in ("arm.ping", "arm.status"):
         if payload: raise ArmMotionGatewayError("invalid_payload_fields")
         return ("PING" if name.endswith("ping") else "STATUS"), ""
-    if name == "arm.l3_j1_cycle":
-        if payload:
+    if name == "arm.jog_joint":
+        if set(payload) != {"joint_delta_deg", "accel_pct", "speed_pct"} or not isinstance(payload["joint_delta_deg"], (list, tuple)) or len(payload["joint_delta_deg"]) != 6:
             raise ArmMotionGatewayError("invalid_payload_fields")
-        return "L3J1CYCLE", ""
+        return "RELJOINT", encode_fields((("joint_delta_deg", ",".join(str(item) for item in payload["joint_delta_deg"])), ("accel_pct", payload["accel_pct"]), ("speed_pct", payload["speed_pct"]), ("blend_pct", 0)))
+    if name == "arm.jog_xyz":
+        if set(payload) != {"translation_mm", "user", "tool", "accel_pct", "speed_pct"} or not isinstance(payload["translation_mm"], (list, tuple)) or len(payload["translation_mm"]) != 3:
+            raise ArmMotionGatewayError("invalid_payload_fields")
+        return "RELLINEAR", encode_fields((("translation_mm", ",".join(str(item) for item in payload["translation_mm"])), ("user", payload["user"]), ("tool", payload["tool"]), ("accel_pct", payload["accel_pct"]), ("speed_pct", payload["speed_pct"]), ("blend_mm", 0)))
     if name == "arm.move_joint":
         if set(payload) != {"joint_deg", "accel_pct", "speed_pct"} or not isinstance(payload["joint_deg"], (list, tuple)) or len(payload["joint_deg"]) != 6:
             raise ArmMotionGatewayError("invalid_payload_fields")

@@ -41,13 +41,16 @@ class DobotStudioProjectBuilderTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unexpected_files"):
                 builder.build(output)
 
-    def test_l3_option_changes_only_the_one_use_test_policy(self):
+    def test_yolo_option_enables_repeatable_engineering_policy(self):
         with tempfile.TemporaryDirectory() as directory:
             output = pathlib.Path(directory) / "dobotstudio-project"
-            builder.build(output, l3_j1_cycle=True)
+            builder.build(output, yolo=True)
             policy = (output / "var.py").read_text(encoding="utf-8")
             self.assertIn("MOTION_ENABLED = False", policy)
-            self.assertIn("L3_TEST_ACTION_ENABLED = True", policy)
+            self.assertIn("YOLO_MODE = True", policy)
+            main = (output / "main.py").read_text(encoding="utf-8")
+            self.assertIn("RelJointMovJ", main)
+            self.assertIn("RelMovLUser", main)
 
 
 if __name__ == "__main__":

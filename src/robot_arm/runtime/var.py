@@ -1,12 +1,17 @@
 """Local Magician E6 RPA2 policy template.
 
-Copy to the controller project and fill only after a reviewed L3 safety goal.
-Leaving any bounds as None keeps all motion disabled.
+The tracked template is default-deny. The project builder creates a YOLO/manual
+engineering variant without altering this source file.
 """
 
 LISTEN_IP = "192.168.5.1"
 LISTEN_PORT = 5200
 
+# The generated engineering project sets YOLO_MODE=True. In that mode the
+# application accepts repeatable relative and absolute commands; the Dobot
+# controller remains responsible for its native limits, collision response,
+# emergency stop, and recovery.
+YOLO_MODE = False
 MOTION_ENABLED = False
 JOINT_MIN_DEG = None
 JOINT_MAX_DEG = None
@@ -16,13 +21,6 @@ MAX_ACCEL_PCT = 20
 MAX_SPEED_PCT = 20
 GRIPPER_MIN_MM = 0
 GRIPPER_MAX_MM = 70
-
-# One-use supervised L3 action. It remains false in the committed runtime
-# template and is enabled only in the separately reviewed temporary deployment.
-L3_TEST_ACTION_ENABLED = False
-L3_TEST_J1_STEP_DEG = 1.0
-L3_TEST_ACCEL_PCT = 5
-L3_TEST_SPEED_PCT = 5
 
 # Human-reviewed, non-executable deployment record. Do not invent values.
 SAFE_INITIAL_POSE = None

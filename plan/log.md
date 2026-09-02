@@ -692,4 +692,32 @@ entry format:
 - Hardware: MaixCam arm route only, with the user-installed default-deny
   controller retained. No physical arm action, controller configuration,
   TCP232 write, or LAN2 operation was sent.
-- Commit status: pending.
+- Commit status: included in the current
+  `feat(arm): add repeatable YOLO manual jog control` feature commit; push
+  pending.
+
+## 2026-09-02 - Replace one-use arm permission with YOLO manual control
+
+- Goal: expose repeatable J1-J6 and user-coordinate X/Y/Z engineering motion
+  through the computer API, CLI, MaixCam route, controller service, and Hardware
+  UI without an application lease, one-use grant, repeated enable, UI unlock,
+  or chassis dependency.
+- Modified scope: arm RPA2/control-envelope contracts, controller runtime and
+  project builder, MaixCam routing/configuration, computer client/runtime/UI,
+  CLI, focused documentation/tests, and goal records. ESP32/CAN behavior,
+  TCP232/network settings, controller safety configuration, taught points,
+  payload, user/tool calibration, and raw resources were unchanged.
+- Implementation: YOLO mode maps `arm.jog_joint` to `RelJointMovJ` and
+  `arm.jog_xyz` to `RelMovLUser`; default UI steps are 2 degrees and 5 mm.
+  Absolute arm commands remain programmatically available. The tracked and
+  generated defaults remain distinguishable through `control_mode` status.
+- Validation: L1 passed 172 tests plus 6 subtests across protocol, robot-arm,
+  MaixCam, console, and development tooling; generated-controller compilation,
+  UI smoke construction, and diff-format validation passed. Whole-repository
+  collection still hits the pre-existing duplicate `chassis_tcp_probe` test
+  import collision.
+- Hardware: no deployment, device write, configuration change, or real motion
+  was performed for the YOLO build. The ignored import package is available at
+  `build/robot-arm-yolo` for the next explicitly requested L2/L3 session.
+- Commit status: committed on `target/arm-yolo-manual-control` with
+  `feat(arm): add repeatable YOLO manual jog control`; push pending.

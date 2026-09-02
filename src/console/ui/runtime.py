@@ -18,7 +18,7 @@ from .runtime_config import RuntimeConfig
 SAFE_CHASSIS_COMMANDS = {"ping", "status"}
 SAFE_ARM_COMMANDS = {"ping", "status"}
 MOTION_CHASSIS_COMMANDS = {"acquire", "heartbeat", "enable", "velocity", "stop", "disable", "release"}
-MOTION_ARM_COMMANDS = {"move_joint", "move_linear", "gripper", "l3_j1_cycle"}
+MOTION_ARM_COMMANDS = {"move_joint", "move_linear", "jog_joint", "jog_xyz", "gripper"}
 
 
 @dataclass(frozen=True)
@@ -141,8 +141,13 @@ def _arm_dispatch(client, command, payload):
         "move_linear": lambda: client.move_linear(
             payload["pose"], payload.get("user", 0), payload.get("tool", 0), payload.get("accel_pct", 5), payload.get("speed_pct", 5)
         ),
+        "jog_joint": lambda: client.jog_joint(
+            payload["joint_delta_deg"], payload.get("accel_pct", 5), payload.get("speed_pct", 5)
+        ),
+        "jog_xyz": lambda: client.jog_xyz(
+            payload["translation_mm"], payload.get("user", 0), payload.get("tool", 0), payload.get("accel_pct", 5), payload.get("speed_pct", 5)
+        ),
         "gripper": lambda: client.gripper(payload["width_mm"]),
-        "l3_j1_cycle": lambda: client.l3_j1_cycle(),
     }
     if command not in handlers:
         raise ValueError("unsupported_arm_command")
@@ -454,7 +459,7 @@ class RuntimeCoordinator(QObject):
             "MaixCam",
             arm_factory or (lambda: _default_arm_factory(config.arm)),
             _arm_dispatch,
-            SAFE_ARM_COMMANDS | {"l3_j1_cycle"},
+            SAFE_ARM_COMMANDS | MOTION_ARM_COMMANDS,
             MOTION_ARM_COMMANDS,
             self,
         )
@@ -539,8 +544,11 @@ class RuntimeCoordinator(QObject):
     def request_arm_status(self):
         self.arm.request("status")
 
-    def request_arm_l3_j1_cycle(self):
-        self.arm.request("l3_j1_cycle")
+    def request_arm_motion(self, command, payload=None):
+        if command not in MOTION_ARM_COMMANDS:
+            raise ValueError("unsupported_arm_motion_command")
+        self.arm.request(command, payload)
+        return True
 
     def close(self):
         self.chassis.close()

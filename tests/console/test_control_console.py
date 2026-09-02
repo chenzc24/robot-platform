@@ -29,7 +29,6 @@ class ConsoleControllerTests(unittest.TestCase):
 
     def _ready_arm(self):
         self.assertTrue(self.controller.connect_arm())
-        self.assertTrue(self.controller.set_arm_manual_unlock(True))
 
     def test_safe_defaults_lock_every_motion_path(self):
         state = self.controller.state
@@ -37,7 +36,7 @@ class ConsoleControllerTests(unittest.TestCase):
         self.assertEqual(state.video.link, LinkState.OFFLINE)
         self.assertFalse(state.chassis.motion_enabled)
         self.assertFalse(state.chassis.manual_unlocked)
-        self.assertFalse(state.arm.manual_unlocked)
+        self.assertFalse(state.arm.motion_permitted)
         self.assertFalse(self.controller.can_chassis_move())
         self.assertFalse(self.controller.can_arm_move())
         self.assertFalse(self.controller.chassis_velocity(1, 0, 0))

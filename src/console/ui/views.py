@@ -462,11 +462,9 @@ class MainWindow(QMainWindow):
         arm_session.setContentsMargins(10, 4, 10, 6)
         self.arm_connect_button = QPushButton("Connect arm route")
         self.arm_recheck_button = QPushButton("Recheck status")
-        self.arm_unlock = QCheckBox("Manual motion unlocked (simulator)")
         arm_session.addWidget(self.arm_connect_button)
         arm_session.addWidget(self.arm_recheck_button)
         arm_session.addStretch(1)
-        arm_session.addWidget(self.arm_unlock)
         layout.addLayout(arm_session)
 
         self.arm_runtime_detail = _label("Route offline. Connect to request arm status.", "muted")
@@ -477,19 +475,45 @@ class MainWindow(QMainWindow):
         detail_layout.addWidget(self.arm_runtime_detail, 1)
         layout.addWidget(detail_frame)
 
-        self.arm_l3_test_frame = QFrame()
-        l3_layout = QHBoxLayout(self.arm_l3_test_frame)
-        l3_layout.setContentsMargins(10, 2, 10, 7)
-        self.arm_l3_unlock = QCheckBox("Confirm attended L3 J1 test")
-        self.arm_l3_execute_button = QPushButton("Run J1 +1° / -1° test")
-        self.arm_l3_test_detail = _label("One use only: 5% speed/acceleration; returns to the start angle.", "muted")
-        self.arm_l3_test_detail.setWordWrap(True)
-        l3_layout.addWidget(self.arm_l3_unlock)
-        l3_layout.addWidget(self.arm_l3_execute_button)
-        l3_layout.addWidget(self.arm_l3_test_detail, 1)
-        layout.addWidget(self.arm_l3_test_frame)
-
         self.arm_tabs = QTabWidget()
+        joint_jog_page = QWidget()
+        joint_jog_layout = QGridLayout(joint_jog_page)
+        joint_jog_layout.setContentsMargins(10, 8, 10, 8)
+        self.joint_jog_step = self._spin(2.0, 0.1, 360.0, " deg")
+        self.arm_jog_speed = self._spin(5.0, 1.0, 100.0, " %")
+        self.arm_jog_accel = self._spin(5.0, 1.0, 100.0, " %")
+        joint_jog_layout.addWidget(_label("Step"), 0, 0)
+        joint_jog_layout.addWidget(self.joint_jog_step, 0, 1)
+        joint_jog_layout.addWidget(_label("Speed"), 0, 2)
+        joint_jog_layout.addWidget(self.arm_jog_speed, 0, 3)
+        joint_jog_layout.addWidget(_label("Accel"), 0, 4)
+        joint_jog_layout.addWidget(self.arm_jog_accel, 0, 5)
+        self.joint_jog_buttons = []
+        for index in range(6):
+            row, column = 1 + index // 2, (index % 2) * 3
+            minus, plus = QPushButton("−"), QPushButton("+")
+            joint_jog_layout.addWidget(_label("J%d" % (index + 1)), row, column)
+            joint_jog_layout.addWidget(minus, row, column + 1)
+            joint_jog_layout.addWidget(plus, row, column + 2)
+            self.joint_jog_buttons.extend((minus, plus))
+        self.arm_tabs.addTab(joint_jog_page, "J1-J6 jog")
+
+        xyz_jog_page = QWidget()
+        xyz_jog_layout = QGridLayout(xyz_jog_page)
+        xyz_jog_layout.setContentsMargins(10, 8, 10, 8)
+        self.xyz_jog_step = self._spin(5.0, 0.1, 500.0, " mm")
+        xyz_jog_layout.addWidget(_label("Step"), 0, 0)
+        xyz_jog_layout.addWidget(self.xyz_jog_step, 0, 1)
+        xyz_jog_layout.addWidget(_label("Uses the same speed and acceleration from J1-J6 jog."), 0, 2, 1, 4)
+        self.xyz_jog_buttons = []
+        for index, axis in enumerate("XYZ"):
+            minus, plus = QPushButton("−"), QPushButton("+")
+            xyz_jog_layout.addWidget(_label(axis), index + 1, 0)
+            xyz_jog_layout.addWidget(minus, index + 1, 1)
+            xyz_jog_layout.addWidget(plus, index + 1, 2)
+            self.xyz_jog_buttons.extend((minus, plus))
+        self.arm_tabs.addTab(xyz_jog_page, "XYZ jog")
+
         joint_page, self.joint_spins, joint_layout = self._form_page(
             ("J1", "J2", "J3", "J4", "J5", "J6"),
             (0.0, -18.0, 32.0, 0.0, 76.0, 0.0),
@@ -497,7 +521,7 @@ class MainWindow(QMainWindow):
         self.joint_execute_button = QPushButton("Execute joint move")
         joint_layout.addWidget(_label("Measured joint pose: unavailable", "muted"), 2, 0, 1, 2)
         joint_layout.addWidget(self.joint_execute_button, 2, 2)
-        self.arm_tabs.addTab(joint_page, "Joint")
+        self.arm_tabs.addTab(joint_page, "Absolute J")
 
         cartesian_page, self.cartesian_spins, cartesian_layout = self._form_page(
             ("X", "Y", "Z", "Rx", "Ry", "Rz"),
@@ -507,7 +531,7 @@ class MainWindow(QMainWindow):
         self.linear_execute_button = QPushButton("Execute linear move")
         cartesian_layout.addWidget(_label("Measured Cartesian pose: unavailable", "muted"), 2, 0, 1, 2)
         cartesian_layout.addWidget(self.linear_execute_button, 2, 2)
-        self.arm_tabs.addTab(cartesian_page, "Cartesian")
+        self.arm_tabs.addTab(cartesian_page, "Absolute XYZ")
 
         gripper_page = QWidget()
         gripper_layout = QHBoxLayout(gripper_page)
@@ -580,9 +604,12 @@ class MainWindow(QMainWindow):
         self.angular_slider.valueChanged.connect(self._update_limit_labels)
         self.arm_connect_button.clicked.connect(self._toggle_arm_connection)
         self.arm_recheck_button.clicked.connect(self.controller.recheck)
-        self.arm_unlock.toggled.connect(self.controller.set_arm_manual_unlock)
-        self.arm_l3_unlock.toggled.connect(self.controller.set_arm_manual_unlock)
-        self.arm_l3_execute_button.clicked.connect(self.controller.execute_hardware_arm_l3_test)
+        for index in range(6):
+            self.joint_jog_buttons[index * 2].clicked.connect(lambda _checked=False, i=index: self._jog_joint(i, -1))
+            self.joint_jog_buttons[index * 2 + 1].clicked.connect(lambda _checked=False, i=index: self._jog_joint(i, 1))
+        for index in range(3):
+            self.xyz_jog_buttons[index * 2].clicked.connect(lambda _checked=False, i=index: self._jog_xyz(i, -1))
+            self.xyz_jog_buttons[index * 2 + 1].clicked.connect(lambda _checked=False, i=index: self._jog_xyz(i, 1))
         self.joint_execute_button.clicked.connect(self._execute_joint)
         self.linear_execute_button.clicked.connect(self._execute_linear)
         self.gripper_execute_button.clicked.connect(self._execute_gripper)
@@ -635,17 +662,34 @@ class MainWindow(QMainWindow):
 
     def _execute_joint(self):
         detail = ", ".join("%.1f" % spin.value() for spin in self.joint_spins)
-        if self.controller.execute_arm("arm.move_joint", "joint_deg=[%s]" % detail):
-            QTimer.singleShot(650, self.controller.complete_arm_command)
+        payload = {"joint_deg": [spin.value() for spin in self.joint_spins], "accel_pct": int(self.arm_jog_accel.value()), "speed_pct": int(self.arm_jog_speed.value())}
+        self._finish_simulated_arm_if_needed(self.controller.execute_arm("arm.move_joint", "joint_deg=[%s]" % detail, payload))
 
     def _execute_linear(self):
         detail = ", ".join("%.1f" % spin.value() for spin in self.cartesian_spins)
-        if self.controller.execute_arm("arm.move_linear", "pose=[%s]" % detail):
-            QTimer.singleShot(650, self.controller.complete_arm_command)
+        payload = {"pose": [spin.value() for spin in self.cartesian_spins], "user": 0, "tool": 0, "accel_pct": int(self.arm_jog_accel.value()), "speed_pct": int(self.arm_jog_speed.value())}
+        self._finish_simulated_arm_if_needed(self.controller.execute_arm("arm.move_linear", "pose=[%s]" % detail, payload))
 
     def _execute_gripper(self):
-        if self.controller.execute_arm("arm.gripper", "width_mm=%.1f" % self.gripper_spin.value()):
+        self._finish_simulated_arm_if_needed(self.controller.execute_arm("arm.gripper", "width_mm=%.1f" % self.gripper_spin.value(), {"width_mm": self.gripper_spin.value()}))
+
+    def _finish_simulated_arm_if_needed(self, accepted):
+        if accepted and self.controller.state.environment == Environment.SIMULATOR:
             QTimer.singleShot(650, self.controller.complete_arm_command)
+
+    def _jog_joint(self, index, direction):
+        accepted = self.controller.jog_arm_joint(
+            index, direction * self.joint_jog_step.value(),
+            self.arm_jog_accel.value(), self.arm_jog_speed.value(),
+        )
+        self._finish_simulated_arm_if_needed(accepted)
+
+    def _jog_xyz(self, index, direction):
+        accepted = self.controller.jog_arm_xyz(
+            index, direction * self.xyz_jog_step.value(),
+            self.arm_jog_accel.value(), self.arm_jog_speed.value(),
+        )
+        self._finish_simulated_arm_if_needed(accepted)
 
     @staticmethod
     def _state_text(link):
@@ -746,41 +790,19 @@ class MainWindow(QMainWindow):
         self.arm_controller_value.setText(self._state_text(arm.controller))
         self.arm_task_value.setText("%s / %s" % (arm.task.value.title(), arm.reported_state))
         self.arm_connect_button.setText("Disconnect arm route" if arm.gateway != LinkState.OFFLINE else "Connect arm route")
-        self.arm_unlock.blockSignals(True)
-        self.arm_unlock.setChecked(arm.manual_unlocked)
-        self.arm_unlock.blockSignals(False)
-        arm_unlock_available = (
-            state.environment == Environment.SIMULATOR
-            and arm.gateway == LinkState.ONLINE
-            and arm.task == Lifecycle.IDLE
-            and self.controller._chassis_is_idle()
-        )
-        self.arm_unlock.setText(
-            "Manual motion unlocked (simulator)"
-            if state.environment == Environment.SIMULATOR
-            else "Hardware motion unavailable"
-        )
-        self.arm_unlock.setEnabled(arm_unlock_available)
-        hardware_l3_ready = self.controller._hardware_arm_l3_ready()
-        self.arm_l3_test_frame.setVisible(state.environment == Environment.HARDWARE)
-        self.arm_l3_unlock.blockSignals(True)
-        self.arm_l3_unlock.setChecked(arm.manual_unlocked)
-        self.arm_l3_unlock.blockSignals(False)
-        self.arm_l3_unlock.setEnabled(hardware_l3_ready)
-        self.arm_l3_execute_button.setEnabled(self.controller.can_hardware_arm_l3_test())
         arm_enabled = self.controller.can_arm_move()
-        for button in (self.joint_execute_button, self.linear_execute_button, self.gripper_execute_button):
+        for button in self.joint_jog_buttons + self.xyz_jog_buttons + [self.joint_execute_button, self.linear_execute_button, self.gripper_execute_button]:
             button.setEnabled(arm_enabled)
-        self.arm_tabs.setVisible(state.environment == Environment.SIMULATOR)
+        self.arm_tabs.setVisible(True)
         if state.environment == Environment.HARDWARE:
             if arm.gateway != LinkState.ONLINE:
-                detail = "Connect MaixCam to query the arm route. Hardware motion remains unavailable."
-            elif arm.motion_permitted:
-                detail = "One supervised J1 +1° / -1° test is armed; generic joint, Cartesian, and gripper motion remains denied."
+                detail = "Connect MaixCam to use the arm route."
+            elif arm.control_mode == "yolo" and arm.motion_permitted:
+                detail = "YOLO manual mode: repeatable jog and direct commands enabled; Dobot controller safeguards remain active."
             else:
-                detail = "Route ready; controller policy is default-deny (motion_enabled=0). Motion forms are hidden."
+                detail = "Route ready, but the deployed controller is not in YOLO mode."
         else:
-            detail = "Simulator only: joint, Cartesian, and gripper controls use simulated lifecycle events."
+            detail = "Simulator: repeatable jog and direct commands use simulated lifecycle events."
         self.arm_runtime_detail.setText(detail)
 
         self.video_health_label.setText("Video %s" % self._state_text(state.video.link).lower())

@@ -59,6 +59,7 @@ class ChassisStatus:
 class ArmStatus:
     service_state: str
     motion_permitted: bool
+    control_mode: str
     active_sequence: int
     last_error: str
     terminal_position_supported: bool
@@ -149,6 +150,7 @@ def parse_arm_status(responses):
     expected = {
         "service_state",
         "motion_enabled",
+        "control_mode",
         "active_sequence",
         "last_error",
         "terminal_position_supported",
@@ -158,11 +160,14 @@ def parse_arm_status(responses):
     service_state = values["service_state"]
     if service_state not in {"ready", "running", "fault"}:
         raise StatusMappingError("invalid_arm_service_state")
+    if values["control_mode"] not in {"production", "yolo"}:
+        raise StatusMappingError("invalid_arm_control_mode")
     if not values["active_sequence"].isdigit():
         raise StatusMappingError("invalid_arm_status_payload")
     return ArmStatus(
         service_state=service_state,
         motion_permitted=_binary(values["motion_enabled"]),
+        control_mode=values["control_mode"],
         active_sequence=int(values["active_sequence"]),
         last_error=_token(values["last_error"], "invalid_arm_status_payload", allow_none=True),
         terminal_position_supported=_binary(values["terminal_position_supported"]),

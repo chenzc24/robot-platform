@@ -1,4 +1,4 @@
-"""Default-deny RPA2 service hosted by the Dobot controller on LAN1."""
+"""RPA2 service hosted by the Dobot controller on LAN1."""
 
 import math
 import time
@@ -31,48 +31,34 @@ def _integer(value, low, high, code):
     return int(value)
 
 
-def _vector(value, code):
+def _vector(value, length, code):
     values = value.split(",")
-    if len(values) != 6:
+    if len(values) != length:
         raise ValueError(code)
     return tuple(_number(item, code) for item in values)
 
 
-def _api_failed(result):
-    if result is None:
-        return False
-    if isinstance(result, tuple):
-        return bool(result[0]) if result else False
-    return bool(result)
-
-
 class ArmSafetyPolicy:
-    """A deliberately incomplete local policy blocks every motion command."""
+    """Select default-deny production policy or unrestricted engineering mode."""
 
     def __init__(self, motion_enabled=False, joint_min=None, joint_max=None, pose_min=None, pose_max=None,
                  max_accel_pct=20, max_speed_pct=20, gripper_min_mm=0, gripper_max_mm=70,
-                 l3_test_action_enabled=False, l3_test_j1_step_deg=1.0,
-                 l3_test_accel_pct=5, l3_test_speed_pct=5):
+                 yolo_mode=False):
+        if not isinstance(yolo_mode, bool):
+            raise ValueError("invalid_yolo_policy")
+        self.yolo_mode = yolo_mode
         self.motion_enabled = motion_enabled is True
         self.joint_min = self._bounds(joint_min, "invalid_joint_policy")
         self.joint_max = self._bounds(joint_max, "invalid_joint_policy")
         self.pose_min = self._bounds(pose_min, "invalid_pose_policy")
         self.pose_max = self._bounds(pose_max, "invalid_pose_policy")
-        self.max_accel_pct = self._policy_integer(max_accel_pct, 1, 20, "invalid_motion_policy")
-        self.max_speed_pct = self._policy_integer(max_speed_pct, 1, 20, "invalid_motion_policy")
+        self.max_accel_pct = self._policy_integer(max_accel_pct, 1, 100, "invalid_motion_policy")
+        self.max_speed_pct = self._policy_integer(max_speed_pct, 1, 100, "invalid_motion_policy")
         self.gripper_min_mm = self._policy_integer(gripper_min_mm, 0, 70, "invalid_gripper_policy")
         self.gripper_max_mm = self._policy_integer(gripper_max_mm, 0, 70, "invalid_gripper_policy")
         if self.gripper_min_mm > self.gripper_max_mm:
             raise ValueError("invalid_gripper_policy")
-        if not isinstance(l3_test_action_enabled, bool):
-            raise ValueError("invalid_l3_test_policy")
-        self.l3_test_action_enabled = l3_test_action_enabled
-        self.l3_test_j1_step_deg = _number(l3_test_j1_step_deg, "invalid_l3_test_policy")
-        self.l3_test_accel_pct = self._policy_integer(l3_test_accel_pct, 1, 5, "invalid_l3_test_policy")
-        self.l3_test_speed_pct = self._policy_integer(l3_test_speed_pct, 1, 5, "invalid_l3_test_policy")
-        if not 0 < self.l3_test_j1_step_deg <= 1.0:
-            raise ValueError("invalid_l3_test_policy")
-        if self.motion_enabled:
+        if self.motion_enabled and not self.yolo_mode:
             if None in (self.joint_min, self.joint_max, self.pose_min, self.pose_max):
                 raise ValueError("motion_policy_requires_bounds")
             self._ordered(self.joint_min, self.joint_max, "invalid_joint_policy")
@@ -104,50 +90,52 @@ class ArmSafetyPolicy:
             raise ValueError(code)
 
     def _motion(self):
-        if not self.motion_enabled:
+        if not (self.motion_enabled or self.yolo_mode):
             raise ValueError("motion_disabled")
 
     def joint(self, joints, accel, speed):
         self._motion()
-        if not self._inside(joints, self.joint_min, self.joint_max):
+        if not self.yolo_mode and not self._inside(joints, self.joint_min, self.joint_max):
             raise ValueError("joint_out_of_policy")
         self.options(accel, speed)
 
     def pose(self, pose, accel, speed):
         self._motion()
-        if not self._inside(pose, self.pose_min, self.pose_max):
+        if not self.yolo_mode and not self._inside(pose, self.pose_min, self.pose_max):
             raise ValueError("pose_out_of_policy")
         self.options(accel, speed)
 
     def options(self, accel, speed):
-        if not 1 <= accel <= self.max_accel_pct:
+        maximum_accel = 100 if self.yolo_mode else self.max_accel_pct
+        maximum_speed = 100 if self.yolo_mode else self.max_speed_pct
+        if not 1 <= accel <= maximum_accel:
             raise ValueError("acceleration_out_of_policy")
-        if not 1 <= speed <= self.max_speed_pct:
+        if not 1 <= speed <= maximum_speed:
             raise ValueError("speed_out_of_policy")
+
+    def relative(self, accel, speed):
+        if not self.yolo_mode:
+            raise ValueError("yolo_mode_required")
+        self.options(accel, speed)
 
     def gripper(self, width):
         self._motion()
         if not self.gripper_min_mm <= width <= self.gripper_max_mm:
             raise ValueError("gripper_out_of_policy")
 
-    def claim_l3_j1_cycle(self):
-        """Consume the only relative-motion action before controller execution."""
-        if not self.l3_test_action_enabled:
-            raise ValueError("l3_test_not_armed")
-        self.l3_test_action_enabled = False
-        return self.l3_test_j1_step_deg, self.l3_test_accel_pct, self.l3_test_speed_pct
-
-
 class DobotControllerApi:
-    """Narrow adapter. Its API-return terminal is explicitly not physical proof."""
+    """Adapter for the controller-resident Python API exposed by pluginPy."""
 
-    def __init__(self, check_movj, movj, check_movl, movl, set_parallel_gripper, rel_joint_movj, wait):
-        if not all(callable(item) for item in (check_movj, movj, check_movl, movl, set_parallel_gripper, rel_joint_movj, wait)):
+    def __init__(self, check_movj, movj, check_movl, movl, set_parallel_gripper,
+                 rel_joint_movj, rel_movl_user):
+        functions = (check_movj, movj, check_movl, movl, set_parallel_gripper,
+                     rel_joint_movj, rel_movl_user)
+        if not all(callable(item) for item in functions):
             raise ValueError("controller_api_not_callable")
         self.check_movj, self.movj = check_movj, movj
         self.check_movl, self.movl = check_movl, movl
         self.set_parallel_gripper = set_parallel_gripper
-        self.rel_joint_movj, self.wait = rel_joint_movj, wait
+        self.rel_joint_movj, self.rel_movl_user = rel_joint_movj, rel_movl_user
 
     @staticmethod
     def _check_result(value):
@@ -160,29 +148,25 @@ class DobotControllerApi:
         point, options = {"joint": list(joints)}, {"a": accel, "v": speed, "cp": 0}
         if self._check_result(self.check_movj(point, options)) != 0:
             raise ValueError("joint_path_rejected")
-        if _api_failed(self.movj(point, options)):
-            raise RuntimeError("movj_failed")
+        self.movj(point, options)
 
     def move_linear(self, pose, user, tool, accel, speed):
         point = {"pose": list(pose)}
         options = {"user": user, "tool": tool, "a": accel, "v": speed, "r": 0}
         if self._check_result(self.check_movl(point, options)) != 0:
             raise ValueError("linear_path_rejected")
-        if _api_failed(self.movl(point, options)):
-            raise RuntimeError("movl_failed")
+        self.movl(point, options)
 
     def gripper(self, width):
-        if _api_failed(self.set_parallel_gripper(width)):
-            raise RuntimeError("gripper_failed")
+        self.set_parallel_gripper(width)
 
-    def l3_j1_cycle(self, step_deg, accel, speed):
+    def jog_joint(self, joint_delta_deg, accel, speed):
         options = {"a": accel, "v": speed, "cp": 0}
-        if _api_failed(self.rel_joint_movj([step_deg, 0, 0, 0, 0, 0], options)):
-            raise RuntimeError("l3_j1_forward_failed")
-        self.wait(1000)
-        if _api_failed(self.rel_joint_movj([-step_deg, 0, 0, 0, 0, 0], options)):
-            raise RuntimeError("l3_j1_reverse_failed")
-        self.wait(1)
+        self.rel_joint_movj(list(joint_delta_deg), options)
+
+    def jog_xyz(self, translation_mm, user, tool, accel, speed):
+        options = {"user": user, "tool": tool, "a": accel, "v": speed, "r": 0}
+        self.rel_movl_user(list(translation_mm) + [0, 0, 0], options)
 
 
 class ArmMotionService:
@@ -203,7 +187,8 @@ class ArmMotionService:
         return (self._response(request, "ERROR", encode_fields((("error_code", code), ("retryable", 0)))),)
 
     def _state(self):
-        return encode_fields((("service_state", self.service_state), ("motion_enabled", int(self.policy.l3_test_action_enabled)),
+        return encode_fields((("service_state", self.service_state), ("motion_enabled", int(self.policy.motion_enabled or self.policy.yolo_mode)),
+                              ("control_mode", "yolo" if self.policy.yolo_mode else "production"),
                               ("active_sequence", self.active_sequence or 0), ("last_error", self.error_code or "none"),
                               ("terminal_position_supported", 0), ("cancel_supported", 0)))
 
@@ -214,6 +199,9 @@ class ArmMotionService:
             function()
         except ValueError as error:
             self.service_state, self.active_sequence = "ready", None
+            return replies + self._error(request, str(error))
+        except RuntimeError as error:
+            self.service_state, self.active_sequence = "fault", None
             return replies + self._error(request, str(error))
         except Exception:
             self.service_state, self.active_sequence = "fault", None
@@ -234,28 +222,38 @@ class ArmMotionService:
                 return (self._response(request, "STATE", self._state()),)
             if self.service_state == "fault":
                 return self._error(request, "service_fault")
-            if kind == "L3J1CYCLE":
-                decode_fields(request["payload"], ())
-                step_deg, accel, speed = self.policy.claim_l3_j1_cycle()
-                return self._run(
-                    request,
-                    lambda: self.api.l3_j1_cycle(step_deg, accel, speed),
-                    "primitive=l3_j1_cycle;terminal_position=unknown",
-                )
             if kind == "MOVEJ":
                 values = decode_fields(request["payload"], ("joint_deg", "accel_pct", "speed_pct", "blend_pct"))
-                joints, accel, speed = _vector(values["joint_deg"], "invalid_joint"), _integer(values["accel_pct"], 1, 100, "invalid_acceleration"), _integer(values["speed_pct"], 1, 100, "invalid_speed")
+                joints, accel, speed = _vector(values["joint_deg"], 6, "invalid_joint"), _integer(values["accel_pct"], 1, 100, "invalid_acceleration"), _integer(values["speed_pct"], 1, 100, "invalid_speed")
                 if values["blend_pct"] != "0": raise ValueError("blending_disabled")
                 self.policy.joint(joints, accel, speed)
                 return self._run(request, lambda: self.api.move_joint(joints, accel, speed), "primitive=move_joint;terminal_position=unknown")
             if kind == "MOVEL":
                 values = decode_fields(request["payload"], ("pose", "user", "tool", "accel_pct", "speed_pct", "blend_mm"))
-                pose = _vector(values["pose"], "invalid_pose")
+                pose = _vector(values["pose"], 6, "invalid_pose")
                 user, tool = _integer(values["user"], 0, 9, "invalid_user"), _integer(values["tool"], 0, 9, "invalid_tool")
                 accel, speed = _integer(values["accel_pct"], 1, 100, "invalid_acceleration"), _integer(values["speed_pct"], 1, 100, "invalid_speed")
                 if values["blend_mm"] != "0": raise ValueError("blending_disabled")
                 self.policy.pose(pose, accel, speed)
                 return self._run(request, lambda: self.api.move_linear(pose, user, tool, accel, speed), "primitive=move_linear;terminal_position=unknown")
+            if kind == "RELJOINT":
+                values = decode_fields(request["payload"], ("joint_delta_deg", "accel_pct", "speed_pct", "blend_pct"))
+                delta = _vector(values["joint_delta_deg"], 6, "invalid_joint_delta")
+                accel = _integer(values["accel_pct"], 1, 100, "invalid_acceleration")
+                speed = _integer(values["speed_pct"], 1, 100, "invalid_speed")
+                if values["blend_pct"] != "0": raise ValueError("blending_disabled")
+                self.policy.relative(accel, speed)
+                return self._run(request, lambda: self.api.jog_joint(delta, accel, speed), "primitive=jog_joint;terminal_position=unknown")
+            if kind == "RELLINEAR":
+                values = decode_fields(request["payload"], ("translation_mm", "user", "tool", "accel_pct", "speed_pct", "blend_mm"))
+                translation = _vector(values["translation_mm"], 3, "invalid_translation")
+                user = _integer(values["user"], 0, 9, "invalid_user")
+                tool = _integer(values["tool"], 0, 9, "invalid_tool")
+                accel = _integer(values["accel_pct"], 1, 100, "invalid_acceleration")
+                speed = _integer(values["speed_pct"], 1, 100, "invalid_speed")
+                if values["blend_mm"] != "0": raise ValueError("blending_disabled")
+                self.policy.relative(accel, speed)
+                return self._run(request, lambda: self.api.jog_xyz(translation, user, tool, accel, speed), "primitive=jog_xyz;terminal_position=unknown")
             if kind == "GRIPPER":
                 values = decode_fields(request["payload"], ("width_mm",))
                 width = _integer(values["width_mm"], 0, 70, "invalid_gripper")

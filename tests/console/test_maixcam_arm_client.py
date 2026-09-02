@@ -21,7 +21,7 @@ class QueryLoopback:
         reply = self.service.feed_computer(data)
         request = decode_frame(self.writes.pop(0))
         response_type = "PONG" if request["type"] == "PING" else "STATE"
-        response_payload = "protocol=2" if response_type == "PONG" else "service_state=ready;motion_enabled=0;active_sequence=0;last_error=none;terminal_position_supported=0;cancel_supported=0"
+        response_payload = "protocol=2" if response_type == "PONG" else "service_state=ready;motion_enabled=0;control_mode=production;active_sequence=0;last_error=none;terminal_position_supported=0;cancel_supported=0"
         reply += self.service.feed_uart(encode_frame("RPA2", response_type, request["sequence"], 0, response_payload))
         self.responses.append(reply)
         return len(data)
@@ -43,12 +43,12 @@ class MaixCamArmClientTests(unittest.TestCase):
             MaixCamArmClient(connection).gripper(10)
         self.assertEqual(connection.sends, 1)
 
-    def test_l3_cycle_is_parameterless_and_state_changing(self):
-        class CycleConnection:
+    def test_joint_jog_is_state_changing_and_not_retried(self):
+        class JogConnection:
             def __init__(self): self.sent = []
             def send(self, data): self.sent.append(data); return len(data)
             def recv(self, _size): raise TimeoutError("timeout")
-        connection = CycleConnection()
+        connection = JogConnection()
         with self.assertRaises(MaixCamArmUnknown):
-            MaixCamArmClient(connection).l3_j1_cycle()
+            MaixCamArmClient(connection).jog_joint((2, 0, 0, 0, 0, 0))
         self.assertEqual(len(connection.sent), 1)

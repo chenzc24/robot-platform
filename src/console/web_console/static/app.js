@@ -38,6 +38,21 @@ function textState(node, value, online = false, fault = false) {
   node.classList.toggle("fault-text", fault);
 }
 
+function formatMeasurement(value) {
+  if (!Number.isFinite(value)) return "—";
+  const formatted = Number(value).toFixed(3).replace(/\.?0+$/, "");
+  return formatted === "-0" ? "0" : formatted;
+}
+
+function renderMeasurement(root, labels, values) {
+  $$("output", root).forEach((node, index) => {
+    const value = Array.isArray(values) ? values[index] : null;
+    node.value = formatMeasurement(value);
+    node.textContent = `${labels[index]} ${formatMeasurement(value)}`;
+    node.title = Number.isFinite(value) ? String(value) : "No measured value";
+  });
+}
+
 function render(state) {
   currentState = state;
   const c = state.chassis, a = state.arm;
@@ -53,6 +68,15 @@ function render(state) {
   textState($("#arm-control"), a.controller, a.controller === "online", a.controller === "fault");
   textState($("#arm-task"), a.task, a.task === "running");
   $("#arm-mode").textContent = a.control_mode.toUpperCase();
+  const measurement = a.measurement || {};
+  const hasSample = Array.isArray(measurement.joint_deg) && Array.isArray(measurement.pose);
+  const feedbackState = measurement.valid ? "LIVE" : (hasSample ? "STALE" : "UNAVAILABLE");
+  textState($("#arm-feedback-state"), feedbackState, measurement.valid, hasSample && !measurement.valid);
+  $("#arm-feedback-meta").textContent = hasSample
+    ? `#${measurement.sample_id} · ${measurement.age_ms == null ? "—" : measurement.age_ms + " ms"} · U${measurement.pose_user}/T${measurement.pose_tool}`
+    : String(measurement.error || "no sample").toUpperCase();
+  renderMeasurement($("#current-joints"), ["J1","J2","J3","J4","J5","J6"], measurement.joint_deg);
+  renderMeasurement($("#current-pose"), ["X","Y","Z","RX","RY","RZ"], measurement.pose);
   $("#requested-vector").textContent = `${c.velocity.vx_mm_s} / ${c.velocity.vy_mm_s} / ${c.velocity.omega_mrad_s}`;
   const online = c.link === "online";
   $("#chassis-connect").textContent = online ? "DISCONNECT" : "CONNECT";
@@ -135,6 +159,10 @@ function armOptions() {
 function armCommand(command, payload) { return act("/api/arm/command", {command, payload:{...armOptions(), ...payload}}, command.replaceAll("_", " ")); }
 
 function buildArmControls() {
+  [["#current-joints",["J1","J2","J3","J4","J5","J6"]],["#current-pose",["X","Y","Z","RX","RY","RZ"]]].forEach(([selector, labels]) => {
+    const root = $(selector);
+    labels.forEach(label => { const value = document.createElement("output"); value.textContent = `${label} —`; root.append(value); });
+  });
   const jointRoot = $("#joint-jogs");
   for (let i=0;i<6;i++) {
     const row=document.createElement("div"); row.className="jog-row"; row.innerHTML=`<span>J${i+1}</span><button data-arm-command>−</button><button data-arm-command>+</button>`;

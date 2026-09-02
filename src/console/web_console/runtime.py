@@ -42,6 +42,7 @@ class WebConsoleRuntime:
         self._held_velocity = None
         self._last_chassis_health = None
         self._last_arm_health = None
+        self._last_arm_sample_received = None
         self._stop_event = threading.Event()
         self._threads = []
         self._state = {
@@ -72,7 +73,16 @@ class WebConsoleRuntime:
                 "control_mode": "unknown",
                 "reported_state": "disconnected",
                 "last_error": "none",
-                "measured_pose": None,
+                "measurement": {
+                    "valid": False,
+                    "joint_deg": None,
+                    "pose": None,
+                    "pose_user": 0,
+                    "pose_tool": 0,
+                    "sample_id": None,
+                    "sample_time_ms": None,
+                    "error": "unavailable",
+                },
             },
         }
         if start_workers:
@@ -132,6 +142,7 @@ class WebConsoleRuntime:
             now = self._clock()
             state["chassis"]["health_age_ms"] = None if self._last_chassis_health is None else max(0, int((now - self._last_chassis_health) * 1000))
             state["arm"]["health_age_ms"] = None if self._last_arm_health is None else max(0, int((now - self._last_arm_health) * 1000))
+            state["arm"]["measurement"]["age_ms"] = None if self._last_arm_sample_received is None else max(0, int((now - self._last_arm_sample_received) * 1000))
             return {
                 "revision": self._revision,
                 "video": state["video"],
@@ -378,6 +389,7 @@ class WebConsoleRuntime:
                 motion_permitted=False, control_mode="unknown",
                 reported_state="disconnected",
             )
+            self._state["arm"]["measurement"].update(valid=False, error="disconnected")
             self._touch()
         close_client(client)
 
@@ -424,6 +436,21 @@ class WebConsoleRuntime:
                 reported_state=status.service_state,
                 last_error=status.last_error,
             )
+            measurement = self._state["arm"]["measurement"]
+            if status.feedback_valid:
+                measurement.update(
+                    valid=True,
+                    joint_deg=list(status.joint_deg),
+                    pose=list(status.pose),
+                    pose_user=status.pose_user,
+                    pose_tool=status.pose_tool,
+                    sample_id=status.sample_id,
+                    sample_time_ms=status.sample_time_ms,
+                    error="none",
+                )
+                self._last_arm_sample_received = self._clock()
+            else:
+                measurement.update(valid=False, error=status.feedback_error)
             self._last_arm_health = self._clock()
             self._touch()
         self._clear_fault("arm_status_invalid")

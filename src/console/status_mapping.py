@@ -1,5 +1,6 @@
 """Strict conversion of validated device status replies into console state."""
 
+import math
 from dataclasses import dataclass
 
 
@@ -61,6 +62,14 @@ class ArmStatus:
     last_error: str
     terminal_position_supported: bool
     cancel_supported: bool
+    feedback_valid: bool
+    feedback_error: str
+    joint_deg: tuple | None
+    pose: tuple | None
+    pose_user: int
+    pose_tool: int
+    sample_id: int
+    sample_time_ms: int
 
 
 def parse_chassis_status(response):
@@ -110,6 +119,34 @@ def _binary(value):
     return value == "1"
 
 
+def _decimal(value, code):
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        raise StatusMappingError(code)
+    if not math.isfinite(result):
+        raise StatusMappingError(code)
+    return result
+
+
+def _decimal_vector(value, code):
+    if not isinstance(value, str):
+        raise StatusMappingError(code)
+    items = value.split(",")
+    if len(items) != 6:
+        raise StatusMappingError(code)
+    return tuple(_decimal(item, code) for item in items)
+
+
+def _decimal_integer(value, low, high, code):
+    if not isinstance(value, str) or not value.isdigit():
+        raise StatusMappingError(code)
+    result = int(value)
+    if not low <= result <= high:
+        raise StatusMappingError(code)
+    return result
+
+
 def parse_arm_status(responses):
     """Parse the terminal lifecycle response for the current RPA2 status service."""
     if not isinstance(responses, (list, tuple)) or not responses:
@@ -142,6 +179,14 @@ def parse_arm_status(responses):
         "last_error",
         "terminal_position_supported",
         "cancel_supported",
+        "feedback_valid",
+        "feedback_error",
+        "joint_deg",
+        "pose",
+        "pose_user",
+        "pose_tool",
+        "sample_id",
+        "sample_time_ms",
     }
     _exact(values, expected, "invalid_arm_status_payload")
     service_state = values["service_state"]
@@ -151,6 +196,17 @@ def parse_arm_status(responses):
         raise StatusMappingError("invalid_arm_control_mode")
     if not values["active_sequence"].isdigit():
         raise StatusMappingError("invalid_arm_status_payload")
+    feedback_valid = _binary(values["feedback_valid"])
+    feedback_error = _token(values["feedback_error"], "invalid_arm_status_payload", allow_none=True)
+    if feedback_valid:
+        if feedback_error != "none":
+            raise StatusMappingError("invalid_arm_status_payload")
+        joint_deg = _decimal_vector(values["joint_deg"], "invalid_arm_status_payload")
+        pose = _decimal_vector(values["pose"], "invalid_arm_status_payload")
+    else:
+        if feedback_error == "none" or values["joint_deg"] != "unavailable" or values["pose"] != "unavailable":
+            raise StatusMappingError("invalid_arm_status_payload")
+        joint_deg = pose = None
     return ArmStatus(
         service_state=service_state,
         motion_permitted=_binary(values["motion_enabled"]),
@@ -159,4 +215,12 @@ def parse_arm_status(responses):
         last_error=_token(values["last_error"], "invalid_arm_status_payload", allow_none=True),
         terminal_position_supported=_binary(values["terminal_position_supported"]),
         cancel_supported=_binary(values["cancel_supported"]),
+        feedback_valid=feedback_valid,
+        feedback_error=feedback_error,
+        joint_deg=joint_deg,
+        pose=pose,
+        pose_user=_decimal_integer(values["pose_user"], 0, 9, "invalid_arm_status_payload"),
+        pose_tool=_decimal_integer(values["pose_tool"], 0, 9, "invalid_arm_status_payload"),
+        sample_id=_decimal_integer(values["sample_id"], 1, 2147483647, "invalid_arm_status_payload"),
+        sample_time_ms=_decimal_integer(values["sample_time_ms"], 0, 9223372036854775807, "invalid_arm_status_payload"),
     )

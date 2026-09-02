@@ -38,6 +38,32 @@ def _vector(value, length, code):
     return tuple(_number(item, code) for item in values)
 
 
+def _feedback_vector(value, container_name, component_names, code):
+    """Normalize documented vectors plus common controller status wrappers."""
+    if isinstance(value, tuple) and len(value) == 2 and isinstance(value[0], (int, bool)):
+        if value[0]:
+            raise ValueError(code)
+        value = value[1]
+    if isinstance(value, dict):
+        if set(value) == {container_name}:
+            value = value[container_name]
+        elif set(value) == set(component_names):
+            value = [value[name] for name in component_names]
+        else:
+            raise ValueError(code)
+    if isinstance(value, dict):
+        if set(value) != set(component_names):
+            raise ValueError(code)
+        value = [value[name] for name in component_names]
+    if not isinstance(value, (list, tuple)) or len(value) != 6:
+        raise ValueError(code)
+    return tuple(_number(item, code) for item in value)
+
+
+def _encode_vector(values):
+    return ",".join("%.9g" % value for value in values)
+
+
 class ArmSafetyPolicy:
     """Select default-deny production policy or unrestricted engineering mode."""
 
@@ -127,15 +153,16 @@ class DobotControllerApi:
     """Adapter for the controller-resident Python API exposed by pluginPy."""
 
     def __init__(self, check_movj, movj, check_movl, movl, set_parallel_gripper,
-                 rel_joint_movj, rel_movl_user):
+                 rel_joint_movj, rel_movl_user, get_angle, get_pose):
         functions = (check_movj, movj, check_movl, movl, set_parallel_gripper,
-                     rel_joint_movj, rel_movl_user)
+                     rel_joint_movj, rel_movl_user, get_angle, get_pose)
         if not all(callable(item) for item in functions):
             raise ValueError("controller_api_not_callable")
         self.check_movj, self.movj = check_movj, movj
         self.check_movl, self.movl = check_movl, movl
         self.set_parallel_gripper = set_parallel_gripper
         self.rel_joint_movj, self.rel_movl_user = rel_joint_movj, rel_movl_user
+        self.get_angle, self.get_pose = get_angle, get_pose
 
     @staticmethod
     def _check_result(value):
@@ -168,6 +195,17 @@ class DobotControllerApi:
         options = {"user": user, "tool": tool, "a": accel, "v": speed, "r": 0}
         self.rel_movl_user(list(translation_mm) + [0, 0, 0], options)
 
+    def read_feedback(self, user=0, tool=0):
+        joints = _feedback_vector(
+            self.get_angle(), "joint", ("j1", "j2", "j3", "j4", "j5", "j6"),
+            "invalid_joint_feedback",
+        )
+        pose = _feedback_vector(
+            self.get_pose(user, tool), "pose", ("x", "y", "z", "rx", "ry", "rz"),
+            "invalid_pose_feedback",
+        )
+        return joints, pose
+
 
 class ArmMotionService:
     """One synchronous primitive at a time. No cancellation is claimed."""
@@ -178,6 +216,7 @@ class ArmMotionService:
         self.decoder = FrameStreamDecoder(MARKER)
         self.last_sequence, self.last_fingerprint, self.last_responses = 0, None, None
         self.service_state, self.error_code, self.active_sequence = "ready", None, None
+        self.feedback_sample_id = 0
 
     def _response(self, request, kind, payload=""):
         return encode_frame(MARKER, kind, request["sequence"], 0, payload)
@@ -187,10 +226,25 @@ class ArmMotionService:
         return (self._response(request, "ERROR", encode_fields((("error_code", code), ("retryable", 0)))),)
 
     def _state(self):
+        self.feedback_sample_id = 1 if self.feedback_sample_id >= 2147483647 else self.feedback_sample_id + 1
+        sample_time_ms = self.clock_ms()
+        try:
+            joints, pose = self.api.read_feedback(0, 0)
+            feedback_valid, feedback_error = 1, "none"
+            joint_text, pose_text = _encode_vector(joints), _encode_vector(pose)
+        except ValueError as error:
+            feedback_valid, feedback_error = 0, str(error)
+            joint_text = pose_text = "unavailable"
+        except Exception:
+            feedback_valid, feedback_error = 0, "feedback_read_failed"
+            joint_text = pose_text = "unavailable"
         return encode_fields((("service_state", self.service_state), ("motion_enabled", int(self.policy.motion_enabled or self.policy.yolo_mode)),
                               ("control_mode", "yolo" if self.policy.yolo_mode else "production"),
                               ("active_sequence", self.active_sequence or 0), ("last_error", self.error_code or "none"),
-                              ("terminal_position_supported", 0), ("cancel_supported", 0)))
+                              ("terminal_position_supported", 0), ("cancel_supported", 0),
+                              ("feedback_valid", feedback_valid), ("feedback_error", feedback_error),
+                              ("joint_deg", joint_text), ("pose", pose_text), ("pose_user", 0), ("pose_tool", 0),
+                              ("sample_id", self.feedback_sample_id), ("sample_time_ms", sample_time_ms)))
 
     def _run(self, request, function, done_payload):
         self.service_state, self.active_sequence = "running", request["sequence"]

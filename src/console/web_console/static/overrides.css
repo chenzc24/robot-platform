@@ -10,3 +10,76 @@
 .status-chip.configured i {
   background: #4389ff;
 }
+
+.arm-current {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px solid #29384b;
+  border-radius: 8px;
+  background: #0d141d;
+}
+
+.current-head,
+.current-row {
+  display: grid;
+  align-items: center;
+  gap: 10px;
+}
+
+.current-head {
+  grid-template-columns: auto auto 1fr;
+  margin-bottom: 8px;
+  color: #8497af;
+  font-size: 11px;
+  letter-spacing: .08em;
+}
+
+.current-head strong {
+  color: #9aabc0;
+}
+
+.current-head small {
+  justify-self: end;
+  letter-spacing: 0;
+}
+
+.current-row {
+  grid-template-columns: 58px 1fr;
+  min-width: 0;
+}
+
+.current-row + .current-row {
+  margin-top: 5px;
+}
+
+.current-row > span {
+  color: #6f829a;
+  font-size: 10px;
+  letter-spacing: .08em;
+}
+
+.current-values {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.current-values output {
+  min-width: 0;
+  padding: 5px 3px;
+  overflow: hidden;
+  border: 1px solid #243244;
+  border-radius: 4px;
+  color: #d9e5f5;
+  background: #111c28;
+  font: 11px/1.1 ui-monospace, SFMono-Regular, Consolas, monospace;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .current-values {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

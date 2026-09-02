@@ -72,12 +72,18 @@ class FakeChassis:
         return self._response("DONE")
 
 
-def arm_status(service_state="ready", permitted=True):
+def arm_status(service_state="ready", permitted=True, feedback_valid=True, sample_id=1, feedback_error="none"):
+    joint = "1,2,3,4,5,6" if feedback_valid else "unavailable"
+    pose = "101,202,303,1.5,2.5,3.5" if feedback_valid else "unavailable"
     downstream = ";".join((
         "service_state=" + service_state,
         "motion_enabled=" + ("1" if permitted else "0"),
         "control_mode=yolo", "active_sequence=0", "last_error=none",
         "terminal_position_supported=0", "cancel_supported=0",
+        "feedback_valid=" + ("1" if feedback_valid else "0"),
+        "feedback_error=" + feedback_error,
+        "joint_deg=" + joint, "pose=" + pose,
+        "pose_user=0", "pose_tool=0", "sample_id=" + str(sample_id), "sample_time_ms=1234",
     ))
     return [{
         "version": 1, "kind": "lifecycle", "message_id": "reply-1", "sequence": 1,
@@ -91,9 +97,10 @@ class FakeArm:
     def __init__(self):
         self.connection = Connection()
         self.calls = []
+        self.status_result = None
 
     def status(self):
-        self.calls.append(("status",)); return arm_status()
+        self.calls.append(("status",)); return self.status_result or arm_status()
 
     def ping(self):
         self.calls.append(("ping",)); return arm_status()
@@ -201,6 +208,31 @@ class WebRuntimeTests(unittest.TestCase):
         with self.assertRaisesRegex(WebConsoleError, "invalid_arm_vector"):
             self.runtime.arm_command("jog_joint", {"joint_delta_deg": [2]})
 
+    def test_arm_measurement_is_exposed_aged_and_never_replaced_by_target(self):
+        clock = [10.0]
+        runtime = WebConsoleRuntime(
+            config(), lambda _config: FakeChassis(), lambda _config: self.arm,
+            start_workers=False, clock=lambda: clock[0],
+        )
+        try:
+            runtime.connect_arm()
+            measured = runtime.snapshot()["arm"]["measurement"]
+            self.assertTrue(measured["valid"])
+            self.assertEqual(measured["joint_deg"], [1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            self.assertEqual(measured["pose"], [101.0, 202.0, 303.0, 1.5, 2.5, 3.5])
+            clock[0] = 10.25
+            self.assertEqual(runtime.snapshot()["arm"]["measurement"]["age_ms"], 250)
+            runtime.arm_command("move_joint", {"joint_deg": [9, 9, 9, 9, 9, 9]})
+            self.assertEqual(runtime.snapshot()["arm"]["measurement"]["joint_deg"], [1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            self.arm.status_result = arm_status("ready", True, False, 2, "feedback_read_failed")
+            runtime.refresh_arm_status()
+            stale = runtime.snapshot()["arm"]["measurement"]
+            self.assertFalse(stale["valid"])
+            self.assertEqual(stale["joint_deg"], [1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            self.assertEqual(stale["error"], "feedback_read_failed")
+        finally:
+            runtime.close()
+
     def test_text_log_contains_only_sanitized_event_fields(self):
         with tempfile.TemporaryDirectory() as directory:
             path = pathlib.Path(directory) / "events.log"
@@ -239,6 +271,7 @@ class WebServerTests(unittest.TestCase):
         self.assertIn("Live view", html)
         self.assertIn("EXACT VECTOR", html)
         self.assertIn("ROBOT ARM", html)
+        self.assertIn("Measured robot arm position", html)
         response = json.load(self._request("/api/state"))
         self.assertTrue(response["ok"])
         self.assertNotIn("credential", json.dumps(response))

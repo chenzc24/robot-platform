@@ -21,7 +21,7 @@ class QueryLoopback:
         reply = self.service.feed_computer(data)
         request = decode_frame(self.writes.pop(0))
         response_type = "PONG" if request["type"] == "PING" else "STATE"
-        response_payload = "protocol=2" if response_type == "PONG" else "service_state=ready;motion_enabled=0;control_mode=production;active_sequence=0;last_error=none;terminal_position_supported=0;cancel_supported=0"
+        response_payload = "protocol=2" if response_type == "PONG" else "service_state=ready;motion_enabled=0;control_mode=production;active_sequence=0;last_error=none;terminal_position_supported=0;cancel_supported=0;feedback_valid=1;feedback_error=none;joint_deg=1,2,3,4,5,6;pose=101,202,303,1.5,2.5,3.5;pose_user=0;pose_tool=0;sample_id=1;sample_time_ms=1234"
         reply += self.service.feed_uart(encode_frame("RPA2", response_type, request["sequence"], 0, response_payload))
         self.responses.append(reply)
         return len(data)

@@ -615,7 +615,7 @@ class RuntimeWorkerTests(unittest.TestCase):
         runtime.result_ready.emit(SessionResult("MaixCam", "status", Lifecycle.DONE, "completed", [{
             "version": 1, "kind": "lifecycle", "message_id": "console-2:done", "sequence": 2,
             "target": "arm", "name": "arm.status", "ttl_ms": 0,
-            "payload": {"downstream_sequence": 7, "terminal_position": "unknown", "downstream_payload": "service_state=ready;motion_enabled=0;control_mode=production;active_sequence=0;last_error=none;terminal_position_supported=0;cancel_supported=0"},
+            "payload": {"downstream_sequence": 7, "terminal_position": "unknown", "downstream_payload": "service_state=ready;motion_enabled=0;control_mode=production;active_sequence=0;last_error=none;terminal_position_supported=0;cancel_supported=0;feedback_valid=1;feedback_error=none;joint_deg=1,2,3,4,5,6;pose=101,202,303,1.5,2.5,3.5;pose_user=0;pose_tool=0;sample_id=1;sample_time_ms=1234"},
             "correlation_id": "console-2", "lifecycle": "DONE",
         }]))
         self.assertEqual(controller.state.arm.uart_lan1, LinkState.ONLINE)

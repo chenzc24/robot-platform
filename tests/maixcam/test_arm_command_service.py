@@ -58,6 +58,13 @@ class ArmCommandServiceTests(unittest.TestCase):
         service.feed_computer(encode_message(command("arm.jog_xyz", payload)))
         self.assertEqual(decode_frame(self.writes[-1])["type"], "RELLINEAR")
 
+    def test_status_preserves_measured_feedback_payload(self):
+        self.service.feed_computer(encode_message(command("arm.status")))
+        downstream = "service_state=ready;motion_enabled=1;control_mode=yolo;active_sequence=0;last_error=none;terminal_position_supported=0;cancel_supported=0;feedback_valid=1;feedback_error=none;joint_deg=1,2,3,4,5,6;pose=101,202,303,1.5,2.5,3.5;pose_user=0;pose_tool=0;sample_id=9;sample_time_ms=1234"
+        response = self.messages(self.service.feed_uart(encode_frame("RPA2", "STATE", 1, 0, downstream)))[-1]
+        self.assertEqual(response["lifecycle"], "DONE")
+        self.assertEqual(response["payload"]["downstream_payload"], downstream)
+
     def test_motion_timeout_is_unknown_and_not_retried(self):
         clock = [0]
         gateway = ArmMotionGateway(lambda frame: len(frame), clock_ms=lambda: clock[0])

@@ -85,8 +85,11 @@ joint_deg=j1,j2,j3,j4,j5,j6
 pose=x,y,z,rx,ry,rz
 pose_user=0
 pose_tool=0
+feedback_valid=1
+feedback_error=none
+sample_id=<monotonic sample sequence>
 sample_time_ms=<controller monotonic time>
-terminal_position_supported=1
+terminal_position_supported=0
 ```
 
 The complete route is:
@@ -104,17 +107,22 @@ GetPose / GetAngle
 
 Required semantics:
 
-1. `arm.status` returns the latest measured joint and pose sample.
-2. A successful motion obtains a fresh sample before `DONE` and returns it as
-   the terminal measurement.
-3. Command targets and measured values remain separate fields.
-4. Missing, malformed, stale, or non-finite feedback is displayed as
+1. `arm.status` obtains and returns a fresh measured joint and pose sample.
+2. Command targets and measured values remain separate fields.
+3. Missing, malformed, stale, or non-finite feedback is displayed as
    unavailable; a target value is never substituted.
+4. A failed read uses `feedback_valid=0`, a fixed `feedback_error`, and the
+   literal `unavailable` for both vectors. It does not fault the motion service.
 5. The current 500 ms computer status cycle is a suitable initial idle polling
    interval.
 6. Continuous in-motion feedback is not yet guaranteed. If `MovJ` or `MovL`
    blocks the controller's single service loop, only idle and terminal samples
    are available until controller concurrency is verified.
+
+This first implementation deliberately leaves `terminal_position_supported=0`:
+motion `DONE` still means that the selected controller API returned without an
+observed error. Sampling after `DONE` can be added only after the stationary
+`GetAngle()` and `GetPose(0, 0)` return shapes are verified on hardware.
 
 ## 4. Motion parameters
 

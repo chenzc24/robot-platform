@@ -68,6 +68,13 @@
           <div><span>TASK</span><strong id="arm-task">IDLE</strong></div>
         </div>
         <div class="action-row"><button id="arm-connect">CONNECT</button><button class="ghost" id="arm-status">STATUS</button><span class="mode-badge" id="arm-mode">UNKNOWN</span></div>
+
+        <section class="arm-current" aria-label="Measured robot arm position">
+          <div class="current-head"><span>CURRENT</span><strong id="arm-feedback-state">UNAVAILABLE</strong><small id="arm-feedback-meta">NO SAMPLE</small></div>
+          <div class="current-row"><span>JOINT °</span><div class="current-values" id="current-joints"></div></div>
+          <div class="current-row"><span>POSE</span><div class="current-values" id="current-pose"></div></div>
+        </section>
+
         <nav class="tabs sub-tabs" aria-label="Arm controls"><button class="tab active" data-arm-tab="joint">JOINT</button><button class="tab" data-arm-tab="xyz">XYZ</button><button class="tab" data-arm-tab="absolute">ABSOLUTE</button><button class="tab" data-arm-tab="gripper">GRIPPER</button></nav>
 
         <div class="arm-view active" id="arm-joint">

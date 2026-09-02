@@ -93,6 +93,14 @@ online, and `motion_enabled=1`. There is no chassis dependency or application
 lease in YOLO/manual engineering mode. A motion call is one serialized request
 and is never retried after an unknown outcome.
 
+The compact `CURRENT` box is measurement-only. Each successful `arm.status`
+sample carries six joint angles, six Cartesian pose values, User/Tool indices,
+a controller sample sequence, and a controller timestamp. The browser labels
+the latest sample `LIVE`; if a later read fails or the route disconnects, it
+labels the retained last valid values `STALE` and keeps their PC-side age.
+Target inputs never overwrite this box. Until stationary hardware verification
+is complete, motion completion still reports `terminal_position_supported=0`.
+
 ## Camera and future vision
 
 The page embeds the local MediaMTX WebRTC player from `video.webrtc_url` and

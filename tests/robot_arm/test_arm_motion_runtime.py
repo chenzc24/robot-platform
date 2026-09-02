@@ -7,13 +7,15 @@ sys.path.insert(0, str(ROOT / "protocol"))
 sys.path.insert(0, str(ROOT / "src/robot_arm/runtime"))
 
 from arm_motion_service import ArmMotionService, ArmSafetyPolicy, DobotControllerApi
-from motion_link import decode_frame, encode_fields, encode_frame
+from motion_link import decode_fields, decode_frame, encode_fields, encode_frame
 
 
 class FakeApi:
     def __init__(self):
         self.calls = []
         self.motion_return = "nonempty_controller_return"
+        self.angle_result = [1, 2, 3, 4, 5, 6]
+        self.pose_result = [100, 200, 300, 10, 20, 30]
 
     def check_j(self, *_): return 0
     def move_j(self, point, options):
@@ -27,10 +29,12 @@ class FakeApi:
         self.calls.append(("relative_joint", joints, options)); return self.motion_return
     def relative_linear_user(self, pose, options):
         self.calls.append(("relative_linear_user", pose, options)); return self.motion_return
+    def get_angle(self): return self.angle_result
+    def get_pose(self, _user, _tool): return self.pose_result
 
 
 class ArmRuntimeTests(unittest.TestCase):
-    def service(self, enabled=False, yolo=False):
+    def service(self, enabled=False, yolo=False, clock_ms=None):
         raw = FakeApi()
         policy = ArmSafetyPolicy(
             enabled,
@@ -40,9 +44,39 @@ class ArmRuntimeTests(unittest.TestCase):
         )
         api = DobotControllerApi(
             raw.check_j, raw.move_j, raw.check_l, raw.move_l, raw.gripper,
-            raw.relative_joint, raw.relative_linear_user,
+            raw.relative_joint, raw.relative_linear_user, raw.get_angle, raw.get_pose,
         )
-        return ArmMotionService(api, policy), raw
+        return ArmMotionService(api, policy, clock_ms=clock_ms), raw
+
+    def test_status_contains_normalized_measured_feedback(self):
+        service, raw = self.service(clock_ms=lambda: 1234)
+        raw.angle_result = (0, {"joint": [1, 2, 3, 4, 5, 6]})
+        raw.pose_result = {"x": 101, "y": 202, "z": 303, "rx": 1.5, "ry": 2.5, "rz": 3.5}
+        replies, _ = service.feed(encode_frame("RPA2", "STATUS", 1, 1000))
+        values = decode_fields(decode_frame(replies[0])["payload"], (
+            "service_state", "motion_enabled", "control_mode", "active_sequence", "last_error",
+            "terminal_position_supported", "cancel_supported", "feedback_valid", "feedback_error",
+            "joint_deg", "pose", "pose_user", "pose_tool", "sample_id", "sample_time_ms",
+        ))
+        self.assertEqual(values["feedback_valid"], "1")
+        self.assertEqual(values["feedback_error"], "none")
+        self.assertEqual(values["joint_deg"], "1,2,3,4,5,6")
+        self.assertEqual(values["pose"], "101,202,303,1.5,2.5,3.5")
+        self.assertEqual(values["sample_id"], "1")
+        self.assertEqual(values["sample_time_ms"], "1234")
+        self.assertEqual(values["terminal_position_supported"], "0")
+
+    def test_feedback_failure_is_reported_without_faulting_motion_service(self):
+        service, raw = self.service(yolo=True, clock_ms=lambda: 55)
+        raw.angle_result = [1, 2]
+        replies, _ = service.feed(encode_frame("RPA2", "STATUS", 1, 1000))
+        payload = decode_frame(replies[0])["payload"]
+        self.assertIn("feedback_valid=0", payload)
+        self.assertIn("feedback_error=invalid_joint_feedback", payload)
+        self.assertIn("joint_deg=unavailable;pose=unavailable", payload)
+        request = encode_fields((("joint_delta_deg", "2,0,0,0,0,0"), ("accel_pct", 5), ("speed_pct", 5), ("blend_pct", 0)))
+        motion, _ = service.feed(encode_frame("RPA2", "RELJOINT", 2, 1000, request))
+        self.assertEqual(decode_frame(motion[-1])["type"], "DONE")
 
     def test_default_policy_answers_status_and_rejects_motion(self):
         service, raw = self.service()

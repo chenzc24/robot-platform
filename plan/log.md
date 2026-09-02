@@ -876,3 +876,30 @@ entry format:
 - Commit status: reference committed on `main` as `834e82d`
   (`docs(arm): record relevant controller APIs`); this factual status update is
   committed after it, and both commits are pushed together.
+
+## 2026-09-02 - Add measured robot-arm status feedback
+
+- Goal: implement the minimal measured-state route from controller
+  `GetAngle/GetPose` calls through RPA2 and MaixCam to the PC parser, localhost
+  state, and web arm panel.
+- Modified scope: robot-arm status sampling and adapter injection, strict PC
+  arm-status parsing/storage, the web Current display, focused fixtures/tests,
+  and arm/console documentation. MaixCam runtime code did not need modification
+  because its existing transparent payload behavior was proved by test.
+- Contract: a status sample contains validity/error, six measured joints, six
+  measured pose values, User/Tool indices, sample sequence, and controller
+  timestamp. Invalid reads are explicit and non-fatal. Targets and measurements
+  remain separate, and `terminal_position_supported` remains false.
+- Validation: 243 L1 tests passed across all six suites; 57 affected Python
+  files and the web JavaScript passed syntax checks; a generated DobotStudio
+  two-file YOLO project compiled and contained the new API path; localhost
+  visual inspection at 1280 x 720 showed both complete Current rows without
+  clipping controls; `git diff --check` passed. The workspace validator still
+  reports two pre-existing non-ASCII lines in legacy `src/console/ui/views.py`.
+- Hardware state: no device connection, deployment, write, or motion occurred.
+  Stationary L2 return-shape verification and an independently authorized L3
+  2-degree feedback-change check remain pending.
+- Local exception: the user's `.vscode/settings.json` change remains untouched,
+  unstaged, and uncommitted.
+- Commit status: implementation and records are committed on
+  `target/arm-measured-feedback` and pushed for review after this record.

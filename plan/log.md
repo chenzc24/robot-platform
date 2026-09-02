@@ -515,3 +515,28 @@ entry format:
 - Hardware: none. No endpoint, device filesystem, reset, CAN output, or motion was
   accessed. Deployment and the next jog require a fresh attended L3 gate.
 - Commit status: committed and pushed on `target/control-console-manual-l3`.
+
+## 2026-09-02 - Deploy flat manual chassis runtime
+
+- Goal: deploy the committed velocity-watchdog revision and accept the resident
+  ESP32 service in a disabled non-motion state.
+- Modified scope: three declared ESP32 filesystem files, ignored pre/post
+  deployment backups, ignored local `device_config.py`, deployment plan/log, and
+  local console process lifecycle. MaixCam, arm, TCP232, credentials, network
+  settings, CAN parameters, speed limits, firmware, and unrelated files remained
+  unchanged.
+- Safety and recovery: the operator confirmed COM7 and the immediate physical L3
+  gate. WebREPL did not complete its handshake, so COM7 direct interrupt and Raw
+  REPL were used. Fresh copies of every overwritten file were retained; no flash
+  erase or firmware write occurred.
+- Deployment: `chassis_motion_tcp_service.py`, `chassis_runtime_factory.py`, and
+  `device_config.py` were uploaded. The only configuration change was
+  `L3_MAX_HOLD_MS` from 200 to 500. All three device readback SHA-256 hashes matched
+  the local sources.
+- Validation: L1 passed 43 console and 56 ESP32 tests. Post-reset L2 application
+  traffic returned `WELCOME`, `PONG`, and `STATE=ready/disabled`, with motion
+  permission true, no lease, and no error. No Acquire, Enable, velocity, or other
+  motion command was sent. The refreshed console process started successfully.
+- Hardware: ESP32 was interrupted, written, and reset under the confirmed gate;
+  CAN motion was not requested and the robot arm was not accessed.
+- Commit status: committed and pushed on `target/control-console-manual-l3`.

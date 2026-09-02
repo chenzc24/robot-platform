@@ -27,6 +27,16 @@ class ChassisConfig(EndpointConfig):
 
 
 @dataclass(frozen=True)
+class ManualChassisConfig:
+    enabled: bool
+    lease_ms: int
+    heartbeat_interval_ms: int
+    velocity_hold_ms: int
+    linear_limit_mm_s: int
+    angular_limit_mrad_s: int
+
+
+@dataclass(frozen=True)
 class ArmConfig(EndpointConfig):
     session_id: str
 
@@ -45,6 +55,7 @@ class VideoConfig:
 @dataclass(frozen=True)
 class RuntimeConfig:
     chassis: ChassisConfig
+    manual_chassis: ManualChassisConfig
     arm: ArmConfig
     video: VideoConfig
 
@@ -73,6 +84,18 @@ def _timeout(value, field):
     return float(value)
 
 
+def _positive_int(value, field, low, high):
+    if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
+        raise RuntimeConfigError("%s must be an integer in %d..%d" % (field, low, high))
+    return value
+
+
+def _boolean(value, field):
+    if not isinstance(value, bool):
+        raise RuntimeConfigError("%s must be a boolean" % field)
+    return value
+
+
 def load_runtime_config(path):
     """Load an explicit local JSON configuration without logging its contents."""
     source = Path(path)
@@ -82,15 +105,18 @@ def load_runtime_config(path):
         raw = json.loads(source.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise RuntimeConfigError("local configuration cannot be read") from error
-    if set(raw) != {"schema_version", "chassis", "arm", "video"}:
+    if set(raw) != {"schema_version", "chassis", "manual_chassis", "arm", "video"}:
         raise RuntimeConfigError("unexpected configuration fields")
     if raw["schema_version"] != 1:
         raise RuntimeConfigError("unsupported configuration schema")
     chassis = _mapping(raw["chassis"], "chassis")
+    manual_chassis = _mapping(raw["manual_chassis"], "manual_chassis")
     arm = _mapping(raw["arm"], "arm")
     video = _mapping(raw["video"], "video")
     if set(chassis) != {"host", "port", "client_id", "credential_env", "connect_timeout_seconds"}:
         raise RuntimeConfigError("unexpected chassis configuration fields")
+    if set(manual_chassis) != {"enabled", "lease_ms", "heartbeat_interval_ms", "velocity_hold_ms", "linear_limit_mm_s", "angular_limit_mrad_s"}:
+        raise RuntimeConfigError("unexpected manual chassis configuration fields")
     if set(arm) != {"host", "port", "session_id", "connect_timeout_seconds"}:
         raise RuntimeConfigError("unexpected arm configuration fields")
     if set(video) != {"rtsp_url", "connect_timeout_seconds", "snapshot_directory"}:
@@ -102,6 +128,14 @@ def load_runtime_config(path):
             client_id=_string(chassis["client_id"], "chassis.client_id"),
             credential_env=_string(chassis["credential_env"], "chassis.credential_env"),
             connect_timeout_seconds=_timeout(chassis["connect_timeout_seconds"], "chassis.connect_timeout_seconds"),
+        ),
+        manual_chassis=ManualChassisConfig(
+            enabled=_boolean(manual_chassis["enabled"], "manual_chassis.enabled"),
+            lease_ms=_positive_int(manual_chassis["lease_ms"], "manual_chassis.lease_ms", 500, 10_000),
+            heartbeat_interval_ms=_positive_int(manual_chassis["heartbeat_interval_ms"], "manual_chassis.heartbeat_interval_ms", 50, 1_000),
+            velocity_hold_ms=_positive_int(manual_chassis["velocity_hold_ms"], "manual_chassis.velocity_hold_ms", 50, 500),
+            linear_limit_mm_s=_positive_int(manual_chassis["linear_limit_mm_s"], "manual_chassis.linear_limit_mm_s", 1, 600),
+            angular_limit_mrad_s=_positive_int(manual_chassis["angular_limit_mrad_s"], "manual_chassis.angular_limit_mrad_s", 1, 800),
         ),
         arm=ArmConfig(
             host=_string(arm["host"], "arm.host", allow_empty=True),

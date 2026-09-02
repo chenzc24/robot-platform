@@ -624,7 +624,8 @@ class MainWindow(QMainWindow):
         label.style().polish(label)
 
     def _apply_state(self, state):
-        self.setWindowTitle("Robot Console - %s" % ("Simulator" if state.environment == Environment.SIMULATOR else "Hardware (locked)"))
+        hardware_title = "Hardware (manual enabled)" if self.controller._hardware_manual_enabled() else "Hardware (locked)"
+        self.setWindowTitle("Robot Console - %s" % ("Simulator" if state.environment == Environment.SIMULATOR else hardware_title))
         self.simulator_button.setChecked(state.environment == Environment.SIMULATOR)
         self.hardware_button.setChecked(state.environment == Environment.HARDWARE)
         self.scenario_combo.setEnabled(state.environment == Environment.SIMULATOR)
@@ -659,15 +660,24 @@ class MainWindow(QMainWindow):
         )
         self.chassis_motion_value.setText("Enabled" if chassis.motion_enabled else "Permitted (locked)" if chassis.motion_permitted else "Locked")
         self.chassis_connect_button.setText("Disconnect" if chassis.link != LinkState.OFFLINE else "Connect")
-        simulator_mode = state.environment == Environment.SIMULATOR
-        self.chassis_acquire_button.setEnabled(simulator_mode and chassis.link == LinkState.ONLINE and chassis.lease_owner is None)
-        self.chassis_enable_button.setEnabled(simulator_mode and chassis.lease_owner == "console" and not chassis.motion_enabled)
-        self.chassis_disable_button.setEnabled(simulator_mode and chassis.motion_enabled)
-        self.chassis_release_button.setEnabled(simulator_mode and chassis.lease_owner is not None)
+        manual_mode = state.environment == Environment.SIMULATOR or self.controller._hardware_manual_enabled()
+        self.chassis_unlock.setText(
+            "Manual motion unlocked (attended L3)"
+            if state.environment == Environment.HARDWARE
+            else "Manual motion unlocked (simulator)"
+        )
+        if state.environment == Environment.HARDWARE and self.controller._hardware_manual_enabled():
+            limits = self.controller.runtime.config.manual_chassis
+            self.linear_slider.setMaximum(limits.linear_limit_mm_s)
+            self.angular_slider.setMaximum(limits.angular_limit_mrad_s)
+        self.chassis_acquire_button.setEnabled(manual_mode and chassis.link == LinkState.ONLINE and chassis.lease_owner is None)
+        self.chassis_enable_button.setEnabled(manual_mode and chassis.lease_owner == "console" and chassis.motion_permitted and not chassis.motion_enabled)
+        self.chassis_disable_button.setEnabled(manual_mode and chassis.motion_enabled)
+        self.chassis_release_button.setEnabled(manual_mode and chassis.lease_owner is not None)
         self.chassis_unlock.blockSignals(True)
         self.chassis_unlock.setChecked(chassis.manual_unlocked)
         self.chassis_unlock.blockSignals(False)
-        self.chassis_unlock.setEnabled(chassis.motion_enabled and state.environment == Environment.SIMULATOR)
+        self.chassis_unlock.setEnabled(chassis.motion_enabled and chassis.motion_permitted and manual_mode)
         self.chassis_vector_label.setText(
             "Requested vx %d / vy %d / omega %d / physical feedback %s"
             % (*chassis.velocity, chassis.physical_feedback)

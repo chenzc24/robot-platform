@@ -7,6 +7,14 @@
     "credential_env": "ROBOT_CHASSIS_CREDENTIAL",
     "connect_timeout_seconds": 3.0
   },
+  "manual_chassis": {
+    "enabled": false,
+    "lease_ms": 1000,
+    "heartbeat_interval_ms": 250,
+    "velocity_hold_ms": 150,
+    "linear_limit_mm_s": 50,
+    "angular_limit_mrad_s": 100
+  },
   "arm": {
     "host": "",
     "port": 0,

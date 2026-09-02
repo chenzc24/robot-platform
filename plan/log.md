@@ -356,3 +356,34 @@ entry format:
   attended-test configuration, not a general production release.
 - Commit status: pending this target's diff review, commit, and push. No
   backup, secret, local configuration, or raw resource is staged.
+
+## 2026-09-02 - Add the attended manual chassis debug panel
+
+- Goal: bind the deployed direct ESP32 RCP/TCP v2 chassis lifecycle to the
+  desktop console for explicit attended L3 debugging, while keeping Hardware
+  mode default-deny and disconnected on launch.
+- Modified scope: console local configuration template, runtime queue
+  admission, controller/view bindings, console documentation, deterministic
+  fake-client tests, and this goal plan/log. ESP32 source and device files,
+  protocol source, MaixCam, arm source, credentials, raw archives, local
+  configuration, and user settings remained read-only.
+- Implementation: a local `manual_chassis.enabled` flag defaults to false.
+  Only an ignored local override permits acquire, heartbeat, enable, velocity,
+  stop, disable, and release. The UI requires explicit Connect, Acquire,
+  Enable, and manual unlock; it bounds velocities, refreshes only while
+  unlocked/held, coalesces periodic work, and prioritizes stop-like requests.
+  Turning manual unlock off, releasing a direction, disconnecting, or a
+  failed motion result clears the local hold state.
+- Validation: L1. Console tests `36 passed`; ESP32 `56 passed`; protocol `28
+  passed, 6 subtests passed`; MaixCam `44 passed`; robot arm `9 passed`; and
+  development tooling `23 passed`. Offscreen UI smoke, Python compilation,
+  and `git diff --check` passed. Tests used fakes/offscreen Qt and no endpoint
+  access.
+- Hardware: no device, socket, stream, credential, deployment operation, CAN
+  bus, or motion command was accessed. A panel-to-device test remains L3 and
+  requires a fresh immediate on-site safety confirmation.
+- Commit status: committed and pushed on `target/control-console-manual-l3`;
+  ignored local configuration and secrets are excluded.
+- Follow-up: conduct one explicitly gated attended panel test, beginning with
+  connect/status and then a separate low-speed hold-to-run movement; add
+  physical feedback before treating `DONE` as wheel-motion evidence.

@@ -171,7 +171,37 @@ class SerializedSession(QObject):
 
     def request(self, command, payload=None):
         self._start_if_needed()
-        self._operations.put(("request", command, payload or {}))
+        operation = ("request", command, payload or {})
+        if command in {"velocity", "heartbeat"}:
+            self._replace_pending(command, operation)
+        elif command in {"stop", "disable", "release"}:
+            self._prioritize_safe_output(operation)
+        else:
+            self._operations.put(operation)
+
+    def _replace_pending(self, command, operation):
+        """Keep only the newest periodic request; never build a motion backlog."""
+        with self._operations.mutex:
+            retained = [
+                item for item in self._operations.queue
+                if not (item[0] == "request" and item[1] == command)
+            ]
+            self._operations.queue.clear()
+            self._operations.queue.extend(retained)
+            self._operations.queue.append(operation)
+            self._operations.not_empty.notify()
+
+    def _prioritize_safe_output(self, operation):
+        """Drop stale motion/heartbeats and schedule stop-like output next."""
+        with self._operations.mutex:
+            retained = [
+                item for item in self._operations.queue
+                if not (item[0] == "request" and item[1] in {"velocity", "heartbeat"})
+            ]
+            self._operations.queue.clear()
+            self._operations.queue.extend(retained)
+            self._operations.queue.appendleft(operation)
+            self._operations.not_empty.notify()
 
     def disconnect(self):
         self._start_if_needed()
@@ -395,7 +425,7 @@ class RuntimeCoordinator(QObject):
             "ESP32",
             chassis_factory or (lambda: _default_chassis_factory(config.chassis)),
             _chassis_dispatch,
-            SAFE_CHASSIS_COMMANDS,
+            SAFE_CHASSIS_COMMANDS | (MOTION_CHASSIS_COMMANDS if config.manual_chassis.enabled else set()),
             MOTION_CHASSIS_COMMANDS,
             self,
         )
@@ -471,6 +501,19 @@ class RuntimeCoordinator(QObject):
 
     def request_chassis_status(self):
         self.chassis.request("status")
+
+    @property
+    def manual_chassis_enabled(self):
+        return self.config.manual_chassis.enabled
+
+    def request_chassis_manual(self, command, payload=None):
+        if command not in MOTION_CHASSIS_COMMANDS:
+            raise ValueError("unsupported_manual_chassis_command")
+        if not self.manual_chassis_enabled:
+            self.result_ready.emit(SessionResult("ESP32", command, Lifecycle.REJECTED, "motion_not_admitted"))
+            return False
+        self.chassis.request(command, payload)
+        return True
 
     def request_arm_status(self):
         self.arm.request("status")

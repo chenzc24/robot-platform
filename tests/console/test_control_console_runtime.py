@@ -8,6 +8,7 @@ import tempfile
 import threading
 import time
 import unittest
+from types import SimpleNamespace
 
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -25,6 +26,7 @@ from ui.runtime import RuntimeCoordinator, SerializedSession, SessionFault, Sess
 from ui.runtime_config import (
     ArmConfig,
     ChassisConfig,
+    ManualChassisConfig,
     RuntimeConfig,
     RuntimeConfigError,
     VideoConfig,
@@ -204,11 +206,31 @@ class FakeRuntime(QObject):
         self.calls.append("close")
 
 
+class ManualRuntime(FakeRuntime):
+    def __init__(self):
+        super().__init__()
+        self.manual_chassis_enabled = True
+        self.config = SimpleNamespace(
+            manual_chassis=SimpleNamespace(
+                lease_ms=1000,
+                heartbeat_interval_ms=250,
+                velocity_hold_ms=150,
+                linear_limit_mm_s=50,
+                angular_limit_mrad_s=100,
+            )
+        )
+
+    def request_chassis_manual(self, command, payload=None):
+        self.calls.append((command, payload or {}))
+        return True
+
+
 class RuntimeConfigTests(unittest.TestCase):
     def test_loader_accepts_secret_free_template_shape(self):
         source = {
             "schema_version": 1,
             "chassis": {"host": "", "port": 0, "client_id": "console", "credential_env": "ROBOT_CHASSIS_CREDENTIAL", "connect_timeout_seconds": 3.0},
+            "manual_chassis": {"enabled": False, "lease_ms": 1000, "heartbeat_interval_ms": 250, "velocity_hold_ms": 150, "linear_limit_mm_s": 50, "angular_limit_mrad_s": 100},
             "arm": {"host": "", "port": 0, "session_id": "console", "connect_timeout_seconds": 3.0},
             "video": {"rtsp_url": "", "connect_timeout_seconds": 3.0, "snapshot_directory": ""},
         }
@@ -217,6 +239,7 @@ class RuntimeConfigTests(unittest.TestCase):
             path.write_text(json.dumps(source), encoding="utf-8")
             config = load_runtime_config(path)
         self.assertFalse(config.chassis.complete)
+        self.assertFalse(config.manual_chassis.enabled)
         self.assertFalse(config.arm.complete)
         self.assertFalse(config.video.complete)
 
@@ -225,6 +248,20 @@ class RuntimeConfigTests(unittest.TestCase):
             path = pathlib.Path(directory) / "console.local.json"
             path.write_text("{}", encoding="utf-8")
             with self.assertRaisesRegex(RuntimeConfigError, "unexpected"):
+                load_runtime_config(path)
+
+    def test_loader_rejects_non_boolean_manual_enable(self):
+        source = {
+            "schema_version": 1,
+            "chassis": {"host": "", "port": 0, "client_id": "console", "credential_env": "ROBOT_CHASSIS_CREDENTIAL", "connect_timeout_seconds": 3.0},
+            "manual_chassis": {"enabled": "true", "lease_ms": 1000, "heartbeat_interval_ms": 250, "velocity_hold_ms": 150, "linear_limit_mm_s": 50, "angular_limit_mrad_s": 100},
+            "arm": {"host": "", "port": 0, "session_id": "console", "connect_timeout_seconds": 3.0},
+            "video": {"rtsp_url": "", "connect_timeout_seconds": 3.0, "snapshot_directory": ""},
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "console.local.json"
+            path.write_text(json.dumps(source), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeConfigError, "manual_chassis.enabled"):
                 load_runtime_config(path)
 
 
@@ -384,6 +421,7 @@ class RuntimeWorkerTests(unittest.TestCase):
             root = pathlib.Path(directory) / "logs"
             config = RuntimeConfig(
                 ChassisConfig("", 0, 1.0, "console", "ROBOT_CHASSIS_CREDENTIAL"),
+                ManualChassisConfig(False, 1000, 250, 150, 50, 100),
                 ArmConfig("", 0, 1.0, "console"),
                 VideoConfig("", 1.0, "session"),
             )
@@ -394,7 +432,7 @@ class RuntimeWorkerTests(unittest.TestCase):
             self.assertTrue(worker.saved[0].is_file())
             self.assertTrue(worker.saved[0].is_relative_to(root.resolve()))
 
-            outside = RuntimeConfig(config.chassis, config.arm, VideoConfig("", 1.0, "../outside"))
+            outside = RuntimeConfig(config.chassis, config.manual_chassis, config.arm, VideoConfig("", 1.0, "../outside"))
             rejected = RuntimeCoordinator(outside, video_worker=SnapshotVideoWorker(image), snapshot_root=root)
             faults = []
             rejected.fault_raised.connect(faults.append)
@@ -446,6 +484,50 @@ class RuntimeWorkerTests(unittest.TestCase):
         runtime.frame_ready.emit(VideoFrame(image, 3, 0, 20.0, 0))
         self.assertEqual(controller.state.video.link, LinkState.ONLINE)
         self.assertEqual(controller.state.video.resolution, (1, 1))
+
+    def test_hardware_manual_configuration_requires_explicit_session_and_bounds_velocity(self):
+        runtime = ManualRuntime()
+        controller = ConsoleController(runtime=runtime)
+        controller.set_environment(Environment.HARDWARE)
+        self.assertFalse(controller.chassis_stop())
+        self.assertEqual(runtime.calls, [])
+        controller._replace(chassis=controller.state.chassis.__class__(
+            link=LinkState.ONLINE,
+            authenticated=True,
+            lease_owner=None,
+            motion_permitted=True,
+            reported_state="disabled",
+        ))
+        self.assertTrue(controller.chassis_acquire())
+        self.assertEqual(runtime.calls[-1], ("acquire", {"lease_ms": 1000}))
+        controller._replace(chassis=controller.state.chassis.__class__(
+            link=LinkState.ONLINE,
+            authenticated=True,
+            lease_owner="console",
+            motion_permitted=True,
+            motion_enabled=False,
+            reported_state="disabled",
+        ))
+        self.assertTrue(controller.chassis_enable())
+        self.assertEqual(runtime.calls[-1], ("enable", {}))
+        controller._replace(chassis=controller.state.chassis.__class__(
+            link=LinkState.ONLINE,
+            authenticated=True,
+            lease_owner="console",
+            motion_permitted=True,
+            motion_enabled=True,
+            reported_state="enabled stopped",
+        ))
+        self.assertTrue(controller.set_chassis_manual_unlock(True))
+        self.assertEqual(runtime.calls[-1], ("heartbeat", {"lease_ms": 1000}))
+        self.assertTrue(controller.chassis_velocity(50, 0, 0))
+        self.assertEqual(runtime.calls[-1][0], "velocity")
+        self.assertFalse(controller.chassis_velocity(51, 0, 0))
+        self.assertFalse(controller.set_chassis_manual_unlock(False))
+        self.assertEqual(runtime.calls[-1], ("stop", {}))
+        self.assertTrue(controller.chassis_stop())
+        self.assertEqual(runtime.calls[-1], ("stop", {}))
+        controller._stop_manual_chassis_timer()
 
     def test_hardware_ui_binds_decoded_frame_and_retains_invalid_status_fault(self):
         runtime = FakeRuntime()

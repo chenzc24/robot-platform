@@ -873,4 +873,6 @@ entry format:
   performed.
 - Local exception: the user's `.vscode/settings.json` change remains untouched
   and uncommitted.
-- Commit status: pending on `main`.
+- Commit status: reference committed on `main` as `834e82d`
+  (`docs(arm): record relevant controller APIs`); this factual status update is
+  committed after it, and both commits are pushed together.

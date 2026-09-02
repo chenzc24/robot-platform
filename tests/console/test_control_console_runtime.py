@@ -213,7 +213,7 @@ class ManualRuntime(FakeRuntime):
         self.config = SimpleNamespace(
             chassis=SimpleNamespace(client_id="console-l2"),
             manual_chassis=SimpleNamespace(
-                lease_ms=5000,
+                lease_ms=2000,
                 heartbeat_interval_ms=250,
                 velocity_hold_ms=150,
                 linear_limit_mm_s=50,
@@ -231,7 +231,7 @@ class RuntimeConfigTests(unittest.TestCase):
         source = {
             "schema_version": 1,
             "chassis": {"host": "", "port": 0, "client_id": "console", "credential_env": "ROBOT_CHASSIS_CREDENTIAL", "connect_timeout_seconds": 3.0},
-            "manual_chassis": {"enabled": False, "lease_ms": 5000, "heartbeat_interval_ms": 250, "velocity_hold_ms": 150, "linear_limit_mm_s": 50, "angular_limit_mrad_s": 100},
+            "manual_chassis": {"enabled": False, "lease_ms": 2000, "heartbeat_interval_ms": 250, "velocity_hold_ms": 150, "linear_limit_mm_s": 50, "angular_limit_mrad_s": 100},
             "arm": {"host": "", "port": 0, "session_id": "console", "connect_timeout_seconds": 3.0},
             "video": {"rtsp_url": "", "connect_timeout_seconds": 3.0, "snapshot_directory": ""},
         }
@@ -255,7 +255,7 @@ class RuntimeConfigTests(unittest.TestCase):
         source = {
             "schema_version": 1,
             "chassis": {"host": "", "port": 0, "client_id": "console", "credential_env": "ROBOT_CHASSIS_CREDENTIAL", "connect_timeout_seconds": 3.0},
-            "manual_chassis": {"enabled": "true", "lease_ms": 5000, "heartbeat_interval_ms": 250, "velocity_hold_ms": 150, "linear_limit_mm_s": 50, "angular_limit_mrad_s": 100},
+            "manual_chassis": {"enabled": "true", "lease_ms": 2000, "heartbeat_interval_ms": 250, "velocity_hold_ms": 150, "linear_limit_mm_s": 50, "angular_limit_mrad_s": 100},
             "arm": {"host": "", "port": 0, "session_id": "console", "connect_timeout_seconds": 3.0},
             "video": {"rtsp_url": "", "connect_timeout_seconds": 3.0, "snapshot_directory": ""},
         }
@@ -263,6 +263,20 @@ class RuntimeConfigTests(unittest.TestCase):
             path = pathlib.Path(directory) / "console.local.json"
             path.write_text(json.dumps(source), encoding="utf-8")
             with self.assertRaisesRegex(RuntimeConfigError, "manual_chassis.enabled"):
+                load_runtime_config(path)
+
+    def test_loader_rejects_manual_lease_above_protocol_limit(self):
+        source = {
+            "schema_version": 1,
+            "chassis": {"host": "", "port": 0, "client_id": "console", "credential_env": "ROBOT_CHASSIS_CREDENTIAL", "connect_timeout_seconds": 3.0},
+            "manual_chassis": {"enabled": False, "lease_ms": 2001, "heartbeat_interval_ms": 250, "velocity_hold_ms": 150, "linear_limit_mm_s": 50, "angular_limit_mrad_s": 100},
+            "arm": {"host": "", "port": 0, "session_id": "console", "connect_timeout_seconds": 3.0},
+            "video": {"rtsp_url": "", "connect_timeout_seconds": 3.0, "snapshot_directory": ""},
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "console.local.json"
+            path.write_text(json.dumps(source), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeConfigError, "manual_chassis.lease_ms"):
                 load_runtime_config(path)
 
 
@@ -500,7 +514,7 @@ class RuntimeWorkerTests(unittest.TestCase):
             reported_state="disabled",
         ))
         self.assertTrue(controller.chassis_acquire())
-        self.assertEqual(runtime.calls[-1], ("acquire", {"lease_ms": 5000}))
+        self.assertEqual(runtime.calls[-1], ("acquire", {"lease_ms": 2000}))
         controller._replace(chassis=controller.state.chassis.__class__(
             link=LinkState.ONLINE,
             authenticated=True,
@@ -520,7 +534,7 @@ class RuntimeWorkerTests(unittest.TestCase):
             reported_state="enabled stopped",
         ))
         self.assertTrue(controller.set_chassis_manual_unlock(True))
-        self.assertEqual(runtime.calls[-1], ("heartbeat", {"lease_ms": 5000}))
+        self.assertEqual(runtime.calls[-1], ("heartbeat", {"lease_ms": 2000}))
         self.assertTrue(controller.chassis_velocity(50, 0, 0))
         self.assertEqual(runtime.calls[-1][0], "velocity")
         self.assertFalse(controller.chassis_velocity(51, 0, 0))
@@ -529,6 +543,38 @@ class RuntimeWorkerTests(unittest.TestCase):
         self.assertTrue(controller.chassis_stop())
         self.assertEqual(runtime.calls[-1], ("stop", {}))
         controller._stop_manual_chassis_timer()
+
+    def test_owned_hardware_lease_renews_without_enabling_or_velocity(self):
+        runtime = ManualRuntime()
+        controller = ConsoleController(runtime=runtime)
+        controller.set_environment(Environment.HARDWARE)
+        controller._replace(chassis=controller.state.chassis.__class__(
+            link=LinkState.ONLINE,
+            authenticated=True,
+            motion_permitted=True,
+            reported_state="status pending",
+        ))
+        controller._apply_chassis_status({
+            "version": 2, "sequence": 1, "type": "STATE", "ttl_ms": 0,
+            "payload": {
+                "service_state": "ready", "chassis_state": "disabled", "motion_permitted": True,
+                "authenticated": True, "lease_active": True, "lease_owner": "console-l2",
+                "lease_remaining_ms": 1800, "hold_remaining_ms": 0, "last_error": "none",
+            },
+        })
+        self.assertTrue(controller._manual_chassis_timer.isActive())
+        self.assertFalse(controller.can_chassis_move())
+        controller._manual_chassis_tick()
+        self.assertEqual(runtime.calls, [("heartbeat", {"lease_ms": 2000})])
+        controller._apply_chassis_status({
+            "version": 2, "sequence": 2, "type": "STATE", "ttl_ms": 0,
+            "payload": {
+                "service_state": "ready", "chassis_state": "disabled", "motion_permitted": True,
+                "authenticated": True, "lease_active": False, "lease_owner": "none",
+                "lease_remaining_ms": 0, "hold_remaining_ms": 0, "last_error": "none",
+            },
+        })
+        self.assertFalse(controller._manual_chassis_timer.isActive())
 
     def test_hardware_enable_view_uses_configured_chassis_client_id(self):
         runtime = ManualRuntime()

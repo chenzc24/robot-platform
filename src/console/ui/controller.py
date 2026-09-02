@@ -336,7 +336,7 @@ class ConsoleController(QObject):
 
     def chassis_disable(self):
         if self.state.environment == Environment.HARDWARE:
-            self._stop_manual_chassis_timer()
+            self._held_chassis_velocity = None
             if not self._hardware_manual_session_ready():
                 self._record("ESP32", "chassis.disable", Lifecycle.REJECTED, "manual_session_not_ready")
                 return False
@@ -375,7 +375,7 @@ class ConsoleController(QObject):
                     "heartbeat", {"lease_ms": self.runtime.config.manual_chassis.lease_ms}
                 )
             else:
-                self._stop_manual_chassis_timer()
+                self._held_chassis_velocity = None
                 self._replace(chassis=replace(chassis, manual_unlocked=False, velocity=(0, 0, 0)))
                 if self._hardware_manual_session_ready():
                     self.runtime.request_chassis_manual("stop")
@@ -473,17 +473,24 @@ class ConsoleController(QObject):
             and chassis.authenticated
         )
 
+    def _hardware_manual_lease_owned(self):
+        chassis = self.state.chassis
+        return bool(
+            self._hardware_manual_session_ready()
+            and chassis.lease_owner == self.chassis_lease_owner_id()
+        )
+
     def _stop_manual_chassis_timer(self):
         self._held_chassis_velocity = None
         self._manual_chassis_timer.stop()
 
     def _manual_chassis_tick(self):
-        if not self.can_chassis_move():
+        if not self._hardware_manual_lease_owned():
             self._stop_manual_chassis_timer()
             return
         limits = self.runtime.config.manual_chassis
         self.runtime.request_chassis_manual("heartbeat", {"lease_ms": limits.lease_ms})
-        if self._held_chassis_velocity is not None:
+        if self.can_chassis_move() and self._held_chassis_velocity is not None:
             vx, vy, omega = self._held_chassis_velocity
             self.runtime.request_chassis_manual(
                 "velocity",
@@ -712,9 +719,14 @@ class ConsoleController(QObject):
             reported_state=status.chassis_state.replace("_", " "),
             last_error=status.last_error,
         )
-        if not (chassis.lease_owner == self.chassis_lease_owner_id() and chassis.motion_enabled and chassis.motion_permitted):
+        if chassis.lease_owner != self.chassis_lease_owner_id():
             chassis = replace(chassis, manual_unlocked=False, velocity=(0, 0, 0))
             self._stop_manual_chassis_timer()
+        else:
+            if not (chassis.motion_enabled and chassis.motion_permitted):
+                chassis = replace(chassis, manual_unlocked=False, velocity=(0, 0, 0))
+                self._held_chassis_velocity = None
+            self._manual_chassis_timer.start(self.runtime.config.manual_chassis.heartbeat_interval_ms)
         self._replace(chassis=chassis)
 
     def _apply_arm_status(self, payload):

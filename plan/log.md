@@ -449,3 +449,24 @@ entry format:
 - Hardware: none in this implementation goal. Restart the console to load the
   local settings; enable and motion remain separate attended L3 actions.
 - Commit status: committed and pushed on `target/control-console-manual-l3`.
+
+## 2026-09-02 - Renew manual chassis lease after acquire
+
+- Goal: correct the live `invalid_lease` result after the console requested a
+  5000 ms lease while the deployed RCP/TCP v2 protocol accepts only
+  250–2000 ms.
+- Modified scope: local manual lease validation and defaults, controller
+  renewal behavior, console documentation/tests, and this plan/log. ESP32
+  source/device configuration, protocol source, credentials, endpoints,
+  MaixCam, arm code, raw resources, and user settings remained read-only.
+- Implementation: the console now requests a legal 2000 ms lease. Once a
+  fresh status reports the configured client as lease owner, it sends only
+  periodic heartbeat renewals until release, disconnect, fault, or ownership
+  loss. Velocity remains separately gated by enable and explicit manual unlock.
+- Validation: L1. New tests cover upper-bound rejection and owned-lease
+  renewal without enable or velocity. All 40 console tests, offscreen smoke,
+  Python compilation, workspace validation, and diff-format checks passed.
+  No device endpoint was accessed.
+- Hardware: none in this implementation goal. Restart the console before the
+  next session; enable and motion remain separate attended L3 actions.
+- Commit status: committed and pushed on `target/control-console-manual-l3`.

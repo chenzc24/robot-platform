@@ -131,7 +131,7 @@ def load_runtime_config(path):
         ),
         manual_chassis=ManualChassisConfig(
             enabled=_boolean(manual_chassis["enabled"], "manual_chassis.enabled"),
-            lease_ms=_positive_int(manual_chassis["lease_ms"], "manual_chassis.lease_ms", 500, 10_000),
+            lease_ms=_positive_int(manual_chassis["lease_ms"], "manual_chassis.lease_ms", 250, 2_000),
             heartbeat_interval_ms=_positive_int(manual_chassis["heartbeat_interval_ms"], "manual_chassis.heartbeat_interval_ms", 50, 1_000),
             velocity_hold_ms=_positive_int(manual_chassis["velocity_hold_ms"], "manual_chassis.velocity_hold_ms", 50, 500),
             linear_limit_mm_s=_positive_int(manual_chassis["linear_limit_mm_s"], "manual_chassis.linear_limit_mm_s", 1, 600),

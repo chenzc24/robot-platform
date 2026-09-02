@@ -13,8 +13,10 @@ selecting Hardware mode. Turning manual unlock off also issues stop.
 While unlocked, the panel renews the configured lease and refreshes a bounded
 velocity while a direction is held. The default manual limits match the first
 L3 deployment: 50 mm/s linear, 100 mrad/s angular, and a 150 ms hold. The
-manual lease is 5 s, leaving time to inspect the post-Acquire status and click
-Enable; it begins renewing only after the operator unlocks the session. A local
+manual lease is 2 s, the maximum accepted by the deployed protocol. After an
+operator-clicked Acquire returns an owned status, the panel renews that lease
+every 250 ms while the session remains connected. Renewal alone never enables
+or moves the chassis. A local
 stop is prioritized ahead of queued velocity refreshes; ESP32 independently
 stops on hold expiry, lease expiry, disconnect, parse error, or local fault.
 

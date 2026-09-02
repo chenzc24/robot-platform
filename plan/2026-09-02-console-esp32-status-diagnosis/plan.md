@@ -1,6 +1,6 @@
 # Console ESP32 Safe-Status Diagnosis
 
-- Status: `blocked`
+- Status: `completed`
 - Responsible: `agent`
 - Highest validation level: `L2` (real connection, no motion)
 
@@ -51,13 +51,17 @@ credentials and endpoint configuration and are read only.
 - The console fault is therefore correctly blocking `ENABLE`: it has no valid
   authenticated `STATE` reply. The immediate blocker is device-side runtime
   availability, not a console credential or enablement-gate failure.
+- After the operator reset the ESP32, the planned L2 recheck passed:
+  `WELCOME`, `PONG`, and `STATE` returned in one fresh session. The service
+  reported `ready`, chassis `disabled`, motion permission true,
+  authentication true, and no active lease. No state-changing request was
+  sent in the recheck.
 
 ## Outstanding matters
 
-- An on-site operator must explicitly authorize and perform the safe ESP32
-  runtime recovery (normally RST, then wait for the resident listener). After
-  that, repeat only `HELLO`/`PING`/`STATUS` before attempting a new attended L3
-  manual-panel test.
+- The console can now reconnect for an attended manual-panel session. Any
+  `ACQUIRE`/`ENABLE`/motion test remains a new L3 action requiring an immediate
+  on-site safety confirmation.
 
 ## Commit intent
 

@@ -405,3 +405,8 @@ entry format:
 - Commit status: pending the scoped diagnostic record commit. A safe on-site
   runtime recovery is required before a fresh L2 status check and any later L3
   panel use.
+- Recovery validation: after the operator performed an ESP32 reset, one fresh
+  L2 session returned `WELCOME`, `PONG`, and `STATE` with service `ready`,
+  chassis `disabled`, motion permission true, authenticated true, and no active
+  lease. No state-changing request was sent. The console may reconnect, but
+  any acquire/enable/motion action requires a new immediate L3 safety gate.

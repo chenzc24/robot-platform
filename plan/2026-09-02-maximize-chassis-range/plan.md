@@ -61,6 +61,13 @@ No device connection, upload, reset, enable, CAN write, or real motion is part
 of this goal. Full-range device deployment and motion validation require a
 fresh on-site L3 safety confirmation.
 
+## Integration authorization
+
+The user subsequently requested that this validated branch be merged into
+`main`. The merge may proceed after confirming the target branch and
+`origin/main` have not diverged. This does not authorize device deployment or
+motion.
+
 ## Intent to submit
 
 ```text

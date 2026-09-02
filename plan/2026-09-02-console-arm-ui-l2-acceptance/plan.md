@@ -1,6 +1,6 @@
 # Console Arm UI L2 Acceptance
 
-- Status: `in-progress`
+- Status: `completed`
 - Responsible: `joint`
 - Highest validation level: `L2`
 
@@ -65,18 +65,31 @@ disconnected and the deployed controller service remains default-deny.
   `REJECTED/request_in_flight`. The UI then attempted to parse that rejection as
   a successful status envelope. The wrapper now emits an explicit rejection and
   retains the healthy session; a focused L1 regression test passes.
-- Visual L2 rerun is pending. The locally launched console was minimized after
-  user input, so no further UI input was sent in that session.
+- The runtime now inspects the nested MaixCam terminal lifecycle before
+  constructing its outer lifecycle event. A nested rejection is shown as a
+  rejection, rather than being parsed as a successful arm-status envelope.
+  The Hardware view hides simulator-only motion forms and shows an explicit
+  default-deny explanation instead of a misleading usable-looking control.
+- L1: `python -m unittest discover -s tests\\console -v` passed all 47 tests.
+  Python compilation of the changed UI/runtime modules and `git diff --check`
+  also passed.
+- L2 visual rerun: a newly started console was switched to Hardware and only
+  **Connect arm route** was used. The panel rendered MaixCam **Online**,
+  UART/LAN1 **Online**, Controller **Online**, and Task **Idle / ready**. It
+  rendered `Route ready; controller policy is default-deny (motion_enabled=0).`
+  and kept the `Hardware motion unavailable` control disabled with all
+  simulator joint/Cartesian/gripper forms hidden. No arm motion or controller
+  configuration command was sent.
+- The concurrently displayed ESP32 connection and video-decoder faults were
+  pre-existing out-of-scope statuses; there was no arm-route fault following
+  the L2 connect/status refresh.
 
 ## Outstanding matters
 
-- Restart the console from the updated local source, select Hardware, connect
-  only the arm route, and confirm `ready`, UART/LAN1 Online, Controller Online,
-  a completed `status` journal event, no active fault, and disabled motion
-  controls.
-- The hardware arm panel layout and its motion-availability explanation need
-  correction before the visual rerun; this is presentation and state mapping,
-  not permission to add arm motion.
+- Hardware arm motion is deliberately not implemented in this console release.
+  A separate L3 goal needs an approved action mapping, arm bounds/safe poses,
+  low-speed validation, and an explicit on-site safety gate before the UI may
+  send an arm command.
 
 ## Intent to submit
 

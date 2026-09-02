@@ -668,3 +668,28 @@ entry format:
 - Commit status: implementation is committed as `861aae1`
   (`fix(console): add arm CLI diagnostics`); this completed record is committed
   and pushed with the current main history.
+
+## 2026-09-02 - Accept the Hardware arm UI as an honest L2 route monitor
+
+- Goal: correct the Hardware-mode arm panel so its layout reflects the actual
+  MaixCam-to-LAN1 route and it never presents simulator motion controls as
+  real-hardware controls.
+- Modified scope: console arm lifecycle mapping and view layout, focused
+  console tests, the goal plan, and this log. No arm controller project,
+  MaixCam deployment, TCP232 configuration, LAN2, ESP32, CAN, credentials, or
+  raw-resource archive changed.
+- Implementation: nested MaixCam `REJECTED` lifecycle responses now remain
+  explicit at the console boundary, instead of becoming a malformed successful
+  status parse. Hardware mode hides joint/Cartesian/gripper forms and displays
+  endpoint state plus the exact default-deny reason. Simulator controls are
+  unchanged.
+- Validation: 47 focused console tests, Python compilation, and
+  `git diff --check` passed. L2 visual acceptance connected only the arm route:
+  MaixCam, UART/LAN1, and controller became Online; task reported Idle/ready;
+  `motion_enabled=0` was rendered and Hardware motion remained disabled.
+  Existing ESP32/video faults were visibly unrelated; no arm-route fault or
+  state-changing arm request occurred.
+- Hardware: MaixCam arm route only, with the user-installed default-deny
+  controller retained. No physical arm action, controller configuration,
+  TCP232 write, or LAN2 operation was sent.
+- Commit status: pending.

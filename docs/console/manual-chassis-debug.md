@@ -1,34 +1,64 @@
 # Hardware Manual Chassis Debug
 
-The console can expose a direct ESP32 manual-debug session only when the
-ignored local `manual_chassis.enabled` setting is explicitly `true`. The
-committed template leaves it `false`.
+The console exposes direct ESP32 manual control only when the ignored local
+`manual_chassis.enabled` setting is explicitly `true`. The committed template
+keeps it `false`.
 
-The operator flow is: connect, inspect status, acquire, enable, enable the
-manual-unlock toggle, then hold a direction control. Releasing the direction
-issues stop; Disable and Release end the session. The panel sends no connection,
-lease, enable, heartbeat, or velocity merely from opening the application or
-selecting Hardware mode. Turning manual unlock off also issues stop.
+## Normal operator flow
 
-While unlocked, the panel renews the configured lease and refreshes a bounded
-velocity while a direction is held. The default manual limits match the first
-L3 deployment: 50 mm/s linear, 100 mrad/s angular, and a 150 ms hold. The
-manual lease is 2 s, the maximum accepted by the deployed protocol. After an
-operator-clicked Acquire returns an owned status, the panel renews that lease
-every 250 ms while the session remains connected. Renewal alone never enables
-or moves the chassis. A local
-stop is prioritized ahead of queued velocity refreshes; ESP32 independently
-stops on hold expiry, lease expiry, disconnect, parse error, or local fault.
+```text
+Connect → Start manual control → hold a direction → release to stop
+                                      │
+                                      └──────────→ STOP is always available
 
-The desktop application writes sanitized live event and fault lines to the
-ignored local file `logs/console/latest-events.log`. It records timestamps,
-targets, command names, lifecycle, result code, and fault codes only. Follow
-the file from a PowerShell terminal with:
+End manual control → STOP → Disable → Release
+```
+
+`Start manual control` performs Acquire and Enable as one asynchronous operator
+action. It renews the lease in the background and unlocks the direction controls
+only after ESP32 status confirms ownership and enabled state. Repeated clicks are
+blocked while this transition is pending.
+
+Holding a direction sends the first bounded velocity immediately and refreshes it
+independently of the lease heartbeat. The refresh interval is at most 100 ms and
+is always derived to be well inside the configured velocity hold. Releasing the
+button stops refresh and immediately queues STOP.
+
+`End manual control` runs STOP, Disable, and Release in order. The raw Acquire,
+Enable, Disable, Release, and manual-unlock controls remain under **Advanced
+protocol controls** for protocol diagnosis; they are not part of routine manual
+operation.
+
+## Minimal runtime protection
+
+The default attended settings are:
+
+```text
+lease:              2000 ms
+lease heartbeat:     500 ms
+velocity refresh:    100 ms maximum
+velocity hold:       500 ms
+linear limit:         50 mm/s
+angular limit:       100 mrad/s
+```
+
+The two timeout classes have deliberately different results:
+
+- Velocity hold expiry sends zero speed and leaves the chassis enabled and the
+  lease owned. The operator can jog again without repeating session setup.
+- Lease expiry, connection loss, malformed transport, or local execution failure
+  sends stop and disable. These conditions require recovery or reconnection.
+
+An explicit ESP32 `ERROR` is reported as `REJECTED` and does not disconnect the
+session. A transport failure during a state-changing request remains `UNKNOWN`
+and disconnects because its terminal outcome cannot be proven.
+
+The desktop application writes sanitized events and faults to the ignored local
+file `logs/console/latest-events.log`. Follow it with:
 
 ```powershell
 Get-Content logs\console\latest-events.log -Wait
 ```
 
-This is an attended L3 diagnostic surface, not an emergency stop and not an
-L4 coordinated-control surface. Each real use still requires the immediate
-physical L3 safety gate.
+This surface is for attended L3 debugging. It is not an emergency stop and does
+not replace the physical emergency stop or the immediate L3 safety gate.

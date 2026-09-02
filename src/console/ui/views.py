@@ -345,14 +345,26 @@ class MainWindow(QMainWindow):
         session.setContentsMargins(10, 4, 10, 6)
         session.setSpacing(6)
         self.chassis_connect_button = QPushButton("Connect")
+        self.chassis_start_button = QPushButton("Start manual control")
+        self.chassis_end_button = QPushButton("End manual control")
+        for widget in (self.chassis_connect_button, self.chassis_start_button, self.chassis_end_button):
+            session.addWidget(widget)
+        session.addStretch(1)
+        layout.addLayout(session)
+
+        self.chassis_advanced = QGroupBox("Advanced protocol controls")
+        self.chassis_advanced.setCheckable(True)
+        self.chassis_advanced.setChecked(False)
+        advanced = QHBoxLayout(self.chassis_advanced)
         self.chassis_acquire_button = QPushButton("Acquire")
         self.chassis_enable_button = QPushButton("Enable")
         self.chassis_disable_button = QPushButton("Disable")
         self.chassis_release_button = QPushButton("Release")
-        for widget in (self.chassis_connect_button, self.chassis_acquire_button, self.chassis_enable_button, self.chassis_disable_button, self.chassis_release_button):
-            session.addWidget(widget)
-        session.addStretch(1)
-        layout.addLayout(session)
+        self.chassis_unlock = QCheckBox("Manual unlock")
+        for widget in (self.chassis_acquire_button, self.chassis_enable_button, self.chassis_disable_button, self.chassis_release_button, self.chassis_unlock):
+            advanced.addWidget(widget)
+        advanced.addStretch(1)
+        layout.addWidget(self.chassis_advanced)
 
         controls = QHBoxLayout()
         controls.setContentsMargins(10, 4, 10, 8)
@@ -391,8 +403,7 @@ class MainWindow(QMainWindow):
         self.angular_slider.setRange(10, 800)
         self.angular_slider.setValue(240)
         self.chassis_vector_label = _label("Requested vx 0 / vy 0 / omega 0", "muted")
-        self.chassis_unlock = QCheckBox("Manual motion unlocked (simulator)")
-        for widget in (self.linear_limit_label, self.linear_slider, self.angular_limit_label, self.angular_slider, self.chassis_vector_label, self.chassis_unlock):
+        for widget in (self.linear_limit_label, self.linear_slider, self.angular_limit_label, self.angular_slider, self.chassis_vector_label):
             limits.addWidget(widget)
         controls.addLayout(limits, 1)
         layout.addLayout(controls)
@@ -530,6 +541,8 @@ class MainWindow(QMainWindow):
         self.overlay_button.clicked.connect(self.controller.toggle_overlays)
         self.freeze_button.clicked.connect(self.controller.toggle_video_freeze)
         self.chassis_connect_button.clicked.connect(self._toggle_chassis_connection)
+        self.chassis_start_button.clicked.connect(self.controller.start_chassis_manual)
+        self.chassis_end_button.clicked.connect(self.controller.end_chassis_manual)
         self.chassis_acquire_button.clicked.connect(self.controller.chassis_acquire)
         self.chassis_enable_button.clicked.connect(self.controller.chassis_enable)
         self.chassis_disable_button.clicked.connect(self.controller.chassis_disable)
@@ -661,10 +674,15 @@ class MainWindow(QMainWindow):
         self.chassis_motion_value.setText("Enabled" if chassis.motion_enabled else "Permitted (locked)" if chassis.motion_permitted else "Locked")
         self.chassis_connect_button.setText("Disconnect" if chassis.link != LinkState.OFFLINE else "Connect")
         manual_mode = state.environment == Environment.SIMULATOR or self.controller._hardware_manual_enabled()
+        transition = self.controller.chassis_manual_transition()
+        self.chassis_start_button.setText("Starting..." if transition == "starting" else "Start manual control")
+        self.chassis_end_button.setText("Ending..." if transition == "ending" else "End manual control")
+        self.chassis_start_button.setEnabled(self.controller.can_start_chassis_manual())
+        self.chassis_end_button.setEnabled(self.controller.can_end_chassis_manual())
         self.chassis_unlock.setText(
-            "Manual motion unlocked (attended L3)"
+            "Manual unlock (attended L3)"
             if state.environment == Environment.HARDWARE
-            else "Manual motion unlocked (simulator)"
+            else "Manual unlock (simulator)"
         )
         if state.environment == Environment.HARDWARE and self.controller._hardware_manual_enabled():
             limits = self.controller.runtime.config.manual_chassis

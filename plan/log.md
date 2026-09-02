@@ -490,3 +490,28 @@ entry format:
 - Hardware: none in this implementation goal. Restart the console before use;
   enable and motion remain separate attended L3 actions.
 - Commit status: committed and pushed on `target/control-console-manual-l3`.
+
+## 2026-09-02 - Flatten attended manual chassis control
+
+- Goal: replace the protocol-step-heavy manual debug flow and correct the
+  timer/rejection behavior that stopped and disconnected a successful jog.
+- Modified scope: console manual-control state machine, worker error semantics,
+  chassis panel, ESP32 velocity watchdog behavior and L3 hold limit, safe
+  configuration templates and local timeout fields, tests, operator documents,
+  overall safety semantics, and this plan/log. Credentials, endpoints, MaixCam,
+  robot-arm code, raw resources, and the primary worktree's user settings remained
+  read-only.
+- Implementation: the routine flow is now Connect, Start manual control, hold a
+  direction, release to STOP, and End manual control. Start automates Acquire and
+  Enable; End sequences STOP, Disable, and Release. Lease heartbeat and held
+  velocity refresh use independent 500 ms and 100 ms schedules with a 500 ms hold.
+  Velocity-hold expiry stops but preserves the enabled owned session. Lease/link
+  loss still stops and disables. Explicit ESP32 rejections remain connected and
+  are recorded as `REJECTED`; ambiguous state-changing transport failures remain
+  `UNKNOWN` and disconnect.
+- Validation: L1. 203 local tests passed (43 console, 56 ESP32, 28 protocol,
+  44 MaixCam, 23 development, and 9 robot arm), plus offscreen UI smoke, Python
+  compilation, workspace validation, and diff-format checks.
+- Hardware: none. No endpoint, device filesystem, reset, CAN output, or motion was
+  accessed. Deployment and the next jog require a fresh attended L3 gate.
+- Commit status: committed and pushed on `target/control-console-manual-l3`.

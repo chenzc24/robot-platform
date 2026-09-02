@@ -142,7 +142,7 @@ class ChassisMotionTcpServiceTests(unittest.TestCase):
         self.assertEqual(response["payload"]["code"], "motion_disabled")
         self.assertEqual(harness.chassis.events, [])
 
-    def test_bounded_velocity_and_hold_expiry_stop_and_disable_locally(self):
+    def test_bounded_velocity_hold_expiry_stops_without_releasing_enabled_session(self):
         harness = ServiceHarness(motion_permitted=True)
         harness.authenticate()
         harness.feed("ACQUIRE", {"lease_ms": 1000})
@@ -157,8 +157,10 @@ class ChassisMotionTcpServiceTests(unittest.TestCase):
         harness.clock.advance(250)
         event = harness.service.poll_safety()
         self.assertEqual(event["event"], "velocity_hold_expired")
-        self.assertEqual(harness.chassis.events[-2:], ["stop", "disable"])
-        self.assertEqual(harness.chassis.state, "disabled")
+        self.assertEqual(harness.chassis.events[-1], "stop")
+        self.assertNotEqual(harness.chassis.events[-2:], ["stop", "disable"])
+        self.assertEqual(harness.chassis.state, "enabled_stopped")
+        self.assertEqual(harness.service.lease.owner, "console")
 
     def test_runtime_velocity_limits_reject_before_any_drive(self):
         harness = ServiceHarness(motion_permitted=True)
@@ -189,6 +191,7 @@ class ChassisMotionTcpServiceTests(unittest.TestCase):
         harness.clock.advance(1)
         event = harness.service.poll_safety()
         self.assertEqual(event["event"], "lease_expired")
+        self.assertEqual(harness.chassis.events[-2:], ["stop", "disable"])
         self.assertEqual(harness.chassis.state, "disabled")
 
     def test_identical_duplicate_replays_without_reexecuting_velocity(self):

@@ -91,8 +91,9 @@ class ChassisMotionTcpClientTests(unittest.TestCase):
 
     def test_authentication_rejection_is_explicit(self):
         client = ChassisMotionTcpClient(LoopbackConnection())
-        with self.assertRaisesRegex(ChassisMotionTcpRejected, "authentication_failed"):
+        with self.assertRaisesRegex(ChassisMotionTcpRejected, "authentication_failed") as raised:
             client.hello("console", "wrong-credential-01")
+        self.assertTrue(raised.exception.explicit_rejection)
 
     def test_state_changing_timeout_is_unknown_and_not_retried(self):
         class TimeoutConnection:

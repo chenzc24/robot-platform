@@ -10,8 +10,8 @@
   "manual_chassis": {
     "enabled": false,
     "lease_ms": 2000,
-    "heartbeat_interval_ms": 250,
-    "velocity_hold_ms": 150,
+    "heartbeat_interval_ms": 500,
+    "velocity_hold_ms": 500,
     "linear_limit_mm_s": 50,
     "angular_limit_mrad_s": 100
   },

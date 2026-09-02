@@ -21,6 +21,8 @@ class ChassisMotionTcpClientError(RuntimeError):
 class ChassisMotionTcpRejected(ChassisMotionTcpClientError):
     """The ESP32 explicitly rejected a request before successful completion."""
 
+    explicit_rejection = True
+
 
 class ChassisMotionTcpUnknown(ChassisMotionTcpClientError):
     """A state-changing request lost evidence of its terminal outcome."""

@@ -121,7 +121,10 @@ Service-health state in `protocol/runtime-status.schema.json` remains distinct f
 - Every device powers on without motion.
 - Loss of the computer, hotspot, or network must not allow new actions or continued stale velocity.
 - Validate, limit, authorize, and log every motion command.
-- ESP32 stops locally on heartbeat timeout and rejects invalid or expired commands.
+- ESP32 stops locally when a velocity refresh expires, while an active attended
+  session remains enabled. Lease expiry, link loss, or execution failure stops and
+  disables. Invalid or expired commands are rejected without converting a healthy
+  transport into a disconnect.
 - The arm uses confirmed safe poses, low speed, limited workspace, and conflict rejection during development.
 - Do not move the arm until chassis stop is confirmed; do not allow high-speed chassis motion until the arm is safe.
 - Software stop never replaces the physical emergency stop.

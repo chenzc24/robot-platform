@@ -390,7 +390,7 @@ class ChassisMotionTcpService:
         return tuple(responses), errors
 
     def poll_safety(self, now_ms=None):
-        """Stop and disable locally when lease or velocity hold expires."""
+        """Stop stale velocity; disable only when the control lease is lost."""
         now_ms = self._clock_ms() if now_ms is None else now_ms
         expired_owner = self.lease.expire_if_needed()
         hold_expired = self._hold_deadline_ms is not None and _ticks_diff(
@@ -403,12 +403,19 @@ class ChassisMotionTcpService:
         self._hold_deadline_ms = None
         self._active_velocity_sequence = None
         try:
-            safe = self._stop_and_disable()
-            if not safe:
-                raise RuntimeError("safe_output_failed")
+            if expired_owner is not None:
+                if not self._stop_and_disable():
+                    raise RuntimeError("safe_output_failed")
+            else:
+                self.chassis.stop()
             self.error_code = reason
-            return {"sequence": sequence, "event": reason, "state": "disabled"}
+            return {
+                "sequence": sequence,
+                "event": reason,
+                "state": getattr(self.chassis, "state", "unknown"),
+            }
         except Exception:
+            self._stop_and_disable()
             self.service_state = "fault"
             self.error_code = "watchdog_stop_failed"
             return {

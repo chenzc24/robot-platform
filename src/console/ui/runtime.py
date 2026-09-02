@@ -139,8 +139,9 @@ def _arm_dispatch(client, command, payload):
 class SerializedSession(QObject):
     """Own exactly one blocking client in one background worker thread.
 
-    Operations are FIFO. State-changing requests are never retried: a transport
-    exception emits one `UNKNOWN` result and one fault with the original code.
+    Operations are FIFO. Explicit device rejection keeps the healthy connection;
+    a transport failure during a state-changing request emits `UNKNOWN` and
+    disconnects. State-changing requests are never retried automatically.
     """
 
     state_changed = Signal(str)
@@ -272,9 +273,15 @@ class SerializedSession(QObject):
             result = self._dispatcher(self._client, command, payload)
         except Exception as error:
             code = getattr(error, "code", None) or "request_failed"
+            if getattr(error, "explicit_rejection", False):
+                self._emit_result(command, Lifecycle.REJECTED, code)
+                return
+            state_changing = command in self._motion_commands
             self._disconnect_internal()
-            self._emit_result(command, Lifecycle.FAULT, code)
-            self._emit_fault(code, "safe request failed", False)
+            lifecycle = Lifecycle.UNKNOWN if state_changing else Lifecycle.FAULT
+            detail = "state-changing request outcome unknown" if state_changing else "request failed"
+            self._emit_result(command, lifecycle, code)
+            self._emit_fault(code, detail, state_changing)
             return
         self._emit_result(command, Lifecycle.DONE, "completed", result)
 

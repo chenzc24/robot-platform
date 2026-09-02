@@ -470,3 +470,23 @@ entry format:
 - Hardware: none in this implementation goal. Restart the console before the
   next session; enable and motion remain separate attended L3 actions.
 - Commit status: committed and pushed on `target/control-console-manual-l3`.
+
+## 2026-09-02 - Clear recovered console chassis faults
+
+- Goal: remove the stale ordinary `invalid_chassis_state` UI fault that
+  remained after a later successful reconnect/acquire/enable sequence and kept
+  the direction pad disabled.
+- Modified scope: console fault recovery logic, deterministic console tests,
+  and this plan/log. Device source/configuration, protocol, credentials,
+  endpoints, MaixCam, arm code, raw resources, and user settings remained
+  read-only.
+- Implementation: a fully parsed ESP32 `STATE` with service `ready` and
+  `last_error=none` clears only ordinary ESP32-sourced console faults. Unknown
+  outcomes and all non-ESP32 faults remain visible.
+- Validation: L1. The new test proves a recovered ESP32 fault clears while an
+  ESP32 unknown outcome and an arm fault remain. All 41 console tests,
+  offscreen smoke, Python compilation, and diff-format checks passed. No
+  device endpoint was accessed.
+- Hardware: none in this implementation goal. Restart the console before use;
+  enable and motion remain separate attended L3 actions.
+- Commit status: committed and pushed on `target/control-console-manual-l3`.

@@ -153,6 +153,16 @@ class ConsoleController(QObject):
             del self._faults[code]
             self._sync_faults()
 
+    def _clear_recovered_esp32_faults(self):
+        recovered = [
+            code for code, fault in self._faults.items()
+            if fault.source == "esp32" and fault.severity != "unknown"
+        ]
+        for code in recovered:
+            del self._faults[code]
+        if recovered:
+            self._sync_faults()
+
     def set_environment(self, environment):
         environment = Environment(environment)
         if environment == self.state.environment:
@@ -728,6 +738,8 @@ class ConsoleController(QObject):
                 self._held_chassis_velocity = None
             self._manual_chassis_timer.start(self.runtime.config.manual_chassis.heartbeat_interval_ms)
         self._replace(chassis=chassis)
+        if status.service_state == "ready" and status.last_error == "none":
+            self._clear_recovered_esp32_faults()
 
     def _apply_arm_status(self, payload):
         try:

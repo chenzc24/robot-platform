@@ -576,6 +576,24 @@ class RuntimeWorkerTests(unittest.TestCase):
         })
         self.assertFalse(controller._manual_chassis_timer.isActive())
 
+    def test_clean_esp32_state_clears_only_recovered_esp32_faults(self):
+        controller = ConsoleController(runtime=ManualRuntime())
+        controller.set_environment(Environment.HARDWARE)
+        controller._raise_fault("invalid_chassis_state", "fault", "esp32", "safe request failed")
+        controller._raise_fault("enable_outcome_unknown", "unknown", "esp32", "inspect device")
+        controller._raise_fault("arm_route_fault", "fault", "arm", "arm fault")
+        controller._apply_chassis_status({
+            "version": 2, "sequence": 1, "type": "STATE", "ttl_ms": 0,
+            "payload": {
+                "service_state": "ready", "chassis_state": "disabled", "motion_permitted": True,
+                "authenticated": True, "lease_active": False, "lease_owner": "none",
+                "lease_remaining_ms": 0, "hold_remaining_ms": 0, "last_error": "none",
+            },
+        })
+        self.assertNotIn("invalid_chassis_state", controller._faults)
+        self.assertIn("enable_outcome_unknown", controller._faults)
+        self.assertIn("arm_route_fault", controller._faults)
+
     def test_hardware_enable_view_uses_configured_chassis_client_id(self):
         runtime = ManualRuntime()
         controller = ConsoleController(runtime=runtime)

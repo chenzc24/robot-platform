@@ -410,3 +410,20 @@ entry format:
   chassis `disabled`, motion permission true, authenticated true, and no active
   lease. No state-changing request was sent. The console may reconnect, but
   any acquire/enable/motion action requires a new immediate L3 safety gate.
+
+## 2026-09-02 - Correct console chassis lease-owner mapping
+
+- Goal: correct the Hardware panel after observed L2 evidence showed that a
+  successful lease owner `console-l2` was compared against a simulator-only
+  literal `console`, leaving Enable disabled.
+- Modified scope: console controller/view owner mapping, deterministic console
+  tests, and this goal plan/log. Device files, local configuration, credentials,
+  protocols, MaixCam, arm code, raw resources, and user settings remained
+  read-only.
+- Validation: L1. The new test verifies a Hardware session using
+  `client_id=console-l2` enables the button after an owned lease. All 37
+  console tests, offscreen smoke, Python compilation, and diff-format checks
+  passed. No device endpoint was accessed.
+- Hardware: none in this implementation goal. Restart the console before use;
+  Enable and any motion remain separate attended L3 actions.
+- Commit status: committed and pushed on `target/control-console-manual-l3`.

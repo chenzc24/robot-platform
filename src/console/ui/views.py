@@ -671,7 +671,7 @@ class MainWindow(QMainWindow):
             self.linear_slider.setMaximum(limits.linear_limit_mm_s)
             self.angular_slider.setMaximum(limits.angular_limit_mrad_s)
         self.chassis_acquire_button.setEnabled(manual_mode and chassis.link == LinkState.ONLINE and chassis.lease_owner is None)
-        self.chassis_enable_button.setEnabled(manual_mode and chassis.lease_owner == "console" and chassis.motion_permitted and not chassis.motion_enabled)
+        self.chassis_enable_button.setEnabled(manual_mode and chassis.lease_owner == self.controller.chassis_lease_owner_id() and chassis.motion_permitted and not chassis.motion_enabled)
         self.chassis_disable_button.setEnabled(manual_mode and chassis.motion_enabled)
         self.chassis_release_button.setEnabled(manual_mode and chassis.lease_owner is not None)
         self.chassis_unlock.blockSignals(True)

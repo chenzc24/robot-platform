@@ -211,6 +211,7 @@ class ManualRuntime(FakeRuntime):
         super().__init__()
         self.manual_chassis_enabled = True
         self.config = SimpleNamespace(
+            chassis=SimpleNamespace(client_id="console-l2"),
             manual_chassis=SimpleNamespace(
                 lease_ms=1000,
                 heartbeat_interval_ms=250,
@@ -503,7 +504,7 @@ class RuntimeWorkerTests(unittest.TestCase):
         controller._replace(chassis=controller.state.chassis.__class__(
             link=LinkState.ONLINE,
             authenticated=True,
-            lease_owner="console",
+            lease_owner="console-l2",
             motion_permitted=True,
             motion_enabled=False,
             reported_state="disabled",
@@ -513,7 +514,7 @@ class RuntimeWorkerTests(unittest.TestCase):
         controller._replace(chassis=controller.state.chassis.__class__(
             link=LinkState.ONLINE,
             authenticated=True,
-            lease_owner="console",
+            lease_owner="console-l2",
             motion_permitted=True,
             motion_enabled=True,
             reported_state="enabled stopped",
@@ -528,6 +529,25 @@ class RuntimeWorkerTests(unittest.TestCase):
         self.assertTrue(controller.chassis_stop())
         self.assertEqual(runtime.calls[-1], ("stop", {}))
         controller._stop_manual_chassis_timer()
+
+    def test_hardware_enable_view_uses_configured_chassis_client_id(self):
+        runtime = ManualRuntime()
+        controller = ConsoleController(runtime=runtime)
+        controller.set_environment(Environment.HARDWARE)
+        controller._replace(chassis=controller.state.chassis.__class__(
+            link=LinkState.ONLINE,
+            authenticated=True,
+            lease_owner="console-l2",
+            motion_permitted=True,
+            motion_enabled=False,
+            reported_state="disabled",
+        ))
+        window = MainWindow(controller)
+        try:
+            self.assertEqual(controller.chassis_lease_owner_id(), "console-l2")
+            self.assertTrue(window.chassis_enable_button.isEnabled())
+        finally:
+            window.close()
 
     def test_hardware_ui_binds_decoded_frame_and_retains_invalid_status_fault(self):
         runtime = FakeRuntime()

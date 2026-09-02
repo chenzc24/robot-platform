@@ -284,7 +284,7 @@ class ConsoleController(QObject):
             chassis = self.state.chassis
             if not (
                 self._hardware_manual_session_ready()
-                and chassis.lease_owner == "console"
+                and chassis.lease_owner == self.chassis_lease_owner_id()
                 and chassis.motion_permitted
                 and not chassis.motion_enabled
             ):
@@ -329,7 +329,7 @@ class ConsoleController(QObject):
                 and self._hardware_manual_enabled()
                 and chassis.link == LinkState.ONLINE
                 and chassis.authenticated
-                and chassis.lease_owner == "console"
+                and chassis.lease_owner == self.chassis_lease_owner_id()
                 and chassis.motion_permitted
                 and chassis.motion_enabled
             )
@@ -350,7 +350,7 @@ class ConsoleController(QObject):
             unlocked
             and self.state.environment == Environment.SIMULATOR
             and chassis.link == LinkState.ONLINE
-            and chassis.lease_owner == "console"
+            and chassis.lease_owner == self.chassis_lease_owner_id()
             and chassis.motion_enabled
         )
         self._replace(chassis=replace(chassis, manual_unlocked=allowed))
@@ -362,7 +362,7 @@ class ConsoleController(QObject):
         return bool(
             (self.state.environment == Environment.SIMULATOR or self._hardware_manual_enabled())
             and chassis.link == LinkState.ONLINE
-            and chassis.lease_owner == "console"
+            and chassis.lease_owner == self.chassis_lease_owner_id()
             and chassis.motion_enabled
             and chassis.manual_unlocked
             and not any(fault.severity == "fault" for fault in self.state.faults)
@@ -420,6 +420,15 @@ class ConsoleController(QObject):
             self.runtime is not None
             and getattr(self.runtime, "manual_chassis_enabled", False)
         )
+
+    def chassis_lease_owner_id(self):
+        """Return the owner name that the selected environment must report."""
+        if self.state.environment == Environment.HARDWARE and self.runtime is not None:
+            chassis = getattr(getattr(self.runtime, "config", None), "chassis", None)
+            client_id = getattr(chassis, "client_id", None)
+            if isinstance(client_id, str) and client_id:
+                return client_id
+        return "console"
 
     def _hardware_manual_session_ready(self):
         chassis = self.state.chassis
@@ -668,7 +677,7 @@ class ConsoleController(QObject):
             reported_state=status.chassis_state.replace("_", " "),
             last_error=status.last_error,
         )
-        if not (chassis.lease_owner == "console" and chassis.motion_enabled and chassis.motion_permitted):
+        if not (chassis.lease_owner == self.chassis_lease_owner_id() and chassis.motion_enabled and chassis.motion_permitted):
             chassis = replace(chassis, manual_unlocked=False, velocity=(0, 0, 0))
             self._stop_manual_chassis_timer()
         self._replace(chassis=chassis)

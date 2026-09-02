@@ -560,3 +560,22 @@ entry format:
   fresh immediate L3 gate.
 - Commit status: committed and pushed on `target/control-console-manual-l3`;
   device deployment evidence remains pending in the same goal.
+
+### Deployment completion
+
+- The operator reconfirmed COM7 and the immediate L3 deployment gate. The prior UI
+  was stopped, and fresh ignored device-configuration backups were captured.
+- The first config-only restart exposed a stale factory validation ceiling of
+  100/200; the runtime port did not start, no command session existed, and no
+  motion was requested. COM7 remained available for recovery.
+- The factory ceiling was aligned with the unchanged chassis-core absolute bounds
+  of 600/800, while the actual local/device manual gate remained 200/400. New tests
+  accept 200/400 and reject values above 600/800.
+- Factory and configuration readback SHA-256 hashes matched. After reset, a
+  non-motion probe returned `ready/disabled`, no lease, and no error. No Acquire,
+  Enable, velocity, MaixCam, or arm command was sent.
+- Final validation passed 204 tests (43 console, 57 ESP32, 28 protocol,
+  44 MaixCam, 23 development, 9 robot arm), offscreen smoke, compilation,
+  workspace validation, and diff checks. The revised visible UI started as PID
+  17816 and was brought to the foreground.
+- Commit status: committed and pushed on `target/control-console-manual-l3`.

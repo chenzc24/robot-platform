@@ -65,8 +65,8 @@ def make_l3_service_factory():
     credential = runtime_credential()
     verifier = fixed_credential_verifier(credential) if credential else None
     motion_permitted = getattr(config, "L3_MOTION_PERMITTED", False) is True
-    max_linear_mm_s = _positive_int(config, "L3_MAX_LINEAR_SPEED_MM_S", 100)
-    max_omega_mrad_s = _positive_int(config, "L3_MAX_OMEGA_MRAD_S", 200)
+    max_linear_mm_s = _positive_int(config, "L3_MAX_LINEAR_SPEED_MM_S", 600)
+    max_omega_mrad_s = _positive_int(config, "L3_MAX_OMEGA_MRAD_S", 800)
     max_hold_ms = _positive_int(config, "L3_MAX_HOLD_MS", 500)
 
     def make_service(transport):

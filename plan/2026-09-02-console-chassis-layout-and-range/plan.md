@@ -1,8 +1,8 @@
 # Console Chassis Layout and Manual Range
 
-- Status: `in-progress`
+- Status: `completed`
 - Responsible: `agent with user authorization to widen manual debug limits`
-- Highest validation level: `L1` for implementation; later `L3` for device deployment
+- Highest validation level: `L3`
 
 ## Objective
 
@@ -21,6 +21,8 @@ from committed code and will be restarted only after local validation.
 ## Modifyable File
 
 - `src/console/ui/views.py`
+- `src/esp32/app/chassis_runtime_factory.py` after the deployed 200/400 config
+  exposed its stale 100/200 validation ceiling
 - `config/console.example.json`
 - `config/esp32-l3-device_config.example.py`
 - Ignored `config/console.local.json`, manual speed fields only
@@ -35,7 +37,8 @@ from committed code and will be restarted only after local validation.
 
 ## Read-only files and directories
 
-- ESP32 runtime/service source and protocol semantics
+- ESP32 runtime/service source except the declared factory validation ceiling;
+  protocol semantics remain read-only
 - Credentials, endpoint addresses, CAN parameters, and all other local config
 - MaixCam, arm, TCP232, raw resources, and the primary worktree user settings
 
@@ -71,6 +74,9 @@ from committed code and will be restarted only after local validation.
 4. Add/update UI binding tests and operator documentation.
 5. Run L1 validation and restart the visible console. Do not deploy device speed
    limits in the L1 phase.
+6. After the user confirms L3 deployment, update the factory validation ceiling
+   to the unchanged chassis-core absolute bounds (600/800), test it, then deploy
+   the factory and 200/400 local configuration together.
 
 ## Validation
 
@@ -89,16 +95,28 @@ from committed code and will be restarted only after local validation.
   genuinely hidden Advanced container with an explicit expand toggle.
 - The committed examples and ignored local console config now use 200 mm/s and
   400 mrad/s ceilings. Initial slider selections remain 80 and 240.
-- L1 passed: 203 tests (43 console, 56 ESP32, 28 protocol, 44 MaixCam,
-  23 development, 9 robot arm), offscreen smoke, console compilation, workspace
-  validation, and `git diff --check`.
-- The visible console still runs the prior committed process and the ESP32 remains
-  at its deployed 50/100 limits. Neither was restarted or changed in this L1 step.
+- The operator reconfirmed the immediate L3 deployment gate for the 200/400 limit
+  change. A fresh ignored backup of `device_config.py` was taken over COM7.
+- The first config-only restart correctly exposed a stale factory validation
+  ceiling (100/200), so TCP 8765 did not start. No application connection or
+  motion command was possible. The device remained recoverable through COM7.
+- Scope was expanded to align factory configuration validation with the unchanged
+  chassis-core absolute bounds (600/800). The actual configured device gate remains
+  200/400. Tests now accept 200/400 and reject 601/801.
+- Fresh factory/config backups were taken. Both files were uploaded, read back,
+  and matched their local SHA-256 hashes before reset.
+- Post-reset non-motion validation returned `WELCOME`, `PONG`, and
+  `STATE=ready/disabled`, with no lease and no error. No Acquire, Enable, velocity,
+  or robot-arm command was sent.
+- Final L1 passed: 204 tests (43 console, 57 ESP32, 28 protocol, 44 MaixCam,
+  23 development, 9 robot arm), offscreen smoke, compilation, workspace validation,
+  and `git diff --check`.
+- The prior UI was stopped. The revised visible UI started as PID 17816 and was
+  brought to the foreground.
 
 ## Outstanding matters
 
-- Device-side range deployment, console restart, and real-speed observation remain
-  pending L3.
+- Real-speed observation remains an operator action; this goal did not send motion.
 
 ## Experience signal (for manual review)
 

@@ -35,9 +35,9 @@ class Config:
     CAN_TX_PIN = 8
     CAN_RX_PIN = 18
     L3_MOTION_PERMITTED = False
-    L3_MAX_LINEAR_SPEED_MM_S = 50
-    L3_MAX_OMEGA_MRAD_S = 100
-    L3_MAX_HOLD_MS = 200
+    L3_MAX_LINEAR_SPEED_MM_S = 200
+    L3_MAX_OMEGA_MRAD_S = 400
+    L3_MAX_HOLD_MS = 500
 
 
 class Transport:
@@ -77,7 +77,25 @@ class CanRuntimeTests(unittest.TestCase):
             service = factory(Transport())
         self.assertEqual(service.chassis.state, "disabled")
         self.assertFalse(service.motion_permitted)
-        self.assertEqual(service.max_linear_mm_s, 50)
-        self.assertEqual(service.max_omega_mrad_s, 100)
-        self.assertEqual(service.max_hold_ms, 200)
+        self.assertEqual(service.max_linear_mm_s, 200)
+        self.assertEqual(service.max_omega_mrad_s, 400)
+        self.assertEqual(service.max_hold_ms, 500)
         self.assertGreaterEqual(len(FakeCan.created), 1)
+
+    def test_l3_factory_rejects_values_above_chassis_core_bounds(self):
+        for field, value in (
+            ("L3_MAX_LINEAR_SPEED_MM_S", 601),
+            ("L3_MAX_OMEGA_MRAD_S", 801),
+        ):
+            values = {
+                name: getattr(Config, name)
+                for name in dir(Config)
+                if name.isupper()
+            }
+            values[field] = value
+            config_module = types.SimpleNamespace(**values)
+            with self.subTest(field=field), patch.dict(
+                sys.modules, {"esp32": self.esp32, "device_config": config_module}
+            ):
+                with self.assertRaisesRegex(RuntimeError, "invalid_"):
+                    make_l3_service_factory()

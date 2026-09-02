@@ -1,6 +1,6 @@
 # Maximize Chassis Command Range
 
-- Status: `complete (local source only; device deployment pending)`
+- Status: `complete (merged to main; device deployment pending)`
 - Responsible: `agent`
 - Highest validation level: `L1`; real deployment/motion remains pending
 
@@ -67,6 +67,9 @@ The user subsequently requested that this validated branch be merged into
 `main`. The merge may proceed after confirming the target branch and
 `origin/main` have not diverged. This does not authorize device deployment or
 motion.
+
+The branch was fast-forwarded into `main` through `dcad8fe` and pushed to
+`origin/main` without including the user's local VS Code settings.
 
 ## Intent to submit
 

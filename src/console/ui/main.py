@@ -24,6 +24,11 @@ def parse_args(argv):
         default="config/console.local.json",
         help="Optional ignored local runtime configuration JSON.",
     )
+    parser.add_argument(
+        "--event-log",
+        default="logs/console/latest-events.log",
+        help="Ignored local text log path; set an empty value to disable it.",
+    )
     return parser.parse_args(argv)
 
 
@@ -42,7 +47,8 @@ def main(argv=None):
     except RuntimeConfigError as error:
         print("Local console configuration is invalid: %s" % error, file=sys.stderr)
         return 2
-    window = MainWindow(ConsoleController(runtime=runtime))
+    event_log_path = None if args.smoke_test or not args.event_log else args.event_log
+    window = MainWindow(ConsoleController(runtime=runtime, event_log_path=event_log_path))
     if args.smoke_test:
         window.run_smoke_assertions()
         window.close()

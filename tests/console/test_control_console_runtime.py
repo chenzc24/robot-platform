@@ -213,7 +213,7 @@ class ManualRuntime(FakeRuntime):
         self.config = SimpleNamespace(
             chassis=SimpleNamespace(client_id="console-l2"),
             manual_chassis=SimpleNamespace(
-                lease_ms=1000,
+                lease_ms=5000,
                 heartbeat_interval_ms=250,
                 velocity_hold_ms=150,
                 linear_limit_mm_s=50,
@@ -231,7 +231,7 @@ class RuntimeConfigTests(unittest.TestCase):
         source = {
             "schema_version": 1,
             "chassis": {"host": "", "port": 0, "client_id": "console", "credential_env": "ROBOT_CHASSIS_CREDENTIAL", "connect_timeout_seconds": 3.0},
-            "manual_chassis": {"enabled": False, "lease_ms": 1000, "heartbeat_interval_ms": 250, "velocity_hold_ms": 150, "linear_limit_mm_s": 50, "angular_limit_mrad_s": 100},
+            "manual_chassis": {"enabled": False, "lease_ms": 5000, "heartbeat_interval_ms": 250, "velocity_hold_ms": 150, "linear_limit_mm_s": 50, "angular_limit_mrad_s": 100},
             "arm": {"host": "", "port": 0, "session_id": "console", "connect_timeout_seconds": 3.0},
             "video": {"rtsp_url": "", "connect_timeout_seconds": 3.0, "snapshot_directory": ""},
         }
@@ -255,7 +255,7 @@ class RuntimeConfigTests(unittest.TestCase):
         source = {
             "schema_version": 1,
             "chassis": {"host": "", "port": 0, "client_id": "console", "credential_env": "ROBOT_CHASSIS_CREDENTIAL", "connect_timeout_seconds": 3.0},
-            "manual_chassis": {"enabled": "true", "lease_ms": 1000, "heartbeat_interval_ms": 250, "velocity_hold_ms": 150, "linear_limit_mm_s": 50, "angular_limit_mrad_s": 100},
+            "manual_chassis": {"enabled": "true", "lease_ms": 5000, "heartbeat_interval_ms": 250, "velocity_hold_ms": 150, "linear_limit_mm_s": 50, "angular_limit_mrad_s": 100},
             "arm": {"host": "", "port": 0, "session_id": "console", "connect_timeout_seconds": 3.0},
             "video": {"rtsp_url": "", "connect_timeout_seconds": 3.0, "snapshot_directory": ""},
         }
@@ -500,7 +500,7 @@ class RuntimeWorkerTests(unittest.TestCase):
             reported_state="disabled",
         ))
         self.assertTrue(controller.chassis_acquire())
-        self.assertEqual(runtime.calls[-1], ("acquire", {"lease_ms": 1000}))
+        self.assertEqual(runtime.calls[-1], ("acquire", {"lease_ms": 5000}))
         controller._replace(chassis=controller.state.chassis.__class__(
             link=LinkState.ONLINE,
             authenticated=True,
@@ -520,7 +520,7 @@ class RuntimeWorkerTests(unittest.TestCase):
             reported_state="enabled stopped",
         ))
         self.assertTrue(controller.set_chassis_manual_unlock(True))
-        self.assertEqual(runtime.calls[-1], ("heartbeat", {"lease_ms": 1000}))
+        self.assertEqual(runtime.calls[-1], ("heartbeat", {"lease_ms": 5000}))
         self.assertTrue(controller.chassis_velocity(50, 0, 0))
         self.assertEqual(runtime.calls[-1][0], "velocity")
         self.assertFalse(controller.chassis_velocity(51, 0, 0))
@@ -548,6 +548,25 @@ class RuntimeWorkerTests(unittest.TestCase):
             self.assertTrue(window.chassis_enable_button.isEnabled())
         finally:
             window.close()
+
+    def test_live_event_log_records_only_sanitized_event_and_fault_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "console-events.log"
+            controller = ConsoleController(event_log_path=path)
+            controller._record(
+                "ESP32", "status", Lifecycle.DONE, "completed",
+                detail="credential=must-not-appear",
+            )
+            controller._raise_fault(
+                "control_not_owned", "fault", "esp32", "safe request failed",
+            )
+            content = path.read_text(encoding="utf-8")
+        self.assertIn("EVENT", content)
+        self.assertIn("command=status", content)
+        self.assertIn("result=completed", content)
+        self.assertIn("FAULT", content)
+        self.assertIn("code=control_not_owned", content)
+        self.assertNotIn("credential=must-not-appear", content)
 
     def test_hardware_ui_binds_decoded_frame_and_retains_invalid_status_fault(self):
         runtime = FakeRuntime()

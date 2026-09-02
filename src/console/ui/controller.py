@@ -1,6 +1,7 @@
 """Immutable console state controller with simulator and locked runtime bindings."""
 
 from dataclasses import replace
+from pathlib import Path
 from time import time_ns
 from typing import Dict, List
 
@@ -42,7 +43,7 @@ class ConsoleController(QObject):
     faults_changed = Signal(object)
     video_frame_ready = Signal(object)
 
-    def __init__(self, runtime=None, parent=None):
+    def __init__(self, runtime=None, parent=None, event_log_path=None):
         super().__init__(parent)
         if runtime is not None and not all(hasattr(runtime, name) for name in ("connect_chassis", "connect_arm", "connect_video")):
             raise TypeError("runtime must provide console runtime operations")
@@ -52,6 +53,7 @@ class ConsoleController(QObject):
         self._next_id = 1
         self._active_arm_command = None
         self._held_chassis_velocity = None
+        self._event_log_path = Path(event_log_path) if event_log_path else None
         self.runtime = runtime
         self._manual_chassis_timer = QTimer(self)
         self._manual_chassis_timer.timeout.connect(self._manual_chassis_tick)
@@ -62,6 +64,7 @@ class ConsoleController(QObject):
             self.runtime.result_ready.connect(self._on_hardware_result)
             self.runtime.fault_raised.connect(self._on_hardware_fault)
             self.runtime.frame_ready.connect(self._on_hardware_frame)
+        self._initialize_event_log()
 
     @staticmethod
     def now_ms():
@@ -91,8 +94,39 @@ class ConsoleController(QObject):
         )
         self.events.insert(0, event)
         del self.events[200:]
+        self._write_live_log(
+            "EVENT",
+            timestamp_ms=event.timestamp_ms,
+            target=event.target,
+            command=event.command,
+            correlation_id=event.correlation_id,
+            lifecycle=event.lifecycle.value,
+            result=event.result,
+        )
         self.event_added.emit(event)
         return event
+
+    def _initialize_event_log(self):
+        if self._event_log_path is None:
+            return
+        try:
+            self._event_log_path.parent.mkdir(parents=True, exist_ok=True)
+            self._event_log_path.write_text("Robot Console live diagnostics\n", encoding="utf-8")
+        except OSError:
+            self._event_log_path = None
+
+    def _write_live_log(self, kind, **fields):
+        if self._event_log_path is None:
+            return
+        try:
+            values = " ".join(
+                "%s=%s" % (name, str(value).replace("\r", " ").replace("\n", " "))
+                for name, value in fields.items()
+            )
+            with self._event_log_path.open("a", encoding="utf-8") as handle:
+                handle.write("%s %s\n" % (kind, values))
+        except OSError:
+            pass
 
     def _sync_faults(self):
         faults = tuple(sorted(self._faults.values(), key=lambda item: item.first_seen_ms))
@@ -111,6 +145,7 @@ class ConsoleController(QObject):
             last_seen_ms=now,
             acknowledged=existing.acknowledged if existing else False,
         )
+        self._write_live_log("FAULT", timestamp_ms=now, code=code, severity=severity, source=source)
         self._sync_faults()
 
     def _clear_fault(self, code):

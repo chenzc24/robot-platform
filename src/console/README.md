@@ -39,6 +39,12 @@ velocity, refreshes only while manual unlock is active, and gives `STOP`,
 `DISABLE`, and `RELEASE` priority over pending periodic requests. It is for an
 attended L3 test only; it is not a production autonomy mode or an emergency stop.
 
+The normal desktop launch writes sanitized live event/fault records to the
+ignored `logs/console/latest-events.log`. Use `Get-Content
+logs\console\latest-events.log -Wait` from a second PowerShell terminal to
+follow command outcomes without screenshots. The log excludes credentials,
+endpoint addresses, payloads, and command parameters.
+
 The console accepts only the current exact ESP32 RCP/TCP v2 `STATE` schema and the current terminal `arm.status` lifecycle/RPA2 state schema. A malformed, incomplete, or inconsistent status response becomes a persistent fault and never enables a control. Snapshots use a configured relative directory below the local `logs/` root, such as `snapshots/session-a`; absolute paths and traversal outside that root are rejected.
 
 Launch it from the repository root:

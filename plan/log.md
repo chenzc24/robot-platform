@@ -427,3 +427,25 @@ entry format:
 - Hardware: none in this implementation goal. Restart the console before use;
   Enable and any motion remain separate attended L3 actions.
 - Commit status: committed and pushed on `target/control-console-manual-l3`.
+
+## 2026-09-02 - Add console live diagnostics and usable manual lease
+
+- Goal: avoid screenshot-only diagnosis and correct the observed one-second
+  lease expiry between successful Acquire and human-triggered Enable.
+- Modified scope: console event/fault log handling and launch option, manual
+  configuration template, ignored local configuration, console documentation,
+  deterministic tests, and this plan/log. Device source/configuration,
+  credentials, endpoints, protocol, MaixCam, arm code, raw resources, and user
+  settings remained read-only.
+- Implementation: the manual lease is now 5000 ms, while its 250 ms heartbeat
+  still begins only after explicit manual unlock. The desktop process writes a
+  fresh sanitized event/fault log to ignored
+  `logs/console/latest-events.log`; it excludes credentials, endpoints,
+  payloads, parameters, and event-detail text.
+- Validation: L1. All 38 console tests, offscreen smoke, Python compilation,
+  workspace validation, and diff-format checks passed. The log test proves an
+  event detail containing a credential-like string is not written. No device
+  endpoint was accessed.
+- Hardware: none in this implementation goal. Restart the console to load the
+  local settings; enable and motion remain separate attended L3 actions.
+- Commit status: committed and pushed on `target/control-console-manual-l3`.

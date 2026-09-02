@@ -775,6 +775,6 @@ entry format:
 - Deployment status: pending. The existing ESP32 runtime remains the older v2
   contract until a separately authorized v3 L2 deployment and subsequent L3
   confirmation. A v3 console must not control an old v2 device.
-- Commit status: prepared on `target/remove-chassis-lease` with intent
-  `refactor(chassis): remove lease control layer`; commit and push follow this
-  record.
+- Commit status: implementation committed on `target/remove-chassis-lease` as
+  `a88051b` (`refactor(chassis): remove lease control layer`); this factual log
+  update is committed and pushed with the same branch.

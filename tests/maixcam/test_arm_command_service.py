@@ -9,7 +9,7 @@ sys.path.insert(0, str(ROOT / "src/maixcam/arm"))
 from arm_motion_gateway import ArmMotionGateway
 from command_service import ArmCommandService
 from control_envelope import EnvelopeStreamDecoder, encode_message
-from motion_link import encode_frame
+from motion_link import decode_frame, encode_frame
 
 
 def command(name, payload=None, sequence=1):
@@ -38,6 +38,14 @@ class ArmCommandServiceTests(unittest.TestCase):
         self.assertEqual(result[-1]["lifecycle"], "REJECTED")
         self.assertEqual(result[-1]["payload"]["error_code"], "admission_rejected")
         self.assertEqual(self.writes, [])
+
+    def test_named_l3_cycle_is_the_only_motion_allowed_by_its_admission(self):
+        service = ArmCommandService(self.gateway, admission=lambda message: message["name"] == "arm.l3_j1_cycle")
+        rejected = self.messages(service.feed_computer(encode_message(command("arm.gripper", {"width_mm": 10}))))
+        self.assertEqual(rejected[-1]["payload"]["error_code"], "admission_rejected")
+        accepted = self.messages(service.feed_computer(encode_message(command("arm.l3_j1_cycle", sequence=2))))
+        self.assertEqual([item["lifecycle"] for item in accepted], ["RECEIVED", "ACCEPTED"])
+        self.assertEqual(decode_frame(self.writes[-1])["type"], "L3J1CYCLE")
 
     def test_motion_timeout_is_unknown_and_not_retried(self):
         clock = [0]

@@ -4,7 +4,7 @@ from control_envelope import EnvelopeStreamDecoder, encode_message, lifecycle, v
 from arm_motion_gateway import ArmMotionGatewayError, arm_payload
 
 
-MOTION_NAMES = {"arm.move_joint", "arm.move_linear", "arm.gripper"}
+MOTION_NAMES = {"arm.move_joint", "arm.move_linear", "arm.gripper", "arm.l3_j1_cycle"}
 
 
 class ArmCommandService:

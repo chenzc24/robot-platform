@@ -42,3 +42,13 @@ class MaixCamArmClientTests(unittest.TestCase):
         with self.assertRaises(MaixCamArmUnknown):
             MaixCamArmClient(connection).gripper(10)
         self.assertEqual(connection.sends, 1)
+
+    def test_l3_cycle_is_parameterless_and_state_changing(self):
+        class CycleConnection:
+            def __init__(self): self.sent = []
+            def send(self, data): self.sent.append(data); return len(data)
+            def recv(self, _size): raise TimeoutError("timeout")
+        connection = CycleConnection()
+        with self.assertRaises(MaixCamArmUnknown):
+            MaixCamArmClient(connection).l3_j1_cycle()
+        self.assertEqual(len(connection.sent), 1)

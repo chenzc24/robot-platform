@@ -229,6 +229,9 @@ class FakeRuntime(QObject):
     def request_arm_status(self):
         self.calls.append("request_arm_status")
 
+    def request_arm_l3_j1_cycle(self):
+        self.calls.append("request_arm_l3_j1_cycle")
+
     def save_snapshot(self):
         self.calls.append("save_snapshot")
         return False
@@ -819,6 +822,42 @@ class RuntimeWorkerTests(unittest.TestCase):
             self.assertFalse(window.arm_unlock.isEnabled())
             self.assertFalse(window.joint_execute_button.isEnabled())
             self.assertIn("default-deny", window.arm_runtime_detail.text())
+        finally:
+            window.close()
+
+    def test_hardware_l3_cycle_requires_arm_route_and_confirmed_chassis_stop(self):
+        runtime = ManualRuntime()
+        controller = ConsoleController(runtime=runtime)
+        controller.set_environment(Environment.HARDWARE)
+        controller._replace(
+            chassis=controller.state.chassis.__class__(
+                link=LinkState.ONLINE, reported_state="safe idle",
+            ),
+            arm=controller.state.arm.__class__(
+                gateway=LinkState.ONLINE, uart_lan1=LinkState.ONLINE,
+                controller=LinkState.ONLINE, task=Lifecycle.IDLE,
+                reported_state="ready", motion_permitted=True,
+            ),
+        )
+        window = MainWindow(controller)
+        try:
+            self.assertTrue(window.arm_l3_unlock.isEnabled())
+            self.assertFalse(window.arm_l3_execute_button.isEnabled())
+            self.assertTrue(controller.set_arm_manual_unlock(True))
+            self.assertTrue(window.arm_l3_execute_button.isEnabled())
+            self.assertTrue(controller.execute_hardware_arm_l3_test())
+            self.assertEqual(runtime.calls[-1], "request_arm_l3_j1_cycle")
+            self.assertFalse(controller.state.arm.manual_unlocked)
+            responses = [
+                {"lifecycle": "RECEIVED", "payload": {}},
+                {"lifecycle": "ACCEPTED", "payload": {"downstream_sequence": 8}},
+                {"lifecycle": "RUNNING", "payload": {"downstream_sequence": 8}},
+                {"lifecycle": "DONE", "payload": {"downstream_sequence": 8}},
+            ]
+            runtime.result_ready.emit(SessionResult("MaixCam", "l3_j1_cycle", Lifecycle.DONE, "completed", responses))
+            self.assertEqual(controller.state.arm.task, Lifecycle.IDLE)
+            self.assertIn("request_arm_status", runtime.calls)
+            self.assertEqual([event.lifecycle for event in controller.events[:4]], [Lifecycle.DONE, Lifecycle.RUNNING, Lifecycle.ACCEPTED, Lifecycle.RECEIVED])
         finally:
             window.close()
 

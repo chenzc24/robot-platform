@@ -112,6 +112,10 @@ def arm_payload(name, payload):
     if name in ("arm.ping", "arm.status"):
         if payload: raise ArmMotionGatewayError("invalid_payload_fields")
         return ("PING" if name.endswith("ping") else "STATUS"), ""
+    if name == "arm.l3_j1_cycle":
+        if payload:
+            raise ArmMotionGatewayError("invalid_payload_fields")
+        return "L3J1CYCLE", ""
     if name == "arm.move_joint":
         if set(payload) != {"joint_deg", "accel_pct", "speed_pct"} or not isinstance(payload["joint_deg"], (list, tuple)) or len(payload["joint_deg"]) != 6:
             raise ArmMotionGatewayError("invalid_payload_fields")

@@ -32,8 +32,16 @@ def _deny_motion(_message):
 
 def _service(gateway, config):
     """Create a computer session while retaining process-owned RPA2 sequencing."""
-    permitted = getattr(config, "MOTION_COMMANDS_PERMITTED", False) is True
-    return ArmCommandService(gateway, admission=lambda _message: permitted)
+    permitted = getattr(config, "PERMITTED_MOTION_NAMES", ())
+    try:
+        import arm_l3_admission
+        permitted = getattr(arm_l3_admission, "PERMITTED_MOTION_NAMES", permitted)
+    except ImportError:
+        pass
+    if not isinstance(permitted, (list, tuple, set)):
+        permitted = ()
+    permitted = frozenset(item for item in permitted if isinstance(item, str))
+    return ArmCommandService(gateway, admission=lambda message: message["name"] in permitted)
 
 
 def _initial_downstream_sequence(clock=None):

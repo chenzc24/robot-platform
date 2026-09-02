@@ -67,7 +67,15 @@ def build_main():
     ))
 
 
-def build(output):
+def _l3_test_var_source():
+    source = _read(RUNTIME / "var.py")
+    marker = "L3_TEST_ACTION_ENABLED = False"
+    if source.count(marker) != 1:
+        raise ValueError("unexpected_l3_test_policy")
+    return source.replace(marker, "L3_TEST_ACTION_ENABLED = True", 1)
+
+
+def build(output, l3_j1_cycle=False):
     """Write two code files plus the required DobotStudio project metadata."""
     output = pathlib.Path(output)
     output.mkdir(parents=True, exist_ok=True)
@@ -75,7 +83,8 @@ def build(output):
     if unexpected:
         raise ValueError("output_directory_contains_unexpected_files")
     (output / "main.py").write_text(build_main(), encoding="utf-8", newline="\n")
-    (output / "var.py").write_text(_read(RUNTIME / "var.py"), encoding="utf-8", newline="\n")
+    policy = _l3_test_var_source() if l3_j1_cycle else _read(RUNTIME / "var.py")
+    (output / "var.py").write_text(policy, encoding="utf-8", newline="\n")
     (output / "prj.json").write_text(PROJECT_METADATA, encoding="utf-8", newline="\n")
     (output / "point.json").write_text(EMPTY_TEACH_POINTS, encoding="utf-8", newline="\n")
     return tuple(output / name for name in OUTPUT_FILES)
@@ -84,8 +93,9 @@ def build(output):
 def main():
     parser = argparse.ArgumentParser(description="Build a DobotStudio RPA2 project with two code files.")
     parser.add_argument("--output", required=True, type=pathlib.Path, help="empty/new output directory")
+    parser.add_argument("--l3-j1-cycle", action="store_true", help="build the one-use, supervised J1 +1/-1 degree test project")
     args = parser.parse_args()
-    for item in build(args.output):
+    for item in build(args.output, l3_j1_cycle=args.l3_j1_cycle):
         print(item)
 
 

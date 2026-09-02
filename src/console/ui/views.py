@@ -477,6 +477,18 @@ class MainWindow(QMainWindow):
         detail_layout.addWidget(self.arm_runtime_detail, 1)
         layout.addWidget(detail_frame)
 
+        self.arm_l3_test_frame = QFrame()
+        l3_layout = QHBoxLayout(self.arm_l3_test_frame)
+        l3_layout.setContentsMargins(10, 2, 10, 7)
+        self.arm_l3_unlock = QCheckBox("Confirm attended L3 J1 test")
+        self.arm_l3_execute_button = QPushButton("Run J1 +1° / -1° test")
+        self.arm_l3_test_detail = _label("One use only: 5% speed/acceleration; returns to the start angle.", "muted")
+        self.arm_l3_test_detail.setWordWrap(True)
+        l3_layout.addWidget(self.arm_l3_unlock)
+        l3_layout.addWidget(self.arm_l3_execute_button)
+        l3_layout.addWidget(self.arm_l3_test_detail, 1)
+        layout.addWidget(self.arm_l3_test_frame)
+
         self.arm_tabs = QTabWidget()
         joint_page, self.joint_spins, joint_layout = self._form_page(
             ("J1", "J2", "J3", "J4", "J5", "J6"),
@@ -569,6 +581,8 @@ class MainWindow(QMainWindow):
         self.arm_connect_button.clicked.connect(self._toggle_arm_connection)
         self.arm_recheck_button.clicked.connect(self.controller.recheck)
         self.arm_unlock.toggled.connect(self.controller.set_arm_manual_unlock)
+        self.arm_l3_unlock.toggled.connect(self.controller.set_arm_manual_unlock)
+        self.arm_l3_execute_button.clicked.connect(self.controller.execute_hardware_arm_l3_test)
         self.joint_execute_button.clicked.connect(self._execute_joint)
         self.linear_execute_button.clicked.connect(self._execute_linear)
         self.gripper_execute_button.clicked.connect(self._execute_gripper)
@@ -747,6 +761,13 @@ class MainWindow(QMainWindow):
             else "Hardware motion unavailable"
         )
         self.arm_unlock.setEnabled(arm_unlock_available)
+        hardware_l3_ready = self.controller._hardware_arm_l3_ready()
+        self.arm_l3_test_frame.setVisible(state.environment == Environment.HARDWARE)
+        self.arm_l3_unlock.blockSignals(True)
+        self.arm_l3_unlock.setChecked(arm.manual_unlocked)
+        self.arm_l3_unlock.blockSignals(False)
+        self.arm_l3_unlock.setEnabled(hardware_l3_ready)
+        self.arm_l3_execute_button.setEnabled(self.controller.can_hardware_arm_l3_test())
         arm_enabled = self.controller.can_arm_move()
         for button in (self.joint_execute_button, self.linear_execute_button, self.gripper_execute_button):
             button.setEnabled(arm_enabled)
@@ -755,7 +776,7 @@ class MainWindow(QMainWindow):
             if arm.gateway != LinkState.ONLINE:
                 detail = "Connect MaixCam to query the arm route. Hardware motion remains unavailable."
             elif arm.motion_permitted:
-                detail = "Arm route is ready, but Hardware motion mapping is not provisioned in this console release."
+                detail = "One supervised J1 +1° / -1° test is armed; generic joint, Cartesian, and gripper motion remains denied."
             else:
                 detail = "Route ready; controller policy is default-deny (motion_enabled=0). Motion forms are hidden."
         else:

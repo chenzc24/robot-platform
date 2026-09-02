@@ -25,14 +25,14 @@ class ArmCommandServerConfigTests(unittest.TestCase):
         self.assertEqual(config.LISTEN_PORT, 8780)
         self.assertEqual(config.UART_DEVICE, "/dev/ttyS0")
         self.assertEqual(config.UART_BAUD, 115200)
-        self.assertIs(config.MOTION_COMMANDS_PERMITTED, False)
+        self.assertEqual(config.PERMITTED_MOTION_NAMES, ())
 
     def test_process_owned_gateway_keeps_rpa2_sequence_across_computer_sessions(self):
         sys.modules.pop("arm_command_server", None)
         server = importlib.import_module("arm_command_server")
         writes = []
         gateway = server.ArmMotionGateway(writes.append)
-        config = type("Config", (), {"MOTION_COMMANDS_PERMITTED": False})()
+        config = type("Config", (), {"PERMITTED_MOTION_NAMES": ()})()
         command = {
             "version": 1,
             "kind": "command",

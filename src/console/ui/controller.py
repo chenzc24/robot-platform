@@ -661,7 +661,7 @@ class ConsoleController(QObject):
 
     def set_arm_manual_unlock(self, unlocked):
         arm = self.state.arm
-        ready = (
+        simulator_ready = (
             self.state.environment == Environment.SIMULATOR
             and arm.gateway == LinkState.ONLINE
             and arm.uart_lan1 == LinkState.ONLINE
@@ -669,10 +669,41 @@ class ConsoleController(QObject):
             and arm.task == Lifecycle.IDLE
             and self._chassis_is_idle()
         )
-        allowed = bool(unlocked and ready)
+        allowed = bool(unlocked and (simulator_ready or self._hardware_arm_l3_ready()))
         self._replace(arm=replace(arm, manual_unlocked=allowed))
         self._record("Console", "arm.manual_unlock", Lifecycle.DONE if allowed or not unlocked else Lifecycle.REJECTED, str(allowed).lower())
         return allowed
+
+    def _hardware_arm_l3_ready(self):
+        """Gate the one reviewed test action; it is not a generic arm enable."""
+        arm, chassis = self.state.arm, self.state.chassis
+        blocking_fault = any(
+            fault.severity in ("fault", "unknown") and fault.source in {"arm", "maixcam", "esp32"}
+            for fault in self.state.faults
+        )
+        return bool(
+            self.state.environment == Environment.HARDWARE
+            and self.runtime is not None
+            and arm.gateway == LinkState.ONLINE
+            and arm.uart_lan1 == LinkState.ONLINE
+            and arm.controller == LinkState.ONLINE
+            and arm.task == Lifecycle.IDLE
+            and arm.motion_permitted
+            and chassis.link == LinkState.ONLINE
+            and chassis.reported_state == "safe idle"
+            and not blocking_fault
+        )
+
+    def can_hardware_arm_l3_test(self):
+        return bool(self._hardware_arm_l3_ready() and self.state.arm.manual_unlocked)
+
+    def execute_hardware_arm_l3_test(self):
+        if not self.can_hardware_arm_l3_test():
+            self._record("Arm", "arm.l3_j1_cycle", Lifecycle.REJECTED, "l3_test_locked")
+            return False
+        self._replace(arm=replace(self.state.arm, task=Lifecycle.RECEIVED, manual_unlocked=False))
+        self.runtime.request_arm_l3_j1_cycle()
+        return True
 
     def can_arm_move(self):
         arm = self.state.arm
@@ -850,8 +881,33 @@ class ConsoleController(QObject):
         elif result.target == "ESP32" and result.command == "heartbeat" and result.lifecycle != Lifecycle.DONE:
             self._stop_manual_chassis_timers()
             self._replace(chassis=replace(self.state.chassis, manual_unlocked=False, velocity=(0, 0, 0)))
-        if result.target == "MaixCam" and result.command == "status" and result.lifecycle == Lifecycle.DONE:
+        if result.target == "MaixCam" and result.command == "l3_j1_cycle":
+            self._apply_hardware_arm_l3_result(result)
+        elif result.target == "MaixCam" and result.command == "status" and result.lifecycle == Lifecycle.DONE:
             self._apply_arm_status(result.payload)
+
+    def _apply_hardware_arm_l3_result(self, result):
+        """Record returned MaixCam lifecycle evidence without fabricating pose proof."""
+        if result.lifecycle == Lifecycle.DONE and isinstance(result.payload, (list, tuple)):
+            for response in result.payload:
+                if not isinstance(response, dict):
+                    continue
+                lifecycle_text = response.get("lifecycle")
+                try:
+                    lifecycle = Lifecycle(lifecycle_text.lower())
+                except (AttributeError, ValueError):
+                    continue
+                payload = response.get("payload") or {}
+                code = payload.get("error_code") or "downstream_%s" % lifecycle.value
+                self._record("Arm", "arm.l3_j1_cycle", lifecycle, code)
+            terminal = result.payload[-1] if result.payload else {}
+            terminal_state = terminal.get("lifecycle") if isinstance(terminal, dict) else ""
+            task = Lifecycle.IDLE if terminal_state == "DONE" else Lifecycle.FAULT
+            self._replace(arm=replace(self.state.arm, task=task, manual_unlocked=False))
+            self.runtime.request_arm_status()
+            return
+        self._replace(arm=replace(self.state.arm, task=Lifecycle.IDLE, manual_unlocked=False))
+        self.runtime.request_arm_status()
 
     def _apply_chassis_status(self, payload):
         try:

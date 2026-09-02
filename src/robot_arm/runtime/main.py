@@ -10,8 +10,11 @@ def _failed(result):
 
 def main():
     policy = ArmSafetyPolicy(MOTION_ENABLED, JOINT_MIN_DEG, JOINT_MAX_DEG, POSE_MIN, POSE_MAX,
-                             MAX_ACCEL_PCT, MAX_SPEED_PCT, GRIPPER_MIN_MM, GRIPPER_MAX_MM)
-    api = DobotControllerApi(CheckMovJ, MovJ, CheckMovL, MovL, SetParallelGripper)
+                             MAX_ACCEL_PCT, MAX_SPEED_PCT, GRIPPER_MIN_MM, GRIPPER_MAX_MM,
+                             L3_TEST_ACTION_ENABLED, L3_TEST_J1_STEP_DEG,
+                             L3_TEST_ACCEL_PCT, L3_TEST_SPEED_PCT)
+    api = DobotControllerApi(CheckMovJ, MovJ, CheckMovL, MovL, SetParallelGripper,
+                             RelJointMovJ, Wait)
     service = ArmMotionService(api, policy)
     error, socket_id = TCPCreate(True, LISTEN_IP, LISTEN_PORT)
     if error or _failed(TCPStart(socket_id, 0)):

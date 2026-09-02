@@ -50,7 +50,9 @@ class ArmSafetyPolicy:
     """A deliberately incomplete local policy blocks every motion command."""
 
     def __init__(self, motion_enabled=False, joint_min=None, joint_max=None, pose_min=None, pose_max=None,
-                 max_accel_pct=20, max_speed_pct=20, gripper_min_mm=0, gripper_max_mm=70):
+                 max_accel_pct=20, max_speed_pct=20, gripper_min_mm=0, gripper_max_mm=70,
+                 l3_test_action_enabled=False, l3_test_j1_step_deg=1.0,
+                 l3_test_accel_pct=5, l3_test_speed_pct=5):
         self.motion_enabled = motion_enabled is True
         self.joint_min = self._bounds(joint_min, "invalid_joint_policy")
         self.joint_max = self._bounds(joint_max, "invalid_joint_policy")
@@ -62,6 +64,14 @@ class ArmSafetyPolicy:
         self.gripper_max_mm = self._policy_integer(gripper_max_mm, 0, 70, "invalid_gripper_policy")
         if self.gripper_min_mm > self.gripper_max_mm:
             raise ValueError("invalid_gripper_policy")
+        if not isinstance(l3_test_action_enabled, bool):
+            raise ValueError("invalid_l3_test_policy")
+        self.l3_test_action_enabled = l3_test_action_enabled
+        self.l3_test_j1_step_deg = _number(l3_test_j1_step_deg, "invalid_l3_test_policy")
+        self.l3_test_accel_pct = self._policy_integer(l3_test_accel_pct, 1, 5, "invalid_l3_test_policy")
+        self.l3_test_speed_pct = self._policy_integer(l3_test_speed_pct, 1, 5, "invalid_l3_test_policy")
+        if not 0 < self.l3_test_j1_step_deg <= 1.0:
+            raise ValueError("invalid_l3_test_policy")
         if self.motion_enabled:
             if None in (self.joint_min, self.joint_max, self.pose_min, self.pose_max):
                 raise ValueError("motion_policy_requires_bounds")
@@ -120,16 +130,24 @@ class ArmSafetyPolicy:
         if not self.gripper_min_mm <= width <= self.gripper_max_mm:
             raise ValueError("gripper_out_of_policy")
 
+    def claim_l3_j1_cycle(self):
+        """Consume the only relative-motion action before controller execution."""
+        if not self.l3_test_action_enabled:
+            raise ValueError("l3_test_not_armed")
+        self.l3_test_action_enabled = False
+        return self.l3_test_j1_step_deg, self.l3_test_accel_pct, self.l3_test_speed_pct
+
 
 class DobotControllerApi:
     """Narrow adapter. Its API-return terminal is explicitly not physical proof."""
 
-    def __init__(self, check_movj, movj, check_movl, movl, set_parallel_gripper):
-        if not all(callable(item) for item in (check_movj, movj, check_movl, movl, set_parallel_gripper)):
+    def __init__(self, check_movj, movj, check_movl, movl, set_parallel_gripper, rel_joint_movj, wait):
+        if not all(callable(item) for item in (check_movj, movj, check_movl, movl, set_parallel_gripper, rel_joint_movj, wait)):
             raise ValueError("controller_api_not_callable")
         self.check_movj, self.movj = check_movj, movj
         self.check_movl, self.movl = check_movl, movl
         self.set_parallel_gripper = set_parallel_gripper
+        self.rel_joint_movj, self.wait = rel_joint_movj, wait
 
     @staticmethod
     def _check_result(value):
@@ -157,6 +175,15 @@ class DobotControllerApi:
         if _api_failed(self.set_parallel_gripper(width)):
             raise RuntimeError("gripper_failed")
 
+    def l3_j1_cycle(self, step_deg, accel, speed):
+        options = {"a": accel, "v": speed, "cp": 0}
+        if _api_failed(self.rel_joint_movj([step_deg, 0, 0, 0, 0, 0], options)):
+            raise RuntimeError("l3_j1_forward_failed")
+        self.wait(1000)
+        if _api_failed(self.rel_joint_movj([-step_deg, 0, 0, 0, 0, 0], options)):
+            raise RuntimeError("l3_j1_reverse_failed")
+        self.wait(1)
+
 
 class ArmMotionService:
     """One synchronous primitive at a time. No cancellation is claimed."""
@@ -176,7 +203,7 @@ class ArmMotionService:
         return (self._response(request, "ERROR", encode_fields((("error_code", code), ("retryable", 0)))),)
 
     def _state(self):
-        return encode_fields((("service_state", self.service_state), ("motion_enabled", int(self.policy.motion_enabled)),
+        return encode_fields((("service_state", self.service_state), ("motion_enabled", int(self.policy.l3_test_action_enabled)),
                               ("active_sequence", self.active_sequence or 0), ("last_error", self.error_code or "none"),
                               ("terminal_position_supported", 0), ("cancel_supported", 0)))
 
@@ -207,6 +234,14 @@ class ArmMotionService:
                 return (self._response(request, "STATE", self._state()),)
             if self.service_state == "fault":
                 return self._error(request, "service_fault")
+            if kind == "L3J1CYCLE":
+                decode_fields(request["payload"], ())
+                step_deg, accel, speed = self.policy.claim_l3_j1_cycle()
+                return self._run(
+                    request,
+                    lambda: self.api.l3_j1_cycle(step_deg, accel, speed),
+                    "primitive=l3_j1_cycle;terminal_position=unknown",
+                )
             if kind == "MOVEJ":
                 values = decode_fields(request["payload"], ("joint_deg", "accel_pct", "speed_pct", "blend_pct"))
                 joints, accel, speed = _vector(values["joint_deg"], "invalid_joint"), _integer(values["accel_pct"], 1, 100, "invalid_acceleration"), _integer(values["speed_pct"], 1, 100, "invalid_speed")

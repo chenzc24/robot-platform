@@ -139,3 +139,4 @@ feat(console): migrate operator UI to localhost web
   requested. L2/L3 acceptance remains pending.
 - `git diff --check` passed before final staging. The user-owned
   `.vscode/settings.json` remained untouched and unstaged.
+- Implementation commit: `c58cd54` on `target/web-console-migration`.

@@ -852,5 +852,6 @@ entry format:
   remains pending.
 - Local exception: the user's `.vscode/settings.json` modification remains
   unchanged, unstaged, and uncommitted.
-- Commit status: pending on `target/web-console-migration`; intended commit is
-  `feat(console): migrate operator UI to localhost web`.
+- Commit status: implementation committed on `target/web-console-migration` as
+  `c58cd54` (`feat(console): migrate operator UI to localhost web`). This
+  factual record is committed before fast-forward integration to `main`.

@@ -387,3 +387,21 @@ entry format:
 - Follow-up: conduct one explicitly gated attended panel test, beginning with
   connect/status and then a separate low-speed hold-to-run movement; add
   physical feedback before treating `DONE` as wheel-motion evidence.
+
+## 2026-09-02 - Diagnose unavailable ESP32 runtime listener
+
+- Goal: determine why the manual console could not enable the chassis after a
+  safe-query fault, using only non-motion diagnostics.
+- Validation: L2. The first direct `HELLO` attempt timed out after TCP setup;
+  a second staged probe timed out opening the configured RCP/TCP listener.
+  ICMP and the distinct WebREPL TCP port remained reachable. No lease,
+  heartbeat, enable, velocity, stop, disable, or release request was sent.
+- Result: the ESP32 remains on the development LAN but its resident direct
+  RCP/TCP runtime service is not accepting the configured TCP connection. The
+  console correctly blocks enablement because it cannot obtain authenticated
+  `STATE` evidence. This is not a credential fault.
+- Hardware: read-only network probes only; no device files, configuration,
+  WebREPL session, reset, CAN bus, or motion command was accessed or changed.
+- Commit status: pending the scoped diagnostic record commit. A safe on-site
+  runtime recovery is required before a fresh L2 status check and any later L3
+  panel use.

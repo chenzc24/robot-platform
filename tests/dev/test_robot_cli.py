@@ -75,17 +75,58 @@ class FakeManager:
         return CommandResult(0, "REBOOT_REQUESTED")
 
 
-def run_cli(arguments, input_value="n"):
+def run_cli(arguments, input_value="n", arm_client_factory=None):
     FakeManager.instances = []
     output = io.StringIO()
     with redirect_stdout(output):
-        exit_code = robot_cli.main(
-            arguments,
-            manager_factory=FakeManager,
-            lock_factory=NoopLock,
-            input_func=lambda _prompt: input_value,
-        )
-    return exit_code, output.getvalue(), FakeManager.instances[-1]
+        kwargs = {
+            "manager_factory": FakeManager,
+            "lock_factory": NoopLock,
+            "input_func": lambda _prompt: input_value,
+        }
+        if arm_client_factory is not None:
+            kwargs["arm_client_factory"] = arm_client_factory
+        exit_code = robot_cli.main(arguments, **kwargs)
+    manager = FakeManager.instances[-1] if FakeManager.instances else None
+    return exit_code, output.getvalue(), manager
+
+
+class FakeArmConnection:
+    def __init__(self):
+        self.closed = False
+
+    def close(self):
+        self.closed = True
+
+
+class FakeArmClient:
+    def __init__(self, outcomes):
+        self.connection = FakeArmConnection()
+        self.outcomes = outcomes
+        self.calls = []
+
+    def ping(self):
+        self.calls.append("ping")
+        return self.outcomes["ping"]
+
+    def status(self):
+        self.calls.append("status")
+        return self.outcomes["status"]
+
+    def move_joint(self, joint_deg, accel_pct=5, speed_pct=5):
+        self.calls.append(("move_joint", tuple(joint_deg), accel_pct, speed_pct))
+        return self.outcomes["move_joint"]
+
+
+def lifecycle(state, payload=None):
+    return [{"lifecycle": state, "payload": payload or {}}]
+
+
+def arm_factory_with(outcomes, created):
+    def factory(host, port, timeout, session_id):
+        created.append((host, port, timeout, session_id))
+        return FakeArmClient(outcomes)
+    return factory
 
 
 class RobotCliTests(unittest.TestCase):
@@ -154,6 +195,63 @@ class RobotCliTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(json.loads(output)["code"], "ok")
         self.assertEqual(manager.calls, [("reboot_maixcam",)])
+
+    def test_arm_check_runs_ping_then_status_and_closes_connection(self):
+        created = []
+        outcomes = {
+            "ping": lifecycle("DONE", {"downstream_payload": "pong"}),
+            "status": lifecycle("DONE", {"downstream_payload": "service_state=ready"}),
+            "move_joint": lifecycle("REJECTED", {"error_code": "admission_rejected"}),
+        }
+        clients = []
+
+        def factory(host, port, timeout, session_id):
+            client = FakeArmClient(outcomes)
+            created.append((host, port, timeout, session_id))
+            clients.append(client)
+            return client
+
+        exit_code, output, _manager = run_cli(
+            ["arm", "check", "--json", "--arm-host", "192.0.2.40", "--arm-port", "9000"],
+            arm_client_factory=factory,
+        )
+        payload = json.loads(output)
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["operation"], "arm.check")
+        self.assertEqual(payload["code"], "ok")
+        self.assertEqual(created, [("192.0.2.40", 9000, 3.0, "robot-cli")])
+        self.assertEqual(clients[0].calls, ["ping", "status"])
+        self.assertTrue(clients[0].connection.closed)
+
+    def test_arm_reject_motion_requires_exact_default_deny_response(self):
+        created = []
+        outcomes = {
+            "ping": lifecycle("DONE"),
+            "status": lifecycle("DONE"),
+            "move_joint": lifecycle("REJECTED", {"error_code": "admission_rejected"}),
+        }
+        clients = []
+
+        def factory(host, port, timeout, session_id):
+            client = FakeArmClient(outcomes)
+            clients.append(client)
+            return client
+
+        exit_code, output, _manager = run_cli(
+            ["arm", "reject-motion", "--json"], arm_client_factory=factory
+        )
+        payload = json.loads(output)
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["code"], "motion_rejected")
+        self.assertEqual(clients[0].calls, [("move_joint", (0, 0, 0, 0, 0, 0), 5, 5)])
+        self.assertTrue(clients[0].connection.closed)
+
+        outcomes["move_joint"] = lifecycle("DONE")
+        exit_code, output, _manager = run_cli(
+            ["arm", "reject-motion", "--json"], arm_client_factory=factory
+        )
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(json.loads(output)["code"], "unexpected_motion_outcome")
 
 
 if __name__ == "__main__":

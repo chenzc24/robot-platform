@@ -153,6 +153,40 @@ Maintenance of protection:
 
 Exit code fixed to:`0`Success or READY;`1`Anomalous or DEGRADED/OFFFLINE;`2`Parameters/environment errors;`3`The rules of protection are rejected.
 
+## Arm endpoint diagnostics
+
+Use the same flat CLI for routine MaixCam-to-arm-route diagnosis. These commands
+open one direct computer-to-MaixCam TCP session, print a concise terminal result,
+and close the session; they do not start the desktop UI or require LAN2.
+
+```powershell
+.\robot arm ping
+.\robot arm status
+.\robot arm check
+.\robot arm check --json
+```
+
+`check` sends exactly one `PING` followed by one `STATUS` on the same session.
+It is the first check when the arm card or console reports offline. Override a
+temporary discovery result locally, without editing committed configuration:
+
+```powershell
+.\robot arm check --arm-host 192.0.2.40 --arm-port 8780 --json
+```
+
+The separate expected-rejection proof is deliberately named so it cannot be
+mistaken for an arm-motion command:
+
+```powershell
+.\robot arm reject-motion --json
+```
+
+It submits one syntactically valid zero-joint request and succeeds only when the
+MaixCam endpoint returns `REJECTED/admission_rejected` before UART output. It
+never retries. If it returns any other result, do not issue further arm commands;
+inspect the MaixCam admission configuration. This remains L2 validation, not
+authorization for arm motion.
+
 ## 6. Registration of issues
 
 | Problem | Status | Current decision-making |

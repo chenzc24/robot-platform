@@ -64,6 +64,27 @@ def _add_common_options(parser):
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
 
 
+def _add_arm_options(parser):
+    parser.add_argument(
+        "--arm-host",
+        default=os.environ.get("ROBOT_ARM_HOST", "maixcam-6c7d.local"),
+        help="MaixCam arm-command endpoint host",
+    )
+    parser.add_argument(
+        "--arm-port",
+        default=int(os.environ.get("ROBOT_ARM_PORT", "8780")),
+        type=int,
+        help="MaixCam arm-command endpoint TCP port",
+    )
+    parser.add_argument(
+        "--timeout",
+        default=3.0,
+        type=float,
+        help="Connection timeout in seconds",
+    )
+    parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+
+
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -112,6 +133,23 @@ def build_parser():
     reboot.add_argument("device", choices=("maixcam", "esp32"))
     reboot.add_argument("--yes", action="store_true", help="Skip the interactive confirmation")
     _add_common_options(reboot)
+
+    arm = subparsers.add_parser(
+        "arm",
+        help="Run direct, non-motion diagnostics against the MaixCam arm endpoint",
+    )
+    arm_commands = arm.add_subparsers(dest="arm_command", required=True)
+    for command, help_text in (
+        ("ping", "Send one arm PING and print its terminal lifecycle"),
+        ("status", "Send one arm STATUS and print its terminal lifecycle"),
+        ("check", "Run one PING then one STATUS on the same arm session"),
+        (
+            "reject-motion",
+            "Prove the deployed default-deny policy rejects a harmless test joint request",
+        ),
+    ):
+        subparser = arm_commands.add_parser(command, help=help_text)
+        _add_arm_options(subparser)
     return parser
 
 
@@ -191,6 +229,105 @@ def _confirmed(prompt, assume_yes, input_func):
         return True
     answer = input_func("%s [y/N] " % prompt).strip().lower()
     return answer in ("y", "yes")
+
+
+def _ensure_arm_client_import_paths():
+    """Expose the local shared protocol and console client to this flat tool."""
+    for directory in (ROOT / "protocol", ROOT / "src" / "console"):
+        path = str(directory)
+        if path not in sys.path:
+            sys.path.insert(0, path)
+
+
+def _default_arm_client_factory(host, port, timeout_seconds, session_id):
+    _ensure_arm_client_import_paths()
+    from maixcam_arm_client import MaixCamArmClient, open_connection
+
+    connection = open_connection(host, port, timeout_seconds)
+    return MaixCamArmClient(connection, session_id)
+
+
+def _close_arm_client(client):
+    close = getattr(getattr(client, "connection", None), "close", None)
+    if callable(close):
+        close()
+
+
+def _terminal_lifecycle(result):
+    if not isinstance(result, list) or not result:
+        return None, {}
+    terminal = result[-1]
+    if not isinstance(terminal, dict):
+        return None, {}
+    return terminal.get("lifecycle"), terminal.get("payload") or {}
+
+
+def _diagnostic_output(command, result):
+    lifecycle, payload = _terminal_lifecycle(result)
+    return json.dumps(
+        {"command": command, "lifecycle": lifecycle, "payload": payload},
+        sort_keys=True,
+    )
+
+
+def _run_arm_diagnostic(args, arm_client_factory):
+    """Run a single non-retrying endpoint probe and always close its socket."""
+    client = None
+    operation = "arm.%s" % args.arm_command
+    try:
+        client = arm_client_factory(
+            args.arm_host,
+            args.arm_port,
+            args.timeout,
+            "robot-cli",
+        )
+        if args.arm_command == "ping":
+            result = client.ping()
+            lifecycle, _payload = _terminal_lifecycle(result)
+            if lifecycle != "DONE":
+                return Feedback("DEGRADED", operation, "unexpected_lifecycle", "PING did not complete", output=_diagnostic_output("arm.ping", result))
+            return Feedback("READY", operation, "ok", "arm PING completed", output=_diagnostic_output("arm.ping", result))
+
+        if args.arm_command == "status":
+            result = client.status()
+            lifecycle, _payload = _terminal_lifecycle(result)
+            if lifecycle != "DONE":
+                return Feedback("DEGRADED", operation, "unexpected_lifecycle", "STATUS did not complete", output=_diagnostic_output("arm.status", result))
+            return Feedback("READY", operation, "ok", "arm STATUS completed", output=_diagnostic_output("arm.status", result))
+
+        if args.arm_command == "check":
+            ping, status = client.ping(), client.status()
+            ping_lifecycle, _ping_payload = _terminal_lifecycle(ping)
+            status_lifecycle, status_payload = _terminal_lifecycle(status)
+            output = json.dumps(
+                {
+                    "ping": json.loads(_diagnostic_output("arm.ping", ping)),
+                    "status": json.loads(_diagnostic_output("arm.status", status)),
+                },
+                sort_keys=True,
+            )
+            if ping_lifecycle != "DONE" or status_lifecycle != "DONE":
+                return Feedback("DEGRADED", operation, "unexpected_lifecycle", "PING or STATUS did not complete", output=output)
+            state = status_payload.get("downstream_payload", "unknown")
+            return Feedback("READY", operation, "ok", "arm PING and STATUS completed", output=output, action="Controller state: %s" % state)
+
+        if args.arm_command == "reject-motion":
+            result = client.move_joint((0, 0, 0, 0, 0, 0), accel_pct=5, speed_pct=5)
+            lifecycle, payload = _terminal_lifecycle(result)
+            if lifecycle == "REJECTED" and payload.get("error_code") == "admission_rejected":
+                return Feedback("READY", operation, "motion_rejected", "default-deny motion policy confirmed", output=_diagnostic_output("arm.move_joint", result))
+            return Feedback("DEGRADED", operation, "unexpected_motion_outcome", "default-deny policy was not confirmed", output=_diagnostic_output("arm.move_joint", result), action="Do not send further arm commands; inspect MaixCam admission policy")
+
+        raise ValueError("unsupported_arm_diagnostic")
+    except Exception as error:
+        code = getattr(error, "code", None) or type(error).__name__.lower()
+        return Feedback("DEGRADED", operation, code, "arm diagnostic request failed", action="Run: .\\robot arm check --json")
+    finally:
+        if client is not None:
+            try:
+                _close_arm_client(client)
+            except Exception:
+                pass
 
 
 def _run_maintenance(args, manager, input_func):
@@ -300,10 +437,16 @@ def main(
     manager_factory=ConnectionManager,
     lock_factory=ConnectionLock,
     input_func=input,
+    arm_client_factory=_default_arm_client_factory,
 ):
     args = build_parser().parse_args(argv)
     try:
         with lock_factory():
+            if args.command == "arm":
+                return _emit_feedback(
+                    _run_arm_diagnostic(args, arm_client_factory),
+                    as_json=args.json,
+                )
             manager = _manager(args, manager_factory)
             if args.command in ("connect", "status", "details"):
                 report = manager.report(

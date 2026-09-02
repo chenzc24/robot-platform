@@ -51,10 +51,12 @@ def _source_root():
     return Path(__file__).resolve().parents[3]
 
 
-def _ensure_protocol_import_path():
-    path = str(_source_root() / "protocol")
-    if path not in sys.path:
-        sys.path.insert(0, path)
+def _ensure_runtime_import_paths():
+    """Expose local protocol and sibling console clients in packaged UI runs."""
+    for directory in (_source_root() / "protocol", _source_root() / "src" / "console"):
+        path = str(directory)
+        if path not in sys.path:
+            sys.path.insert(0, path)
 
 
 def _default_chassis_factory(config):
@@ -64,7 +66,7 @@ def _default_chassis_factory(config):
     credential = os.environ.get(config.credential_env)
     if not credential:
         raise ValueError("chassis_credential_unavailable")
-    _ensure_protocol_import_path()
+    _ensure_runtime_import_paths()
     from chassis_motion_tcp_client import ChassisMotionTcpClient, open_connection
 
     connection = open_connection(config.host, config.port, config.connect_timeout_seconds)
@@ -81,7 +83,7 @@ def _default_arm_factory(config):
     """Create one MaixCam arm client only after explicit connect."""
     if not config.complete:
         raise ValueError("arm_configuration_incomplete")
-    _ensure_protocol_import_path()
+    _ensure_runtime_import_paths()
     from maixcam_arm_client import MaixCamArmClient, open_connection
 
     connection = open_connection(config.host, config.port, config.connect_timeout_seconds)

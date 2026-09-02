@@ -57,6 +57,8 @@ class ArmCommandService:
     def feed_uart(self, data):
         replies = []
         for event, code, frame in self.gateway.feed(data):
+            if event == "IGNORED":
+                continue
             if self.active is None:
                 continue
             if event == "ACK":

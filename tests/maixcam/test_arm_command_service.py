@@ -47,3 +47,19 @@ class ArmCommandServiceTests(unittest.TestCase):
         clock[0] = 1001
         outcome = self.messages(service.poll())[-1]
         self.assertEqual(outcome["lifecycle"], "UNKNOWN")
+
+    def test_stale_safe_reply_does_not_fault_or_block_newer_request(self):
+        clock, writes = [0], []
+        gateway = ArmMotionGateway(writes.append, clock_ms=lambda: clock[0])
+        service = ArmCommandService(gateway, admission=lambda _message: False)
+
+        service.feed_computer(encode_message(command("arm.ping", sequence=1)))
+        clock[0] = 1001
+        self.assertEqual(self.messages(service.poll())[-1]["lifecycle"], "FAULT")
+
+        service.feed_computer(encode_message(command("arm.status", sequence=2)))
+        self.assertEqual(len(writes), 2)
+        stale = self.messages(service.feed_uart(encode_frame("RPA2", "PONG", 1, 0, "protocol=2")))
+        self.assertEqual(stale, [])
+        done = self.messages(service.feed_uart(encode_frame("RPA2", "STATE", 2, 0, "service_state=ready")))
+        self.assertEqual(done[-1]["lifecycle"], "DONE")

@@ -23,7 +23,7 @@ from PySide6.QtWidgets import QApplication
 
 from ui.controller import ConsoleController
 from ui.models import Environment, Lifecycle, LinkState
-from ui.runtime import RuntimeCoordinator, SerializedSession, SessionFault, SessionResult, VideoDecoderWorker, VideoFrame, _default_decoder_factory
+from ui.runtime import RuntimeCoordinator, SerializedSession, SessionFault, SessionResult, VideoDecoderWorker, VideoFrame, _default_decoder_factory, _ensure_runtime_import_paths
 from ui.runtime_config import (
     ArmConfig,
     ChassisConfig,
@@ -244,6 +244,16 @@ class ManualRuntime(FakeRuntime):
 
 
 class RuntimeConfigTests(unittest.TestCase):
+    def test_runtime_import_paths_expose_protocol_and_console_clients(self):
+        expected = {str(ROOT / "protocol"), str(ROOT / "src" / "console")}
+        original = list(sys.path)
+        try:
+            sys.path[:] = [item for item in sys.path if item not in expected]
+            _ensure_runtime_import_paths()
+            self.assertTrue(expected.issubset(sys.path))
+        finally:
+            sys.path[:] = original
+
     def test_loader_accepts_secret_free_template_shape(self):
         source = {
             "schema_version": 1,

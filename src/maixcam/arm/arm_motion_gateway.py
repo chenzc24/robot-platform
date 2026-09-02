@@ -51,8 +51,17 @@ class ArmMotionGateway:
         for error in errors:
             self.error_code = error
         for frame in frames:
-            if self.pending is None or frame["sequence"] != self.pending["sequence"]:
-                self.state, self.error_code = "fault", "sequence_mismatch"
+            if self.pending is None:
+                # A safe request may have timed out locally while its UART reply is
+                # still in flight. It has no computer command to complete now.
+                continue
+            if frame["sequence"] != self.pending["sequence"]:
+                if frame["sequence"] < self.pending["sequence"]:
+                    # UART ordering makes a lower response an expired request, not
+                    # evidence against the newer in-flight request. Discard it.
+                    events.append(("IGNORED", "stale_sequence", frame))
+                    continue
+                self.pending, self.state, self.error_code = None, "fault", "sequence_mismatch"
                 events.append(("ERROR", "sequence_mismatch", frame))
                 continue
             if frame["type"] == "ERROR":

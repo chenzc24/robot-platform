@@ -12,7 +12,7 @@ This project unifies development and control of an ESP32-S3 mobile chassis, a Ma
 
 See the [overall plan](docs/overall-plan.md), [runtime baseline](docs/runtime/README.md), and [deployment baseline](docs/deployment/README.md).
 
-The proposed computer application layout, controls, safety gates, and interface bindings are defined in the [unified control console UI design](docs/console/control-console-ui.md).
+The primary operator interface is now the [localhost web console](docs/console/control-console-ui.md). It keeps video dominant, provides full chassis and robot-arm debug controls, and calls the existing Python device clients through a loopback-only backend.
 
 Subsystem and operating documentation:
 
@@ -32,6 +32,16 @@ Use the flat CLI from the repository root for routine connection management:
 .\robot details
 .\robot disconnect
 ```
+
+Launch the unified console from the repository root:
+
+```powershell
+.\robot-console.cmd
+```
+
+It opens `http://127.0.0.1:8080/`, starts with both device sessions disconnected,
+and reads only the ignored `config/console.local.json` plus environment-held
+credentials. The previous PySide6 interface remains a temporary fallback.
 
 `connect` currently starts only a missing MaixCam video service or computer-side relay and reports ESP32 WebREPL as a maintenance check. It does not start the new ESP32 runtime service, deploy code, enter the ESP32 REPL, or reset a device. See [the development-session guide](docs/development-session.md) for maintenance commands and protection rules.
 

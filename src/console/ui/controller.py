@@ -19,7 +19,7 @@ from .models import (
     VideoState,
 )
 from .runtime import SessionFault, SessionResult
-from .status_mapping import StatusMappingError, parse_arm_status, parse_chassis_status
+from status_mapping import StatusMappingError, parse_arm_status, parse_chassis_status
 
 
 SCENARIOS = (

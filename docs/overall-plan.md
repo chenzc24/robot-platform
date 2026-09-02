@@ -134,7 +134,10 @@ Service-health state in `protocol/runtime-status.schema.json` remains distinct f
 
 ## 8. First Console Scope
 
-The implementation-ready layout and control specification is in [Unified Control Console UI](console/control-console-ui.md).
+The primary implementation and control specification is the
+[localhost robot console](console/control-console-ui.md). The browser is a thin
+operator surface; its local Python process owns all device sessions and
+protocol handling.
 
 - Link and device status for ESP32, MaixCam, and the arm.
 - Chassis manual control, limits, and stop.

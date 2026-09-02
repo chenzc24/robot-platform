@@ -1,0 +1,12 @@
+[hidden] {
+  display: none !important;
+}
+
+.status-chip.configured {
+  color: #9fbfff;
+  border-color: #34517f;
+}
+
+.status-chip.configured i {
+  background: #4389ff;
+}

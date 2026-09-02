@@ -1,4 +1,4 @@
-"""Strict conversion of validated endpoint status replies into display state."""
+"""Strict conversion of validated device status replies into console state."""
 
 from dataclasses import dataclass
 

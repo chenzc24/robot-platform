@@ -19,20 +19,39 @@ stop, and disable. The authenticated connection itself is the control session;
 there is no acquire/release layer. It sends one request at a time and never
 automatically retries a state-changing request whose outcome becomes unknown.
 
-`motion_router.py` is the first flat dual-session routing layer:
+`motion_router.py` is the flat dual-session routing layer:
 
 ```text
 chassis.* → direct ESP32 TCP session
 arm.*     → injected MaixCam arm session
 ```
 
-It validates target/name agreement and exact payload keys, requires an injected admission callback for motion, preserves correlation IDs, and reports `automatic_retry=false`. `maixcam_arm_client.py` now provides the matching one-request-at-a-time NDJSON client for the MaixCam arm endpoint. Both are L1 candidates only; there is no GUI, persistent aggregate state store, or deployed endpoint yet.
+It validates target/name agreement and exact payload keys, requires an injected admission callback for motion, preserves correlation IDs, and reports `automatic_retry=false`. `maixcam_arm_client.py` provides the matching one-request-at-a-time NDJSON client for the MaixCam arm endpoint.
 
 No credential, host address, or runtime port is hard-coded in these modules. Real values belong in ignored local configuration.
 
 ## Unified control console
 
-Phase A adds a PySide6 desktop shell in `ui/`. It implements the approved video-first layout, independent chassis and arm controls, command journal, persistent fault list, and deterministic simulator scenarios.
+`web_console/` is the primary localhost operator surface. Its pure-Python
+runtime owns independent ESP32 and MaixCam sessions, status parsing, health
+checks, held chassis velocity refresh, concise events, and faults. The browser
+uses same-origin JSON requests and embeds the MediaMTX WebRTC page directly.
+No device connects automatically.
+
+Launch from the repository root:
+
+```powershell
+.\robot-console.cmd
+```
+
+The visible chassis flow is Connect, Enable, motion/STOP, Disable, and
+Disconnect. The arm panel exposes J1-J6 and XYZ relative jogs, absolute joint
+and Cartesian moves, and the gripper through the existing MaixCam client. Both
+routes remain independent.
+
+## Legacy desktop fallback
+
+`ui/` retains the prior PySide6 desktop shell during hardware acceptance.
 
 Phase B adds separate background sessions for the direct ESP32 and MaixCam-arm
 clients, a copied-frame PyAV RTSP worker, and a secret-free local configuration
@@ -61,7 +80,7 @@ endpoint addresses, payloads, and command parameters.
 
 The console accepts only the current exact ESP32 RCP/TCP v3 `STATE` schema and the current terminal `arm.status` lifecycle/RPA2 state schema. A malformed, incomplete, or inconsistent status response becomes a persistent fault and never enables a control. Snapshots use a configured relative directory below the local `logs/` root, such as `snapshots/session-a`; absolute paths and traversal outside that root are rejected.
 
-Launch it from the repository root:
+Launch the fallback from the repository root:
 
 ```powershell
 $env:PYTHONPATH = "$PWD/src/console"

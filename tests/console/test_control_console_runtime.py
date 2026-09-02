@@ -24,7 +24,7 @@ from PySide6.QtWidgets import QApplication
 from ui.controller import ConsoleController
 from ui.models import Environment, Lifecycle, LinkState
 from ui.runtime import RuntimeCoordinator, SerializedSession, SessionFault, SessionResult, VideoDecoderWorker, VideoFrame, _arm_dispatch, _default_decoder_factory, _ensure_runtime_import_paths
-from ui.runtime_config import (
+from runtime_config import (
     ArmConfig,
     ChassisConfig,
     ManualChassisConfig,
@@ -276,11 +276,11 @@ class RuntimeConfigTests(unittest.TestCase):
 
     def test_loader_accepts_secret_free_template_shape(self):
         source = {
-            "schema_version": 2,
+            "schema_version": 3,
             "chassis": {"host": "", "port": 0, "client_id": "console", "credential_env": "ROBOT_CHASSIS_CREDENTIAL", "connect_timeout_seconds": 3.0},
             "manual_chassis": {"enabled": False, "health_interval_ms": 250, "velocity_hold_ms": 150, "linear_limit_mm_s": 50, "angular_limit_mrad_s": 100},
             "arm": {"host": "", "port": 0, "session_id": "console", "connect_timeout_seconds": 3.0},
-            "video": {"rtsp_url": "", "connect_timeout_seconds": 3.0, "snapshot_directory": ""},
+            "video": {"rtsp_url": "", "webrtc_url": "", "connect_timeout_seconds": 3.0, "snapshot_directory": ""},
         }
         with tempfile.TemporaryDirectory() as directory:
             path = pathlib.Path(directory) / "console.local.json"
@@ -300,11 +300,11 @@ class RuntimeConfigTests(unittest.TestCase):
 
     def test_loader_rejects_non_boolean_manual_enable(self):
         source = {
-            "schema_version": 2,
+            "schema_version": 3,
             "chassis": {"host": "", "port": 0, "client_id": "console", "credential_env": "ROBOT_CHASSIS_CREDENTIAL", "connect_timeout_seconds": 3.0},
             "manual_chassis": {"enabled": "true", "health_interval_ms": 250, "velocity_hold_ms": 150, "linear_limit_mm_s": 50, "angular_limit_mrad_s": 100},
             "arm": {"host": "", "port": 0, "session_id": "console", "connect_timeout_seconds": 3.0},
-            "video": {"rtsp_url": "", "connect_timeout_seconds": 3.0, "snapshot_directory": ""},
+            "video": {"rtsp_url": "", "webrtc_url": "", "connect_timeout_seconds": 3.0, "snapshot_directory": ""},
         }
         with tempfile.TemporaryDirectory() as directory:
             path = pathlib.Path(directory) / "console.local.json"
@@ -314,11 +314,11 @@ class RuntimeConfigTests(unittest.TestCase):
 
     def test_loader_rejects_health_interval_above_supported_limit(self):
         source = {
-            "schema_version": 2,
+            "schema_version": 3,
             "chassis": {"host": "", "port": 0, "client_id": "console", "credential_env": "ROBOT_CHASSIS_CREDENTIAL", "connect_timeout_seconds": 3.0},
             "manual_chassis": {"enabled": False, "health_interval_ms": 1001, "velocity_hold_ms": 150, "linear_limit_mm_s": 50, "angular_limit_mrad_s": 100},
             "arm": {"host": "", "port": 0, "session_id": "console", "connect_timeout_seconds": 3.0},
-            "video": {"rtsp_url": "", "connect_timeout_seconds": 3.0, "snapshot_directory": ""},
+            "video": {"rtsp_url": "", "webrtc_url": "", "connect_timeout_seconds": 3.0, "snapshot_directory": ""},
         }
         with tempfile.TemporaryDirectory() as directory:
             path = pathlib.Path(directory) / "console.local.json"
@@ -566,7 +566,7 @@ class RuntimeWorkerTests(unittest.TestCase):
                 ChassisConfig("", 0, 1.0, "console", "ROBOT_CHASSIS_CREDENTIAL"),
                 ManualChassisConfig(False, 250, 150, 50, 100),
                 ArmConfig("", 0, 1.0, "console"),
-                VideoConfig("", 1.0, "session"),
+                VideoConfig("", "", 1.0, "session"),
             )
             worker = SnapshotVideoWorker(image)
             runtime = RuntimeCoordinator(config, video_worker=worker, snapshot_root=root)
@@ -575,7 +575,7 @@ class RuntimeWorkerTests(unittest.TestCase):
             self.assertTrue(worker.saved[0].is_file())
             self.assertTrue(worker.saved[0].is_relative_to(root.resolve()))
 
-            outside = RuntimeConfig(config.chassis, config.manual_chassis, config.arm, VideoConfig("", 1.0, "../outside"))
+            outside = RuntimeConfig(config.chassis, config.manual_chassis, config.arm, VideoConfig("", "", 1.0, "../outside"))
             rejected = RuntimeCoordinator(outside, video_worker=SnapshotVideoWorker(image), snapshot_root=root)
             faults = []
             rejected.fault_raised.connect(faults.append)

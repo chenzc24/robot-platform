@@ -1,4 +1,4 @@
-"""Secret-free local configuration loading for the control-console runtime."""
+"""Secret-free local configuration shared by console frontends."""
 
 import json
 from dataclasses import dataclass
@@ -43,6 +43,7 @@ class ArmConfig(EndpointConfig):
 @dataclass(frozen=True)
 class VideoConfig:
     rtsp_url: str
+    webrtc_url: str
     connect_timeout_seconds: float
     snapshot_directory: str
 
@@ -106,7 +107,7 @@ def load_runtime_config(path):
         raise RuntimeConfigError("local configuration cannot be read") from error
     if set(raw) != {"schema_version", "chassis", "manual_chassis", "arm", "video"}:
         raise RuntimeConfigError("unexpected configuration fields")
-    if raw["schema_version"] != 2:
+    if raw["schema_version"] != 3:
         raise RuntimeConfigError("unsupported configuration schema")
     chassis = _mapping(raw["chassis"], "chassis")
     manual_chassis = _mapping(raw["manual_chassis"], "manual_chassis")
@@ -118,7 +119,7 @@ def load_runtime_config(path):
         raise RuntimeConfigError("unexpected manual chassis configuration fields")
     if set(arm) != {"host", "port", "session_id", "connect_timeout_seconds"}:
         raise RuntimeConfigError("unexpected arm configuration fields")
-    if set(video) != {"rtsp_url", "connect_timeout_seconds", "snapshot_directory"}:
+    if set(video) != {"rtsp_url", "webrtc_url", "connect_timeout_seconds", "snapshot_directory"}:
         raise RuntimeConfigError("unexpected video configuration fields")
     return RuntimeConfig(
         chassis=ChassisConfig(
@@ -143,6 +144,7 @@ def load_runtime_config(path):
         ),
         video=VideoConfig(
             rtsp_url=_string(video["rtsp_url"], "video.rtsp_url", allow_empty=True),
+            webrtc_url=_string(video["webrtc_url"], "video.webrtc_url", allow_empty=True),
             connect_timeout_seconds=_timeout(video["connect_timeout_seconds"], "video.connect_timeout_seconds"),
             snapshot_directory=_string(video["snapshot_directory"], "video.snapshot_directory", allow_empty=True),
         ),

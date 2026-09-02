@@ -825,3 +825,32 @@ entry format:
 - Commit status: implementation committed as `48992c8`, reviewed records end
   at `dcad8fe`, and the branch was fast-forwarded into and pushed to `main`.
   This final factual merge record is committed directly on `main`.
+
+## 2026-09-02 - Migrate the operator console to localhost web
+
+- Goal: replace the crowded primary PySide6 surface with a compact
+  camera-first localhost UI while preserving the validated device clients and
+  independent chassis/arm runtime routes.
+- Modified scope: shared computer-side configuration/status/session helpers,
+  a new loopback web runtime and static UI, the console schema/template,
+  focused tests, launch integration, and console/video/overall documentation.
+  Device runtime code, wire protocols, credentials, endpoints, CAN, TCP232,
+  robot-arm deployment, and physical limits were not changed.
+- Implementation: the Python backend owns serialized ESP32 and MaixCam sockets,
+  health polling, chassis velocity refresh, state mapping, sanitized text
+  logging, events, and faults. The browser presents a dominant direct WebRTC
+  viewport, a Chassis/Robot Arm tab column, complete exact controls, and a
+  collapsed diagnostics drawer. Both device routes remain independent; the
+  page never connects them automatically.
+- Validation: 236 L1 tests passed across all six suites. Python compilation,
+  JavaScript syntax, HTTP root/state checks, same-origin/path tests, and live
+  browser inspection at 1280 x 720 passed. The browser showed all six arm jog
+  rows and all absolute inputs, correct offline control gating, a persistent
+  STOP action, 90-degree initial video display, and no script errors.
+- Hardware state: no ESP32 or MaixCam command session was opened, no device was
+  written, and no physical motion was requested. L2/L3 web-console acceptance
+  remains pending.
+- Local exception: the user's `.vscode/settings.json` modification remains
+  unchanged, unstaged, and uncommitted.
+- Commit status: pending on `target/web-console-migration`; intended commit is
+  `feat(console): migrate operator UI to localhost web`.

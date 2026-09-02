@@ -13,7 +13,8 @@ MaixCam GC4653
        |- RTSP   rtsp://127.0.0.1:8555/maixcam
        |- HLS    http://127.0.0.1:8888/maixcam/index.m3u8
        `- WebRTC http://127.0.0.1:8889/maixcam/
-  -> unified console PyAV decoder
+  -> localhost console MediaMTX WebRTC viewport
+  -> parallel RTSP input reserved for future Python vision inference
 ```
 
 MaixVision and MaixCode are not part of this path. SSH/SCP manages files and processes; it does not transport video. Starting or stopping this chain must not connect the robot-arm gateway, UART0/TCP232 business protocol, ESP32, CAN, or any motion endpoint.
@@ -39,7 +40,9 @@ py -3.13 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 ```
 
-The console decoder needs both PyAV and NumPy. PyAV can open and decode H.264 without NumPy, but converting a frame to the RGB array used by Qt requires NumPy.
+The localhost preview uses the browser MediaMTX WebRTC page and adds no Python
+decoder dependency. PyAV and NumPy remain installed for the legacy Qt fallback,
+receive probes, and future Python inference.
 
 The ignored local tools are:
 
@@ -54,6 +57,7 @@ Copy `config/mediamtx.example.yml` to ignored `config/mediamtx.local.yml`. Confi
 {
   "video": {
     "rtsp_url": "rtsp://127.0.0.1:8555/maixcam",
+    "webrtc_url": "http://127.0.0.1:8889/maixcam/",
     "connect_timeout_seconds": 3.0,
     "snapshot_directory": "snapshots"
   }
@@ -79,7 +83,8 @@ ssh robot-maixcam /root/robot-platform/video/start.sh
   --seconds 6
 ```
 
-Then open the unified console, select **Hardware**, and click **Connect preview**. The same button changes to **Disconnect preview** after the decoder starts. **Snapshot** writes below `logs/snapshots/` when the example local setting above is used.
+Then launch `.\robot-console.cmd`. The camera viewport loads the configured
+WebRTC page directly; no device command connection is opened as a side effect.
 
 To stop only the computer side:
 
@@ -101,7 +106,7 @@ The MaixCam stream declares H.264 packetization mode 0 but has emitted FU-A frag
 
 `tools/maixcam/mediamtx.ps1` owns only its recorded FFmpeg and MediaMTX PIDs. Its start command now waits for the MediaMTX API to report path `maixcam` as both `ready` and `online`; a live process pair without a published path is reported as `VIDEO_RELAY_NOT_READY`, not as success.
 
-The console decoder:
+The legacy PySide6 console decoder:
 
 - uses RTSP over TCP;
 - applies separate PyAV open and read timeouts;

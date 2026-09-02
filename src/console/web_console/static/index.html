@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Robot Console</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+  <link rel="stylesheet" href="/assets/overrides.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">RC</span><div><strong>Robot Console</strong><small>LOCAL OPERATOR</small></div></div>
+    <div class="links" aria-label="Link status">
+      <span class="status-chip" id="video-chip"><i></i>Video</span>
+      <span class="status-chip" id="chassis-chip"><i></i>ESP32</span>
+      <span class="status-chip" id="arm-chip"><i></i>Arm</span>
+    </div>
+    <div class="top-actions"><span class="clock" id="clock">--:--:--</span><button class="danger" id="global-stop">■ STOP CHASSIS</button></div>
+  </header>
+
+  <main class="workspace">
+    <section class="camera-panel">
+      <div class="panel-head"><div><span class="eyebrow">CAMERA 01</span><strong>Live view</strong></div><div class="camera-meta"><span id="video-state">OFFLINE</span><button class="icon-button" id="rotate-video" title="Rotate video">↻</button><button class="icon-button" id="open-video" title="Open player">↗</button></div></div>
+      <div class="viewport rotated" id="viewport">
+        <iframe id="video-frame" title="MaixCam live video"></iframe>
+        <div class="no-video" id="no-video"><span>NO VIDEO</span><small>MediaMTX player is not configured</small></div>
+        <div class="vision-overlay" id="vision-overlay" aria-hidden="true"></div>
+      </div>
+      <footer class="camera-foot"><span>WEBRTC / MEDIAMTX</span><span id="video-rotation">ROT 90°</span></footer>
+    </section>
+
+    <section class="device-panel">
+      <nav class="tabs device-tabs" aria-label="Device"><button class="tab active" data-device-tab="chassis">CHASSIS</button><button class="tab" data-device-tab="arm">ROBOT ARM</button></nav>
+
+      <div class="device-view active" id="device-chassis">
+        <div class="device-summary">
+          <div><span>LINK</span><strong id="chassis-link">OFFLINE</strong></div>
+          <div><span>DRIVE</span><strong id="chassis-drive">LOCKED</strong></div>
+          <div><span>HEALTH</span><strong id="chassis-health">—</strong></div>
+        </div>
+        <div class="action-row">
+          <button id="chassis-connect">CONNECT</button><button id="chassis-enable">ENABLE</button><button id="chassis-disable">DISABLE</button><button class="ghost" id="chassis-status">STATUS</button>
+        </div>
+
+        <div class="control-grid">
+          <div class="drive-pad" aria-label="Chassis direction controls">
+            <button class="motion turn" data-motion="ccw">↶</button><button class="motion" data-motion="forward">↑</button><button class="motion turn" data-motion="cw">↷</button>
+            <button class="motion" data-motion="left">←</button><button class="motion stop" data-stop>■</button><button class="motion" data-motion="right">→</button>
+            <span></span><button class="motion" data-motion="back">↓</button><span></span>
+          </div>
+          <div class="drive-tuning">
+            <label><span>LINEAR <output id="linear-output">100 mm/s</output></span><input id="linear-speed" type="range" min="10" max="600" step="10" value="100"></label>
+            <label><span>TURN <output id="angular-output">200 mrad/s</output></span><input id="angular-speed" type="range" min="10" max="800" step="10" value="200"></label>
+          </div>
+        </div>
+
+        <section class="exact-block">
+          <div class="section-label"><span>EXACT VECTOR</span><span id="requested-vector">0 / 0 / 0</span></div>
+          <div class="numeric-row three"><label>VX<input id="vx" type="number" value="0" step="10"></label><label>VY<input id="vy" type="number" value="0" step="10"></label><label>Ω<input id="omega" type="number" value="0" step="10"></label></div>
+          <div class="action-row"><button class="primary wide" id="apply-vector">APPLY &amp; HOLD</button><button class="danger wide" data-stop>STOP</button></div>
+        </section>
+      </div>
+
+      <div class="device-view" id="device-arm">
+        <div class="device-summary">
+          <div><span>GATEWAY</span><strong id="arm-link">OFFLINE</strong></div>
+          <div><span>CONTROL</span><strong id="arm-control">OFFLINE</strong></div>
+          <div><span>TASK</span><strong id="arm-task">IDLE</strong></div>
+        </div>
+        <div class="action-row"><button id="arm-connect">CONNECT</button><button class="ghost" id="arm-status">STATUS</button><span class="mode-badge" id="arm-mode">UNKNOWN</span></div>
+        <nav class="tabs sub-tabs" aria-label="Arm controls"><button class="tab active" data-arm-tab="joint">JOINT</button><button class="tab" data-arm-tab="xyz">XYZ</button><button class="tab" data-arm-tab="absolute">ABSOLUTE</button><button class="tab" data-arm-tab="gripper">GRIPPER</button></nav>
+
+        <div class="arm-view active" id="arm-joint">
+          <div class="compact-settings"><label>STEP °<input id="joint-step" type="number" min="0.1" max="30" step="0.1" value="2"></label><label>SPEED %<input class="arm-speed" type="number" min="1" max="100" value="20"></label><label>ACCEL %<input class="arm-accel" type="number" min="1" max="100" value="20"></label></div>
+          <div class="jog-list" id="joint-jogs"></div>
+        </div>
+
+        <div class="arm-view" id="arm-xyz">
+          <div class="compact-settings"><label>STEP mm<input id="xyz-step" type="number" min="0.1" max="100" step="0.1" value="5"></label><label>USER<input class="arm-user" type="number" min="0" max="9" value="0"></label><label>TOOL<input class="arm-tool" type="number" min="0" max="9" value="0"></label></div>
+          <div class="jog-list" id="xyz-jogs"></div>
+        </div>
+
+        <div class="arm-view" id="arm-absolute">
+          <div class="section-label"><span>JOINT TARGET / DEG</span></div>
+          <div class="numeric-row six" id="joint-targets"></div>
+          <button class="primary full" id="move-joints">MOVE JOINTS</button>
+          <div class="section-label spaced"><span>POSE / X Y Z RX RY RZ</span></div>
+          <div class="numeric-row six" id="pose-targets"></div>
+          <div class="compact-settings"><label>USER<input class="arm-user" type="number" min="0" max="9" value="0"></label><label>TOOL<input class="arm-tool" type="number" min="0" max="9" value="0"></label></div>
+          <button class="primary full" id="move-linear">MOVE LINEAR</button>
+        </div>
+
+        <div class="arm-view" id="arm-gripper">
+          <label class="gripper-control"><span>WIDTH <output id="gripper-output">35 mm</output></span><input id="gripper-width" type="range" min="0" max="70" value="35"></label>
+          <button class="primary full" id="set-gripper">SET GRIPPER</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <aside class="diagnostics" id="diagnostics">
+    <button class="diagnostic-toggle" id="diagnostic-toggle"><span>DIAGNOSTICS</span><span><b id="fault-count">0</b> FAULTS · <b id="event-count">0</b> EVENTS</span><i>⌃</i></button>
+    <div class="diagnostic-body">
+      <section><h2>Active faults</h2><div id="fault-list" class="fault-list"><p class="empty">No active faults</p></div></section>
+      <section><h2>Recent events</h2><div class="event-table"><table><thead><tr><th>TIME</th><th>TARGET</th><th>COMMAND</th><th>STATE</th><th>RESULT</th></tr></thead><tbody id="event-list"></tbody></table></div></section>
+    </div>
+  </aside>
+  <div class="toast" id="toast" role="status"></div>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

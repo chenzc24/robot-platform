@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QApplication
 
 from .controller import ConsoleController
 from .runtime import RuntimeCoordinator
-from .runtime_config import RuntimeConfigError, load_runtime_config
+from runtime_config import RuntimeConfigError, load_runtime_config
 from .views import MainWindow
 
 

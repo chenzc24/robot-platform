@@ -64,6 +64,11 @@ class RtspProbeSettingsTests(unittest.TestCase):
 
 
 class MediaRelayConfigurationTests(unittest.TestCase):
+    def test_console_media_dependencies_include_numpy(self):
+        requirements = (ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
+        self.assertIn("av==", requirements)
+        self.assertIn("numpy==", requirements)
+
     def test_mediamtx_accepts_only_the_local_ffmpeg_publisher(self):
         config = (ROOT / "config/mediamtx.example.yml").read_text(encoding="utf-8")
         self.assertIn("source: publisher", config)
@@ -75,6 +80,13 @@ class MediaRelayConfigurationTests(unittest.TestCase):
         self.assertIn('"-c:v", "copy"', wrapper)
         self.assertIn("mediamtx-v1.20.0", wrapper)
         self.assertIn("ffmpeg-9.0.1", wrapper)
+
+    def test_relay_waits_for_the_published_path_to_be_ready(self):
+        wrapper = (ROOT / "tools/maixcam/mediamtx.ps1").read_text(encoding="utf-8")
+        self.assertIn("function Wait-RelayReady", wrapper)
+        self.assertIn("/v3/paths/list", wrapper)
+        self.assertIn('$path.ready -and $path.online', wrapper)
+        self.assertIn("VIDEO_RELAY_NOT_READY", wrapper)
 
 
 class DeviceLifecycleScriptTests(unittest.TestCase):

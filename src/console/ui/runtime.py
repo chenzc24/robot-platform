@@ -297,8 +297,11 @@ def _default_frame_adapter(frame):
 def _default_decoder_factory(url, timeout_seconds):
     import av
 
-    timeout_us = str(int(timeout_seconds * 1_000_000))
-    return av.open(url, options={"rtsp_transport": "tcp", "stimeout": timeout_us})
+    return av.open(
+        url,
+        options={"rtsp_transport": "tcp"},
+        timeout=(timeout_seconds, timeout_seconds),
+    )
 
 
 class VideoDecoderWorker(QObject):
@@ -331,17 +334,10 @@ class VideoDecoderWorker(QObject):
         return True
 
     def stop(self, timeout_seconds=1.0):
-        """Request decoder shutdown without falsely reporting a blocked thread as offline."""
+        """Request decoder shutdown without closing a PyAV container cross-thread."""
         self._stop_event.set()
         with self._lock:
-            container = self._container
             thread = self._thread
-        close = getattr(container, "close", None)
-        if callable(close):
-            try:
-                close()
-            except Exception:
-                pass
         if thread is not None:
             thread.join(timeout_seconds)
             if thread.is_alive():

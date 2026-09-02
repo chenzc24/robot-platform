@@ -579,3 +579,31 @@ entry format:
   workspace validation, and diff checks. The revised visible UI started as PID
   17816 and was brought to the foreground.
 - Commit status: committed and pushed on `target/control-console-manual-l3`.
+
+## 2026-09-02 - Stabilize the MaixCam console video receive chain
+
+- Goal: validate and tune the non-motion path from MaixCam RTSP through the
+  computer FFmpeg/MediaMTX relay into the unified console, while the robot arm
+  was in use by another colleague.
+- Modified scope: host video dependencies, console video decoder lifecycle,
+  MediaMTX wrapper readiness logic, related tests, the English video operations
+  guide, ignored local configuration/runtime artifacts, and this plan/log.
+  MaixCam arm code, UART/TCP232, robot-arm LAN1/LAN2, ESP32, CAN, credentials,
+  raw resources, and the primary worktree's user settings remained read-only.
+- Live findings and fixes: the direct source was healthy, but the relay wrapper
+  returned before `/maixcam` was published; it now waits for MediaMTX path
+  readiness. The UI interpreter lacked PyAV while the media environment lacked
+  PySide6, and NumPy was absent from locked dependencies; one project-local
+  environment now contains all three. Real decoder cycling exposed an unsafe
+  cross-thread PyAV close that caused stop timeout and an access violation; the
+  container now closes in its owner thread and uses explicit open/read timeouts.
+- Validation: L2. Direct RTSP decoded 154 H.264 1280 x 720 frames in 8.016 s.
+  The corrected relay became ready after 5.496 s and then decoded 105 frames in
+  6.011 s at 20.008 fps; HLS and WebRTC returned HTTP 200. Two real decoder
+  start/frame/snapshot/stop cycles and a full offscreen UI connect/frame/90-degree
+  display/snapshot/disconnect cycle passed. All 207 local tests, UI smoke,
+  PowerShell parsing, and diff-format checks passed.
+- Hardware: MaixCam video and the computer relay only. The existing compact
+  video service was started but not overwritten. No chassis, CAN, ESP32,
+  robot-arm, UART, TCP232, or motion command was sent.
+- Commit status: committed and pushed on `target/control-console-manual-l3`.

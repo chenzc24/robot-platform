@@ -85,6 +85,46 @@ function Stop-ManagedProcess {
     Write-Output "${Name}_STOPPED pid=$($process.Id)"
 }
 
+function Test-RelayReady {
+    try {
+        $response = Invoke-RestMethod `
+            -Uri "http://127.0.0.1:9997/v3/paths/list" `
+            -Method Get `
+            -TimeoutSec 2
+    }
+    catch {
+        return $false
+    }
+
+    $path = $response.items |
+        Where-Object { $_.name -eq "maixcam" } |
+        Select-Object -First 1
+    return [bool]($path -and $path.ready -and $path.online)
+}
+
+function Wait-RelayReady {
+    param(
+        [System.Diagnostics.Process]$MediaMtxProcess,
+        [System.Diagnostics.Process]$FfmpegProcess,
+        [int]$TimeoutSeconds = 20
+    )
+
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    while ([DateTime]::UtcNow -lt $deadline) {
+        if ($MediaMtxProcess.HasExited) {
+            throw "MediaMTX exited before the relay path became ready"
+        }
+        if ($FfmpegProcess.HasExited) {
+            throw "FFmpeg exited before the relay path became ready"
+        }
+        if (Test-RelayReady) {
+            return
+        }
+        Start-Sleep -Milliseconds 250
+    }
+    throw "Video relay processes started, but path maixcam did not become ready within ${TimeoutSeconds}s"
+}
+
 $ffmpegExecutable = Find-FfmpegExecutable
 
 switch ($Action) {
@@ -106,6 +146,9 @@ switch ($Action) {
             -PidFile $ffmpegPidFile `
             -ExpectedExecutable $ffmpegExecutable
         if ($mediaMtxProcess -and $ffmpegProcess) {
+            Wait-RelayReady `
+                -MediaMtxProcess $mediaMtxProcess `
+                -FfmpegProcess $ffmpegProcess
             Write-Output "VIDEO_RELAY_ALREADY_RUNNING mediamtx_pid=$($mediaMtxProcess.Id) ffmpeg_pid=$($ffmpegProcess.Id)"
             exit 0
         }
@@ -161,11 +204,9 @@ switch ($Action) {
                 -RedirectStandardError $ffmpegStderrLog `
                 -PassThru
             Set-Content -LiteralPath $ffmpegPidFile -Value $ffmpegProcess.Id
-            Start-Sleep -Seconds 3
-            if ($ffmpegProcess.HasExited) {
-                Get-Content -LiteralPath $ffmpegStdoutLog, $ffmpegStderrLog -ErrorAction SilentlyContinue
-                throw "FFmpeg relay exited during startup"
-            }
+            Wait-RelayReady `
+                -MediaMtxProcess $mediaMtxProcess `
+                -FfmpegProcess $ffmpegProcess
             Write-Output "VIDEO_RELAY_STARTED mediamtx_pid=$($mediaMtxProcess.Id) ffmpeg_pid=$($ffmpegProcess.Id) source=$cameraAddress"
         }
         catch {
@@ -200,9 +241,13 @@ switch ($Action) {
         else {
             $ffmpegProcess = $null
         }
-        if ($mediaMtxProcess -and $ffmpegProcess) {
+        if ($mediaMtxProcess -and $ffmpegProcess -and (Test-RelayReady)) {
             Write-Output "VIDEO_RELAY_RUNNING mediamtx_pid=$($mediaMtxProcess.Id) ffmpeg_pid=$($ffmpegProcess.Id)"
             exit 0
+        }
+        if ($mediaMtxProcess -and $ffmpegProcess) {
+            Write-Output "VIDEO_RELAY_NOT_READY mediamtx_pid=$($mediaMtxProcess.Id) ffmpeg_pid=$($ffmpegProcess.Id)"
+            exit 1
         }
         Write-Output "VIDEO_RELAY_NOT_RUNNING mediamtx=$([bool]$mediaMtxProcess) ffmpeg=$([bool]$ffmpegProcess)"
         exit 1

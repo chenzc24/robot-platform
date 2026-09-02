@@ -1,110 +1,146 @@
-# MaixCam video communication
+# MaixCam Video Receive Chain
 
-## 1. Current boundary
+## 1. Runtime boundary
 
-At this stage, only MaixCam's video link to the computer is set up, without a unified console, visual recognition, or generic robot-arm control. ESP32 chassis communication is now an independent direct computer-to-ESP32 TCP path.
+The video path is independent of the robot-arm and chassis command paths:
 
 ```text
 MaixCam GC4653
-  └ - NV21 Collect / H.264
-      └─ RTSP :8554/live
-          Ideas-PyAV direct detection and capture frames
-          └-FFmpeg-c:v copy (computer, unpacking/repackaging only)
-              └ - MediaMTX (computer)
-                  ├─ RTSP 127.0.0.1:8555/maixcam
-                  ├─ HLS  http://127.0.0.1:8888/maixcam/index.m3u8
-                  └─ WebRTC http://127.0.0.1:8889/maixcam/
+  -> NV21 capture and H.264 encoding
+  -> RTSP rtsp://maixcam-6c7d.local:8554/live
+  -> FFmpeg stream copy on the computer
+  -> MediaMTX loopback relay
+       |- RTSP   rtsp://127.0.0.1:8555/maixcam
+       |- HLS    http://127.0.0.1:8888/maixcam/index.m3u8
+       `- WebRTC http://127.0.0.1:8889/maixcam/
+  -> unified console PyAV decoder
 ```
 
-MaixVision and MaixCode are not part of the chain. SSH/SCP is only responsible for code deployment, process start-up and log, and no continuous video.
+MaixVision and MaixCode are not part of this path. SSH/SCP manages files and processes; it does not transport video. Starting or stopping this chain must not connect the robot-arm gateway, UART0/TCP232 business protocol, ESP32, CAN, or any motion endpoint.
 
-## 2. Default media parameters
+## 2. Media baseline
 
-- Resolution: 1280 x 720.
-- Encoding: H.264.
+- Source resolution: 1280 x 720.
+- Encoding: H.264 Main profile.
 - Target frame rate: 20 fps.
-- Target code rate: 2 Mbps.
-- Device RTSP port: 8554.
-- Path:`/live`.
-- RTSP accepts priority use of TCP to avoid the Windows firewall blocking the RTP/UDP package.
+- Target bitrate: 2 Mbps.
+- Device endpoint: TCP RTSP port 8554, path `/live`.
+- Console endpoint: loopback TCP RTSP port 8555, path `/maixcam`.
+- Display orientation: clockwise 90 degrees. The encoded stream remains unmodified; the console owns display and future vision-coordinate rotation.
 
-MaixPy RTSP requires cameras to use NV21, which is `image.Format.FMT_YVU420SP`... that the video process calls as soon as MaixPy is imported `comm.rm_default_comm_listener()`, release the system default UART0 protocol listening device; video code does not read and write any robot business trails.
+MaixPy RTSP capture requires `image.Format.FMT_YVU420SP`. Importing MaixPy initializes its default UART listener, so the video service removes that listener before starting the camera. The video service does not read, write, or forward robot-arm commands.
 
-Local source code has been split into CLI, video service, MaixPy backend, camera resource ownership and structured state module, and additional PID attribution for Shell launch. The reconstruction is currently only using local false backend tests and MaixCam has not been uploaded; the results of this section 5 are from pre-restructuring versions already deployed.
+## 3. Computer prerequisites
 
-## 3. Daily operations
-
-Run the following tasks in VS Code:
-
-1. MaixCam exits self-started on device screen after restarting `num` application;it does not occupy cameras with RTSP services.
-2. `MaixCam Video: Start RTSP`: Upload and start device RTSP service.
-3. `MaixCam Video: Probe direct`: Directly receive and save 10 seconds `tmp/maixcam-frame.png`.
-4. `MaixCam Video: Start PC relay`: Activate computer-side FFmpeg compatibility bridge and MediaMTX forwarding service.
-5. `MaixCam Video: Probe relay`: Transmit re-receiving and grab frames through this machine RTSP.
-6. `MaixCam Video: Open WebRTC`: Open the WebRTC page with MediaMTX in the browser.
-7. `MaixCam Video: Stop RTSP` and `Stop PC relay`: Stop the correspondence process.
-
-Local remodeling has increased. `Status`, `Show recent log`, `PC relay status` and `Start development session` Mission. These missions have been checked through JSON's static system and have not yet been uploaded on the remodeled version.
-
-Command line equivalent operation:
+Create the project environment and install the locked dependencies:
 
 ```powershell
-ssh robot-maixcam /root/robot-platform/video/start.sh
-.venv\Scripts\python.exe tools\maixcam\rtsp_probe.py --seconds 10
-tools\maixcam\mediamtx.ps1 -Action start
-.venv\Scripts\python.exe tools\maixcam\rtsp_probe.py --url rtsp://127.0.0.1:8555/maixcam --seconds 10
+py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 ```
 
-The probe will decipher the mDNS name as IPv4. The current hotspots simultaneously release an unattainable device IPv6 address, which may cause FFmpeg/PyAV to wait for a long time; do not submit the current DHCP IPv4 to the repository.
+The console decoder needs both PyAV and NumPy. PyAV can open and decode H.264 without NumPy, but converting a frame to the RGB array used by Qt requires NumPy.
 
-## 4. Computer side compatibility bridge and MediaMTX
-
-The current computer uses MediaMTX v1.20.0 and FFmpeg 9.1 Windows amd64 in Git ignore directory:
+The ignored local tools are:
 
 ```text
 .tools/mediamtx-v1.20.0/
 .tools/ffmpeg-9.0.1/
 ```
 
-Both SHA256 published packages have matched the publisher's verification values. MaixCam's RTSP session declared H264 package mode 0, but actually contained a FU-A fraction; MediaMTX direct pull shows the path ready but cannot receive the media bytes. `-c:v copy` Unpack and repackage, and push it to MediaMTX as publisher. The process does not decode, recode, and does not change the resolution and target code.
+Copy `config/mediamtx.example.yml` to ignored `config/mediamtx.local.yml`. Configure the console's ignored `config/console.local.json` with:
 
-Can submit Templates as `config/mediamtx.example.yml`;actual `config/mediamtx.local.yml` Ignored by Git. `maixcam-6c7d.local` Query for current IPv4, but do not write DHCP addresses to configuration or repository. MediaMTX `maixcam` The path only accepts the machine FFmpeg publicsher.
-
-New computer installed from [MediaMTX Releases](https://github.com/bluenviron/mediamtx/releases) Download v1.20.0 Windows amd64, and from [Official download page of FFmpeg](https://ffmpeg.org/download.html) Select Windows amd64 to release the package. Verify that the publisher SHA256 depresses to the above directory and create a local configuration:
-
-```powershell
-Copy-Item config\mediamtx.example.yml config\mediamtx.local.yml
+```json
+{
+  "video": {
+    "rtsp_url": "rtsp://127.0.0.1:8555/maixcam",
+    "connect_timeout_seconds": 3.0,
+    "snapshot_directory": "snapshots"
+  }
+}
 ```
 
-`tools/maixcam/mediamtx.ps1` Only the task is to parse the current device IPv4, sequentially suspend two mature tools, record PIDs and logs, and not achieve media protocols or decoding.
+Do not commit a temporary DHCP address. The device source is resolved from `maixcam-6c7d.local` to IPv4 when the relay starts.
 
-Configure only listening computer loop addresses, close unused RTMPs, SRTs and MoQ portals. When other computers are needed in the future, a separate network and validation target should be created, and the port should not be exposed directly to uncontrolled networks.
+## 4. Normal operating flow
 
-## Verified output
+From the repository root:
 
-| Peer | Current round of validation |
+```powershell
+# Start or confirm the MaixCam source. This is idempotent for an owned video PID.
+ssh robot-maixcam /root/robot-platform/video/start.sh
+
+# Start the computer relay. Success now means that /maixcam is actually ready.
+.\tools\maixcam\mediamtx.ps1 -Action start
+
+# Optional deterministic receive check.
+.\.venv\Scripts\python.exe tools\maixcam\rtsp_probe.py `
+  --url rtsp://127.0.0.1:8555/maixcam `
+  --seconds 6
+```
+
+Then open the unified console, select **Hardware**, and click **Connect preview**. The same button changes to **Disconnect preview** after the decoder starts. **Snapshot** writes below `logs/snapshots/` when the example local setting above is used.
+
+To stop only the computer side:
+
+```powershell
+.\tools\maixcam\mediamtx.ps1 -Action stop
+```
+
+To release the MaixCam camera as well:
+
+```powershell
+ssh robot-maixcam /root/robot-platform/video/stop.sh
+```
+
+Stop the console preview before stopping the relay. The relay stop order is FFmpeg first, then MediaMTX.
+
+## 5. Why the FFmpeg bridge exists
+
+The MaixCam stream declares H.264 packetization mode 0 but has emitted FU-A fragments. A direct MediaMTX pull can therefore report a ready path without receiving usable media. FFmpeg performs `-c:v copy` depacketization and repacketization, then publishes to MediaMTX. It does not decode, transcode, rotate, resize, or change the target bitrate.
+
+`tools/maixcam/mediamtx.ps1` owns only its recorded FFmpeg and MediaMTX PIDs. Its start command now waits for the MediaMTX API to report path `maixcam` as both `ready` and `online`; a live process pair without a published path is reported as `VIDEO_RELAY_NOT_READY`, not as success.
+
+The console decoder:
+
+- uses RTSP over TCP;
+- applies separate PyAV open and read timeouts;
+- copies RGB pixels into a Qt-owned image before crossing threads;
+- closes the PyAV container in the decoder thread that owns it;
+- supports repeated start, frame decode, snapshot, and stop cycles; and
+- reports a stop timeout as degraded instead of force-closing PyAV from another thread.
+
+## 6. Verified L2 evidence
+
+Live validation on 2026-09-02 produced:
+
+| Check | Result |
 |---|---|
-| MaixCam RTSP `rtsp://maixcam-6c7d.local:8554/live` | PyAV decoded with actual grab frames. |
-| RTSP `rtsp://127.0.0.1:8555/maixcam` | Reactivated 30 seconds to decode 592 frames, 1280 x 720, 20 fps |
-| HLS `http://127.0.0.1:8888/maixcam/index.m3u8` | HTTP 200 and FFmpeg decoded through |
-| WebRTC `http://127.0.0.1:8889/maixcam/` | Playpage HTTP 200, user confirmed actual stream is normal |
+| MaixCam direct RTSP | H.264, 1280 x 720, nominal 20 fps; 154 frames decoded in 8.016 s; first frame in 1.797 s |
+| Computer relay startup | Returned success after 5.496 s, only after the MediaMTX path became ready |
+| Relay RTSP | H.264, 1280 x 720, measured 20.008 fps; 105 frames decoded in 6.011 s; first frame in 2.207 s |
+| HLS and WebRTC pages | HTTP 200 |
+| Console decoder | Two consecutive start/frame/snapshot/stop cycles passed; both stops returned true |
+| Orientation | Captured raw frame was sideways; the console default clockwise 90-degree display rotation is required |
 
-User acceptance confirms that the image requires a clockwise rotation of 90°. This requirement is documented, but this video communication target does not modify the original coding stream; The rotation will be carried out uniformly in the subsequent display and visual coordinates system target.
+No chassis, CAN, robot-arm, UART, or TCP232 command was sent during this validation.
 
-## 6. Cessation and recovery
+## 7. Failure handling
 
-- This target does not set the device to start automatically; maixCam does not run the video service by default after restart.
-- Device confirm/return key may terminate the current MaixPy video process.
-- Use `stop.sh` After normal release of the camera, there is a risk that the current multimedia drive will fail again in the same system session; if logs appear `No buffer space available` Or the initialization of the ISP should stop the residual process and physically restart the device.
-- Try to force the termination of the process first `stop.sh`;do not run two cameras at once.
-- `Stop PC relay` Stop the FFmpeg, then MediaMTX;
+| Symptom | Check and response |
+|---|---|
+| Device port 8554 is closed | Check SSH and the device video log, then run the owned `start.sh`. Do not kill an unknown camera process. |
+| Relay says `NOT_RUNNING` | Confirm the source RTSP first, then start the relay. |
+| Relay says `NOT_READY` | Inspect `logs/mediamtx/ffmpeg-stderr.log` and MediaMTX logs; stop the owned pair before retrying. |
+| Immediate RTSP 404 after startup | The current script waits for path readiness. Treat a recurrence as a relay-start defect and retain the logs. |
+| Console remains offline while the relay probe works | Verify the local RTSP URL and that PyAV plus NumPy are installed in the same interpreter that launches the UI. |
+| Preview stop reports degraded | Allow the configured read timeout to release the decoder; do not force-close the PyAV container from another thread. |
+| ISP or buffer allocation fails | Stop the owned video process. If the multimedia driver does not recover, physically restart MaixCam before starting one camera owner. |
 
-## Not yet included
+## 8. Remaining work
 
-- The confirmed clockwise displays a 90-degree rotation, as well as malformations, exposure and colouring.
-- The detection box, the target coordinates and the identification results are superimposed.
-- Browser console layout and device control.
-- Autostart, guard, health check and cut-off recovery strategy.
-- Video, recycling storage and data retention policy.
+- Deploy the repository's newer modular video service and `status.sh`; the live device currently retains the previously validated compact service.
+- Add vision inference, calibrated overlay coordinates, exposure controls, and recording/retention policy.
+- Decide whether the video service should start automatically after MaixCam boots.
 
-These content sets up follow-up targets; Video cannot be the only feedback on robotic safety.
+Video is observability data and never the only safety feedback for robot motion.

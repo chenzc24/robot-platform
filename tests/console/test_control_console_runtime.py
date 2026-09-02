@@ -9,6 +9,7 @@ import threading
 import time
 import unittest
 from types import SimpleNamespace
+from unittest import mock
 
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -22,7 +23,7 @@ from PySide6.QtWidgets import QApplication
 
 from ui.controller import ConsoleController
 from ui.models import Environment, Lifecycle, LinkState
-from ui.runtime import RuntimeCoordinator, SerializedSession, SessionFault, SessionResult, VideoDecoderWorker, VideoFrame
+from ui.runtime import RuntimeCoordinator, SerializedSession, SessionFault, SessionResult, VideoDecoderWorker, VideoFrame, _default_decoder_factory
 from ui.runtime_config import (
     ArmConfig,
     ChassisConfig,
@@ -95,11 +96,11 @@ class TwoFrameContainer(FakeContainer):
 class BlockingContainer:
     def __init__(self):
         self.closed = threading.Event()
+        self.release = threading.Event()
 
     def decode(self, video=0):
         self.video_index = video
-        while not self.closed.wait(0.01):
-            pass
+        self.release.wait()
         if False:
             yield FakeFrame()
 
@@ -349,6 +350,31 @@ class RuntimeWorkerTests(unittest.TestCase):
         worker.stop()
         self.assertTrue(container.closed)
 
+    def test_default_video_decoder_uses_open_and_read_timeouts(self):
+        calls = []
+        expected = object()
+
+        def fake_open(url, **kwargs):
+            calls.append((url, kwargs))
+            return expected
+
+        with mock.patch.dict(sys.modules, {"av": SimpleNamespace(open=fake_open)}):
+            actual = _default_decoder_factory("rtsp://local/stream", 2.5)
+
+        self.assertIs(actual, expected)
+        self.assertEqual(
+            calls,
+            [
+                (
+                    "rtsp://local/stream",
+                    {
+                        "options": {"rtsp_transport": "tcp"},
+                        "timeout": (2.5, 2.5),
+                    },
+                )
+            ],
+        )
+
     def test_video_worker_reports_low_frame_rate_and_can_restart_after_completion(self):
         containers = [TwoFrameContainer(), FakeContainer()]
         frames = []
@@ -371,7 +397,7 @@ class RuntimeWorkerTests(unittest.TestCase):
         self.assertTrue(wait_until(lambda: len(frames) == 3))
         worker.stop()
 
-    def test_video_worker_reports_decode_failure_and_stops_blocking_decoder(self):
+    def test_video_worker_reports_decode_failure_and_does_not_close_blocking_decoder_cross_thread(self):
         faults = []
         states = []
         blocking = BlockingContainer()
@@ -380,10 +406,16 @@ class RuntimeWorkerTests(unittest.TestCase):
         worker.state_changed.connect(states.append)
         self.assertTrue(worker.start("rtsp://local/fake", 1.0))
         self.assertTrue(wait_until(lambda: "online" in states))
-        self.assertTrue(worker.stop(timeout_seconds=0.5))
+        self.assertFalse(worker.stop(timeout_seconds=0.05))
+        self.assertFalse(blocking.closed.is_set())
+        self.assertTrue(any(item.code == "video_stop_timeout" for item in faults))
+        self.assertIn("degraded", states)
+        blocking.release.set()
+        self.assertTrue(wait_until(lambda: worker._thread is not None and not worker._thread.is_alive()))
         self.assertTrue(blocking.closed.is_set())
-        self.assertIn("offline", states)
+        self.assertTrue(wait_until(lambda: "offline" in states))
 
+        faults.clear()
         failed = VideoDecoderWorker(decoder_factory=lambda _url, _timeout: (_ for _ in ()).throw(RuntimeError("decode failed")))
         failed.fault_raised.connect(faults.append)
         self.assertTrue(failed.start("rtsp://local/fake", 1.0))

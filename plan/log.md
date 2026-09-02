@@ -854,4 +854,5 @@ entry format:
   unchanged, unstaged, and uncommitted.
 - Commit status: implementation committed on `target/web-console-migration` as
   `c58cd54` (`feat(console): migrate operator UI to localhost web`). This
-  factual record is committed before fast-forward integration to `main`.
+  factual record was committed as `e4a6e0e`; the branch was then fast-forwarded
+  into `main` for remote synchronization.

@@ -801,3 +801,27 @@ entry format:
 - Commit status: alignment records are committed on
   `target/remove-chassis-lease`; the branch is merged into and pushed with
   `main` after this record.
+
+## 2026-09-02 - Expose the full defined chassis command range
+
+- Goal: raise the PC console and ESP32 deployment-input ceilings to the full
+  existing RCP/TCP/chassis-model envelope of 600 mm/s resultant planar speed
+  and 800 mrad/s yaw rate.
+- Modified scope: console and ESP32 L3 configuration examples, ignored local
+  PC/ESP32 limit values, UI slider ranges, focused regression tests, active
+  limit documentation, and goal records. Credentials, endpoints, motion
+  permission, health/hold timing, acceleration, CAN assignments, motor tuning,
+  MaixCam, robot arm, TCP232, raw resources, and device filesystems were
+  unchanged.
+- Implementation: PC and ESP32 limits now match at 600/800. Startup sliders
+  remain at 80/240. Resultant planar enforcement and proportional 200 RPM wheel
+  scaling remain active, so combined commands cannot exceed the defined
+  chassis envelope.
+- Validation: L1 passed 157 tests plus 8 subtests across protocol, ESP32,
+  console, and development tooling, plus a 46-test focused rerun; 36 Python
+  files passed source validation; offscreen UI smoke, ignored local
+  configuration alignment, and diff-format checks passed. No hardware
+  connection, deployment, CAN write, or physical motion occurred.
+- Commit status: prepared on `target/maximize-chassis-range` with intent
+  `feat(chassis): expose full command range`; commit and push follow this
+  record.

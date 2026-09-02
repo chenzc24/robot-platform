@@ -122,15 +122,15 @@ Service-health state in `protocol/runtime-status.schema.json` remains distinct f
 - Loss of the computer, hotspot, or network must not allow new actions or continued stale velocity.
 - Validate, limit, authorize, and log every motion command.
 - ESP32 stops locally when a velocity refresh expires, while an active attended
-  session remains enabled. Lease expiry, link loss, or execution failure stops and
-  disables. Invalid or expired commands are rejected without converting a healthy
+  session remains enabled. Connection-health timeout, link loss, or execution
+  failure stops and disables. Invalid or expired commands are rejected without converting a healthy
   transport into a disconnect.
 - The arm uses confirmed safe poses, low speed, limited workspace, and conflict rejection during development.
 - Do not move the arm until chassis stop is confirmed; do not allow high-speed chassis motion until the arm is safe.
 - Software stop never replaces the physical emergency stop.
-- The attended chassis console keeps separate bounded device and UI limits. The
-  current manual tuning ceiling is 200 mm/s linear and 400 mrad/s angular, with
-  lower startup selections; both ends must match before an L3 session.
+- The attended chassis console and ESP32 both expose the defined 600 mm/s
+  resultant planar and 800 mrad/s yaw command envelope, with lower startup
+  slider selections. Combined motion remains scaled by the 200 RPM wheel cap.
 
 ## 8. First Console Scope
 

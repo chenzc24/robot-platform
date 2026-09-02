@@ -176,6 +176,27 @@ class ChassisMotionTcpServiceTests(unittest.TestCase):
             self.assertEqual(response["payload"]["code"], code)
         self.assertFalse(any(isinstance(item, tuple) for item in harness.chassis.events))
 
+    def test_full_configured_envelope_is_accepted_but_planar_resultant_is_bounded(self):
+        harness = ServiceHarness(motion_permitted=True)
+        harness.service.max_linear_mm_s = 600
+        harness.service.max_omega_mrad_s = 800
+        harness.authenticate()
+        harness.feed("ENABLE", {})
+        response = harness.feed(
+            "VELOCITY",
+            {"vx_mm_s": 600, "vy_mm_s": 0, "omega_mrad_s": 800, "hold_ms": 500},
+            1000,
+        )[-1]
+        self.assertEqual(response["type"], "DONE")
+        self.assertEqual(harness.chassis.events[-1], ("drive", 0.6, 0.0, 0.8))
+
+        response = harness.feed(
+            "VELOCITY",
+            {"vx_mm_s": 600, "vy_mm_s": 600, "omega_mrad_s": 0, "hold_ms": 500},
+            1000,
+        )[-1]
+        self.assertEqual(response["payload"]["code"], "linear_speed_limited")
+
     def test_ping_refreshes_health_then_timeout_stops_and_disables(self):
         harness = ServiceHarness(motion_permitted=True, health_timeout_ms=300)
         harness.authenticate()

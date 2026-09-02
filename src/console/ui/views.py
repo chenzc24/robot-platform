@@ -380,11 +380,11 @@ class MainWindow(QMainWindow):
         limits = QVBoxLayout()
         self.linear_limit_label = _label("Speed 80 mm/s")
         self.linear_slider = QSlider(Qt.Orientation.Horizontal)
-        self.linear_slider.setRange(10, 200)
+        self.linear_slider.setRange(10, 600)
         self.linear_slider.setValue(80)
         self.angular_limit_label = _label("Turn 240 mrad/s")
         self.angular_slider = QSlider(Qt.Orientation.Horizontal)
-        self.angular_slider.setRange(10, 400)
+        self.angular_slider.setRange(10, 800)
         self.angular_slider.setValue(240)
         self.chassis_vector_label = _label("Cmd 0 / 0 / 0", "muted")
         for widget in (self.linear_limit_label, self.linear_slider, self.angular_limit_label, self.angular_slider, self.chassis_vector_label):

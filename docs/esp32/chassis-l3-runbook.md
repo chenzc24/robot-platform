@@ -22,9 +22,10 @@ RX `18`. `CAN.send()` is only local transmit acceptance, not motor feedback.
   plus disable output for every motor.
 - `L3_MOTION_PERMITTED` defaults to `False`. While false, the listener can
   report state but rejects `ENABLE` and `VELOCITY`.
-- The first allowed L3 tool is fixed at forward `50 mm/s` for `200 ms`. The
-  service separately limits linear speed to `50 mm/s`, angular speed to
-  `100 mrad/s`, and hold duration to `200 ms`.
+- The first allowed L3 validation tool remains fixed at forward `50 mm/s` for
+  `200 ms`. The deployed command envelope is independently configurable up to
+  `600 mm/s` resultant planar speed, `800 mrad/s` yaw rate, and `500 ms` hold;
+  full-range testing is not implied by the initial bounded validation.
 - Loss of the TCP connection, connection-health timeout, malformed input, CAN
   error, or local service fault attempts stop plus disable. Velocity-hold
   timeout stops while retaining the enabled session.

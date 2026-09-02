@@ -14,6 +14,6 @@ CAN_RX_PIN = 18
 # Keep false during deployment and CAN-safe-output validation. Set true only
 # for the immediately approved, attended L3 wheel-rotation test.
 L3_MOTION_PERMITTED = False
-L3_MAX_LINEAR_SPEED_MM_S = 200
-L3_MAX_OMEGA_MRAD_S = 400
+L3_MAX_LINEAR_SPEED_MM_S = 600
+L3_MAX_OMEGA_MRAD_S = 800
 L3_MAX_HOLD_MS = 500

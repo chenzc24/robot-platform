@@ -91,7 +91,9 @@ startup integration: selected by local ignored `device_config.py`
 
 After `HELLO` succeeds, the TCP connection itself is the control session and `ENABLE` may be sent directly. `STOP` zeros motion without disabling. `DISABLE` stops and disables but retains the authenticated connection, so `ENABLE` may be sent again. Disconnecting ends the session. Background `PING` requests maintain connection health; timeout stops, disables, and closes the session. Velocity contains a separate `100..500 ms` hold whose expiry stops motion without disabling, so an attended operator can jog again immediately.
 
-The current attended tuning ceiling is 200 mm/s linear and 400 mrad/s angular.
+The configured command ceiling is 600 mm/s resultant planar speed and
+800 mrad/s angular speed, matching the current protocol and chassis-model
+ceilings. Combined commands remain subject to the 200 RPM wheel-speed cap.
 The ESP32 local configuration and console local configuration must carry the same
 limits before the wider range is used; a UI-only increase is not deployment.
 

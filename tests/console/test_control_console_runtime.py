@@ -253,8 +253,8 @@ class ManualRuntime(FakeRuntime):
             manual_chassis=SimpleNamespace(
                 health_interval_ms=500,
                 velocity_hold_ms=500,
-                linear_limit_mm_s=200,
-                angular_limit_mrad_s=400,
+                linear_limit_mm_s=600,
+                angular_limit_mrad_s=800,
             )
         )
 
@@ -648,14 +648,14 @@ class RuntimeWorkerTests(unittest.TestCase):
             motion_enabled=True,
             reported_state="enabled stopped",
         ))
-        self.assertTrue(controller.chassis_velocity(200, 0, 0))
+        self.assertTrue(controller.chassis_velocity(600, 0, 0))
         self.assertEqual(runtime.calls[-1][0], "velocity")
         self.assertEqual(controller._velocity_refresh_timer.interval(), 100)
         before_refresh = len(runtime.calls)
         controller._velocity_refresh_tick()
         self.assertEqual(len(runtime.calls), before_refresh + 1)
         self.assertEqual(runtime.calls[-1][0], "velocity")
-        self.assertFalse(controller.chassis_velocity(201, 0, 0))
+        self.assertFalse(controller.chassis_velocity(601, 0, 0))
         self.assertTrue(controller.chassis_stop())
         self.assertEqual(runtime.calls[-1], ("stop", {}))
         self.assertFalse(controller._velocity_refresh_timer.isActive())
@@ -716,8 +716,8 @@ class RuntimeWorkerTests(unittest.TestCase):
         window = MainWindow(controller)
         try:
             self.assertTrue(window.chassis_enable_button.isEnabled())
-            self.assertEqual(window.linear_slider.maximum(), 200)
-            self.assertEqual(window.angular_slider.maximum(), 400)
+            self.assertEqual(window.linear_slider.maximum(), 600)
+            self.assertEqual(window.angular_slider.maximum(), 800)
             self.assertEqual(window.chassis_vector_label.text(), "Cmd 0 / 0 / 0")
         finally:
             window.close()

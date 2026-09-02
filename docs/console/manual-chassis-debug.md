@@ -37,8 +37,8 @@ connection health:  2000 ms
 health ping:          500 ms
 velocity refresh:    100 ms maximum
 velocity hold:       500 ms
-linear range:       10–200 mm/s (starts at 80)
-angular range:      10–400 mrad/s (starts at 240)
+linear range:       10–600 mm/s (starts at 80)
+angular range:      10–800 mrad/s (starts at 240)
 ```
 
 The normal panel keeps only Connect/Disconnect, Enable/Disable, the direction

@@ -11,8 +11,8 @@
     "enabled": false,
     "health_interval_ms": 500,
     "velocity_hold_ms": 500,
-    "linear_limit_mm_s": 200,
-    "angular_limit_mrad_s": 400
+    "linear_limit_mm_s": 600,
+    "angular_limit_mrad_s": 800
   },
   "arm": {
     "host": "",

@@ -822,6 +822,6 @@ entry format:
   files passed source validation; offscreen UI smoke, ignored local
   configuration alignment, and diff-format checks passed. No hardware
   connection, deployment, CAN write, or physical motion occurred.
-- Commit status: prepared on `target/maximize-chassis-range` with intent
-  `feat(chassis): expose full command range`; commit and push follow this
-  record.
+- Commit status: implementation committed on `target/maximize-chassis-range`
+  as `48992c8` (`feat(chassis): expose full command range`); this factual log
+  update is committed and pushed with the branch.

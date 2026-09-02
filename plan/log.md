@@ -665,5 +665,6 @@ entry format:
   controller project remained running; LAN2 stayed disconnected. No motion,
   gripper, configuration, TCP232, or controller write was sent. The expected
   rejection CLI is intentionally not hardware-run in this goal.
-- Commit status: implementation committed locally as `861aae1`
-  (`fix(console): add arm CLI diagnostics`); final record push pending.
+- Commit status: implementation is committed as `861aae1`
+  (`fix(console): add arm CLI diagnostics`); this completed record is committed
+  and pushed with the current main history.

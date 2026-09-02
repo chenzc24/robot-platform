@@ -281,3 +281,43 @@ entry format:
 - Hardware: no device, endpoint, socket, RTSP stream, relay, credential, process, deployment target, CAN bus, motor, TCP232, or robot-arm API was accessed, written, reset, or moved.
 - Commit status: committed and pushed on `target/control-console-ui-phase-b-hardening`; user settings, secrets, caches, backups, local configuration, and raw resources are excluded.
 - Follow-up: L2 must validate the actual endpoint response and timeout/reconnect behavior with motion disabled. L3 remains a separate on-site safety-governed motion goal.
+
+## 2026-09-02 - Deploy and validate the resident ESP32 RCP/TCP v2 L2 listener
+
+- Goal: deploy the reviewed no-motion ESP32 listener, make its safe startup
+  resident, and validate the real computer-to-ESP32 console path without
+  motion.
+- Modified scope: the version-controlled ESP32 boot entry point, a non-secret
+  L2 device configuration template, one deployment evidence document, and this
+  goal plan/log. The primary worktree's user-owned `.vscode/settings.json`, raw
+  resource archives, MaixCam services, arm project, TCP232 settings, CAN, and
+  motion source remained untouched.
+- Deployment and recovery: after the user confirmed the on-site transition
+  safety gate, the previous root launcher and support files were backed up into
+  an ignored local directory. The reviewed L2 files and a generated local
+  credential were uploaded over COM7; source/readback hashes matched for the
+  runtime file set. A first credential generation error produced a too-short
+  value and was corrected before application traffic. The new boot entry point
+  then restored the network and invoked only the no-motion application entry
+  point. No flash erase, firmware write, CAN construction, motor call, or
+  motion command occurred.
+- Hardware validation: L2. The resident listener accepted a connection after
+  reset. Valid `HELLO`, `PING`, and `STATUS` returned `WELCOME`, `PONG`, and
+  `STATE` with `ready`/`disabled`, `motion_permitted=false`, and no lease.
+  A valid-format wrong credential returned `authentication_failed`; a later
+  valid session reconnected and queried status. The actual console runtime
+  completed `connect -> status -> disconnect`. No state-changing request was
+  sent.
+- MaixCam status: the reachable SSH port still required host-key trust, while
+  the observed RTSP and arm-service ports were not listening. This goal did not
+  authorize starting, stopping, or configuring MaixCam services, so video and
+  arm L2 validation remain separate pending work.
+- Validation: 190 tests passed when the six subsystem suites ran in isolated
+  Python processes (ESP32 52, protocol 28, console 34, MaixCam 44, robot arm
+  9, development tools 23); selected device-path tests also passed. Python
+  compilation and the real L2 session above completed, and ignored
+  credentials/backups/local configuration were confirmed excluded from Git.
+  One monolithic `pytest` collection remains unsuitable: two historical
+  modules named `chassis_tcp_probe` collide in Python's import cache depending
+  on collection order. That shared test-runner issue was observed but not
+  changed in this goal. Diff review and commit/push follow this record.

@@ -637,4 +637,5 @@ entry format:
   path was observed during each gateway restart. The controller retains a
   historical `sequence_replay` error from deliberate recovery diagnosis but
   is `ready` with no active task and `motion_enabled=0`.
-- Commit status: pending this main-branch commit and push.
+- Commit status: implementation committed and pushed to `main` as `ffa4935`
+  (`deploy(robot-arm): prove default-deny RPA2 route`).

@@ -778,3 +778,26 @@ entry format:
 - Commit status: implementation committed on `target/remove-chassis-lease` as
   `a88051b` (`refactor(chassis): remove lease control layer`); this factual log
   update is committed and pushed with the same branch.
+
+## 2026-09-02 - Align chassis v3 deployment inputs and integrate main
+
+- Goal: finish local PC/ESP32 RCP/TCP v3 deployment-input alignment and merge
+  the reviewed lease-removal branch into `main`.
+- Modified scope: ignored ESP32 `device_config.py` runtime mode and health
+  timeout, one stale source docstring, goal records, and Git integration state.
+  The user's `.vscode/settings.json`, credentials, CAN assignments, motion
+  permission/limits, MaixCam, robot arm, TCP232, raw resources, and every device
+  filesystem were unchanged.
+- Alignment: the ignored ESP32 configuration now selects `tcp_v3_l3` with a
+  2000 ms health timeout. Its 200 mm/s linear, 400 mrad/s angular, and 500 ms
+  hold limits match the PC local console configuration, whose background
+  health interval is 500 ms. Active source and committed deployment templates
+  contain no v2 import, v2 runtime mode, or lease API.
+- Validation: L1 passed 225 tests plus 8 subtests across protocol, ESP32,
+  console, development tooling, MaixCam, and robot-arm suites; Python source
+  validation, offscreen UI smoke, local configuration parsing, and
+  `git diff --check` passed. No hardware connection, deployment, or motion
+  occurred.
+- Commit status: alignment records are committed on
+  `target/remove-chassis-lease`; the branch is merged into and pushed with
+  `main` after this record.

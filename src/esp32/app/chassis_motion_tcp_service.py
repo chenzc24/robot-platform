@@ -73,7 +73,7 @@ class ChassisMotionRequestError(ValueError):
 
 
 class ChassisMotionTcpService:
-    """Execute one authenticated v2 request at a time and fail locally safe."""
+    """Execute one authenticated v3 request at a time and fail locally safe."""
 
     def __init__(
         self,

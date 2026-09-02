@@ -23,7 +23,7 @@ from PySide6.QtWidgets import QApplication
 
 from ui.controller import ConsoleController
 from ui.models import Environment, Lifecycle, LinkState
-from ui.runtime import RuntimeCoordinator, SerializedSession, SessionFault, SessionResult, VideoDecoderWorker, VideoFrame, _default_decoder_factory, _ensure_runtime_import_paths
+from ui.runtime import RuntimeCoordinator, SerializedSession, SessionFault, SessionResult, VideoDecoderWorker, VideoFrame, _arm_dispatch, _default_decoder_factory, _ensure_runtime_import_paths
 from ui.runtime_config import (
     ArmConfig,
     ChassisConfig,
@@ -132,6 +132,20 @@ class RejectingClient:
 
     def velocity(self):
         raise ExplicitRejection("invalid_chassis_state")
+
+
+class ArmLifecycleClient:
+    def __init__(self, lifecycle, code="request_in_flight"):
+        self.connection = FakeConnection()
+        self.lifecycle, self.code = lifecycle, code
+        self.calls = []
+
+    def status(self):
+        self.calls.append("status")
+        return [{"lifecycle": self.lifecycle, "payload": {"error_code": self.code}}]
+
+    def ping(self):
+        return self.status()
 
 
 class OrderedClient:
@@ -514,6 +528,29 @@ class RuntimeWorkerTests(unittest.TestCase):
         finally:
             session.close()
 
+    def test_arm_terminal_rejection_is_not_misreported_as_completed_status(self):
+        client = ArmLifecycleClient("REJECTED")
+        results, states, faults = [], [], []
+        session = SerializedSession(
+            "MaixCam", lambda: client, _arm_dispatch, {"status"}, {"move_joint"},
+        )
+        session.result_ready.connect(results.append)
+        session.state_changed.connect(states.append)
+        session.fault_raised.connect(faults.append)
+        try:
+            session.connect()
+            self.assertTrue(wait_until(lambda: "online" in states))
+            session.request("status")
+            self.assertTrue(wait_until(lambda: any(item.command == "status" for item in results)))
+            outcome = [item for item in results if item.command == "status"][-1]
+            self.assertEqual(outcome.lifecycle, Lifecycle.REJECTED)
+            self.assertEqual(outcome.code, "request_in_flight")
+            self.assertEqual(client.calls, ["status"])
+            self.assertEqual(faults, [])
+            self.assertFalse(client.connection.closed)
+        finally:
+            session.close()
+
     def test_snapshot_stays_inside_injected_local_root(self):
         image = QImage(2, 1, QImage.Format.Format_RGB888)
         image.fill(0xFF336699)
@@ -760,6 +797,28 @@ class RuntimeWorkerTests(unittest.TestCase):
             window.chassis_advanced_toggle.setChecked(True)
             self.assertFalse(window.chassis_advanced.isHidden())
             self.assertEqual(window.chassis_vector_label.text(), "Cmd 0 / 0 / 0")
+        finally:
+            window.close()
+
+    def test_hardware_arm_view_hides_simulator_motion_forms_and_explains_default_deny(self):
+        runtime = ManualRuntime()
+        controller = ConsoleController(runtime=runtime)
+        controller.set_environment(Environment.HARDWARE)
+        controller._replace(arm=controller.state.arm.__class__(
+            gateway=LinkState.ONLINE,
+            uart_lan1=LinkState.ONLINE,
+            controller=LinkState.ONLINE,
+            task=Lifecycle.IDLE,
+            reported_state="ready",
+            motion_permitted=False,
+            last_status_age_ms=0,
+        ))
+        window = MainWindow(controller)
+        try:
+            self.assertTrue(window.arm_tabs.isHidden())
+            self.assertFalse(window.arm_unlock.isEnabled())
+            self.assertFalse(window.joint_execute_button.isEnabled())
+            self.assertIn("default-deny", window.arm_runtime_detail.text())
         finally:
             window.close()
 

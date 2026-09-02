@@ -38,6 +38,16 @@ class SessionFault:
     state_changing: bool
 
 
+class ArmLifecycleRejection(RuntimeError):
+    """A MaixCam endpoint explicitly rejected a request without link failure."""
+
+    explicit_rejection = True
+
+    def __init__(self, code):
+        RuntimeError.__init__(self, code)
+        self.code = code
+
+
 @dataclass(frozen=True)
 class VideoFrame:
     image: QImage
@@ -135,7 +145,12 @@ def _arm_dispatch(client, command, payload):
     }
     if command not in handlers:
         raise ValueError("unsupported_arm_command")
-    return handlers[command]()
+    responses = handlers[command]()
+    terminal = responses[-1] if isinstance(responses, (list, tuple)) and responses else None
+    if isinstance(terminal, dict) and terminal.get("lifecycle") == "REJECTED":
+        reply = terminal.get("payload") or {}
+        raise ArmLifecycleRejection(reply.get("error_code", "arm_request_rejected"))
+    return responses
 
 
 class SerializedSession(QObject):

@@ -469,6 +469,14 @@ class MainWindow(QMainWindow):
         arm_session.addWidget(self.arm_unlock)
         layout.addLayout(arm_session)
 
+        self.arm_runtime_detail = _label("Route offline. Connect to request arm status.", "muted")
+        self.arm_runtime_detail.setWordWrap(True)
+        detail_frame = QFrame()
+        detail_layout = QHBoxLayout(detail_frame)
+        detail_layout.setContentsMargins(10, 2, 10, 7)
+        detail_layout.addWidget(self.arm_runtime_detail, 1)
+        layout.addWidget(detail_frame)
+
         self.arm_tabs = QTabWidget()
         joint_page, self.joint_spins, joint_layout = self._form_page(
             ("J1", "J2", "J3", "J4", "J5", "J6"),
@@ -733,10 +741,26 @@ class MainWindow(QMainWindow):
             and arm.task == Lifecycle.IDLE
             and self.controller._chassis_is_idle()
         )
+        self.arm_unlock.setText(
+            "Manual motion unlocked (simulator)"
+            if state.environment == Environment.SIMULATOR
+            else "Hardware motion unavailable"
+        )
         self.arm_unlock.setEnabled(arm_unlock_available)
         arm_enabled = self.controller.can_arm_move()
         for button in (self.joint_execute_button, self.linear_execute_button, self.gripper_execute_button):
             button.setEnabled(arm_enabled)
+        self.arm_tabs.setVisible(state.environment == Environment.SIMULATOR)
+        if state.environment == Environment.HARDWARE:
+            if arm.gateway != LinkState.ONLINE:
+                detail = "Connect MaixCam to query the arm route. Hardware motion remains unavailable."
+            elif arm.motion_permitted:
+                detail = "Arm route is ready, but Hardware motion mapping is not provisioned in this console release."
+            else:
+                detail = "Route ready; controller policy is default-deny (motion_enabled=0). Motion forms are hidden."
+        else:
+            detail = "Simulator only: joint, Cartesian, and gripper controls use simulated lifecycle events."
+        self.arm_runtime_detail.setText(detail)
 
         self.video_health_label.setText("Video %s" % self._state_text(state.video.link).lower())
         heartbeat = "%d ms" % chassis.heartbeat_age_ms if chassis.heartbeat_age_ms is not None else "unavailable"

@@ -45,7 +45,7 @@ The only committed arm operations are `PING` and `STATUS`. A future L3 goal may 
 
 1. Freeze a release manifest and local-test result.
 2. Deploy ESP32 `tcp_v2_l2` only with local credentials, `motion_permitted=false`, and `NoMotionChassis`; verify authentication rejection, `PING`, `STATUS`, lease expiry, EOF, and port cleanup.
-3. Deploy the arm project with `MOTION_ENABLED=false`; verify RPA2 `PING`, `STATUS`, and command rejection.
+3. Build the DobotStudio-compatible project from the reviewed modular arm source: two code files (`main.py` and `var.py`) plus required `prj.json` and empty `point.json` metadata. Deploy it with `MOTION_ENABLED = False`; verify RPA2 `PING`, `STATUS`, and command rejection.
 4. Deploy the MaixCam endpoint only through `run_arm_command_service.sh`, which verifies and releases the current launcher UART owner before starting, then restores the launcher supervisor on exit. Verify computer `arm.ping`, `arm.status`, UART restore, and no motion admission.
 5. Keep the three results separate. No L3 motion or cross-device task is authorized by this candidate.
 

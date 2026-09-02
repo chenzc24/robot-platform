@@ -607,3 +607,34 @@ entry format:
   video service was started but not overwritten. No chassis, CAN, ESP32,
   robot-arm, UART, TCP232, or motion command was sent.
 - Commit status: committed and pushed on `target/control-console-manual-l3`.
+
+## 2026-09-02 - Deploy and prove the default-deny RPA2 arm route
+
+- Goal: deploy the DobotStudio-compatible, default-deny Magician E6 LAN1
+  service through LAN2, then prove computer-to-MaixCam-to-TCP232-to-LAN1
+  interaction without the LAN2 maintenance cable.
+- Modified scope: an arm-project builder and docs, MaixCam arm endpoint
+  sequence recovery/configuration naming, focused L1 tests, deployment plan,
+  and this log. Raw resources, arm network/TCP232 parameters, taught points,
+  payload/safety configuration, ESP32, CAN, and credentials remained unchanged.
+- Implementation: DobotStudio receives two executable project files
+  (`main.py`, `var.py`) plus required `prj.json` and empty `point.json`.
+  The generated controller source remains deny-all. The MaixCam gateway now
+  keeps RPA2 sequence ownership across computer connections and starts a new
+  gateway process from a bounded wall-clock sequence, avoiding replay against
+  the controller's resident service after gateway restart.
+- Validation: L1 passed 49 MaixCam tests, 11 robot-arm tests, and 28 protocol
+  tests; the builder output contains only the expected project files and the
+  controller entry point compiles. L2 passed after the operator unplugged LAN2:
+  two independent computer sessions returned RPA2 `PING`/`STATUS` through
+  MaixCam UART0, TCP232, and arm LAN1. Downstream sequences `1788328439` to
+  `1788328442` were accepted. Test joint-motion requests were rejected at
+  MaixCam as `admission_rejected`, before UART output. No physical arm motion
+  was requested.
+- Hardware: the user imported and started the arm project. MaixCam's guarded
+  arm endpoint is intentionally left running at the user's request; it owns
+  `/dev/ttyS0` and listens on TCP 8780. The launcher supervisor restoration
+  path was observed during each gateway restart. The controller retains a
+  historical `sequence_replay` error from deliberate recovery diagnosis but
+  is `ready` with no active task and `motion_enabled=0`.
+- Commit status: pending this main-branch commit and push.

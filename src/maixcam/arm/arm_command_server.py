@@ -14,6 +14,7 @@ except ImportError:
 from arm_motion_gateway import ArmMotionGateway
 from command_service import ArmCommandService
 from command_runtime import ArmCommandRuntime
+from motion_link import MAX_SEQUENCE
 from posix_uart import PosixUartTransport
 
 
@@ -29,10 +30,23 @@ def _deny_motion(_message):
     return False
 
 
+def _service(gateway, config):
+    """Create a computer session while retaining process-owned RPA2 sequencing."""
+    permitted = getattr(config, "MOTION_COMMANDS_PERMITTED", False) is True
+    return ArmCommandService(gateway, admission=lambda _message: permitted)
+
+
+def _initial_downstream_sequence(clock=None):
+    """Seed a freshly started gateway above typical persisted arm sequences."""
+    sequence = int((clock or time.time)())
+    return min(MAX_SEQUENCE, max(1, sequence))
+
+
 def serve_forever(socket_module=None, uart_factory=None):
     config, socket_module = _settings(), socket_module or socket
     uart_factory = uart_factory or PosixUartTransport
     uart = uart_factory(config.UART_DEVICE, config.UART_BAUD)
+    gateway = ArmMotionGateway(uart.write, initial_sequence=_initial_downstream_sequence())
     listener = socket_module.socket(socket_module.AF_INET, socket_module.SOCK_STREAM)
     try:
         listener.setsockopt(socket_module.SOL_SOCKET, socket_module.SO_REUSEADDR, 1)
@@ -47,9 +61,7 @@ def serve_forever(socket_module=None, uart_factory=None):
                 connection.settimeout(0.05)
                 # Default deny. A future L3 goal must separately supply a reviewed
                 # controller policy and computer-side cross-device admission.
-                permitted = getattr(config, "MOTION_COMMANDS_PERMITTED", False) is True
-                admission = (lambda _message: permitted)
-                service = ArmCommandService(ArmMotionGateway(uart.write), admission=admission)
+                service = _service(gateway, config)
                 runtime = ArmCommandRuntime(service, connection, uart)
                 runtime.run_forever()
             except Exception:

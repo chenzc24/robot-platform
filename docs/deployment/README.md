@@ -73,7 +73,7 @@ DobotStudio Pro
 controller project, taught points, and configuration
 ```
 
-LAN2 is used to import, save, start, and debug the project; configure taught points, load, safety settings, and controller mode; bind the controller Run/Stop button to a project; and inspect faults and actual state.
+LAN2 is used to import, save, start, and debug the project; configure taught points, load, safety settings, and controller mode; bind the controller Run/Stop button to a project; and inspect faults and actual state. The observed DobotStudio workflow accepts only `main.py` and `var.py` as code files; build that project with `tools/robot_arm/build_dobotstudio_project.py` from reviewed modular source. The output also includes required import metadata, `prj.json` and an empty `point.json`. Import it as a separate project, preserving the existing controller project when an export backup is not available.
 
 After the project is saved and started, LAN2 can be unplugged and runtime data continues through MaixCam-TCP232-LAN1. RPA1 has passed PING and one fixed action with LAN2 physically disconnected.
 

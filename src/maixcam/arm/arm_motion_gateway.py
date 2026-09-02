@@ -14,13 +14,15 @@ class ArmMotionGatewayError(RuntimeError):
 class ArmMotionGateway:
     """Preserve response lifecycle and never retry a state-changing write."""
 
-    def __init__(self, write, clock_ms=None):
+    def __init__(self, write, clock_ms=None, initial_sequence=1):
         if not callable(write):
             raise ValueError("write must be callable")
+        if isinstance(initial_sequence, bool) or not isinstance(initial_sequence, int) or not 1 <= initial_sequence <= 2147483647:
+            raise ValueError("invalid_initial_sequence")
         self.write = write
         self.clock_ms = clock_ms or (lambda: int(time.monotonic() * 1000))
         self.decoder = FrameStreamDecoder("RPA2")
-        self.sequence, self.pending, self.state, self.error_code = 1, None, "idle", None
+        self.sequence, self.pending, self.state, self.error_code = initial_sequence, None, "idle", None
 
     def start(self, command, payload="", ttl_ms=1000):
         if self.pending is not None:

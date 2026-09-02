@@ -321,3 +321,38 @@ entry format:
   modules named `chassis_tcp_probe` collide in Python's import cache depending
   on collection order. That shared test-runner issue was observed but not
   changed in this goal. Diff review and commit/push follow this record.
+
+## 2026-09-02 - Validate guarded ESP32 CAN and one attended L3 chassis motion
+
+- Goal: add an explicit L3 CAN composition to the resident direct ESP32
+  RCP/TCP v2 service, deploy it first motion-locked, then verify one
+  low-speed, duration-bounded wheel-rotation command under an on-site safety
+  gate.
+- Modified scope: ESP32 CAN construction/composition/startup source, local
+  L3 configuration template, a bounded computer-side L3 tool, ESP32 fake-CAN
+  tests, the L3 runbook, and this plan/log. The raw resource archives,
+  credentials, firmware image, MaixCam, robot arm, TCP232, console source, and
+  user settings remained untouched.
+- Implementation: the L3 composition creates the legacy-confirmed ESP32 CAN
+  peripheral only when `tcp_v2_l3` is selected, starts with zero-speed plus
+  disable output, and composes `SafeMecanumChassis` with the authenticated
+  v2 service. Motion stays false until an ignored local flag is explicitly
+  enabled. The first runtime limits are 50 mm/s linear, 100 mrad/s angular,
+  and 200 ms hold. The L3 test client requires explicit execution and safety
+  flags; its setup lease and shorter renewed motion lease account for the
+  four-motor initialization duration.
+- Validation: L1, 56 ESP32 tests passed and the tool's no-execute dry run
+  passed. L3, after the user twice confirmed the immediate on-site safety
+  gate, a 14-file deployment matched device readback hashes. The motion-locked
+  restart reported `ready`/`disabled` with no fault. The explicitly enabled
+  restart then completed one attended forward 50 mm/s, 200 ms command while
+  raised/restrained; the user observed normal brief wheel rotation. Final
+  status was disabled with no active lease, hold, or fault. The first final
+  release request found its setup lease already expired and was rejected only
+  after the local stop/disable path; no movement was retried.
+- Hardware limitations: CAN local send acceptance and the operator's
+  observation are the only evidence. There is no driver ACK, wheel feedback,
+  bus-off recovery, or controller fault telemetry. The device remains an L3
+  attended-test configuration, not a general production release.
+- Commit status: pending this target's diff review, commit, and push. No
+  backup, secret, local configuration, or raw resource is staged.

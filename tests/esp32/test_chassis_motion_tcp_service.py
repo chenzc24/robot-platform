@@ -160,6 +160,23 @@ class ChassisMotionTcpServiceTests(unittest.TestCase):
         self.assertEqual(harness.chassis.events[-2:], ["stop", "disable"])
         self.assertEqual(harness.chassis.state, "disabled")
 
+    def test_runtime_velocity_limits_reject_before_any_drive(self):
+        harness = ServiceHarness(motion_permitted=True)
+        harness.service.max_linear_mm_s = 50
+        harness.service.max_omega_mrad_s = 100
+        harness.service.max_hold_ms = 200
+        harness.authenticate()
+        harness.feed("ACQUIRE", {"lease_ms": 1000})
+        harness.feed("ENABLE", {})
+        for payload, code in (
+            ({"vx_mm_s": 51, "vy_mm_s": 0, "omega_mrad_s": 0, "hold_ms": 200}, "linear_speed_limited"),
+            ({"vx_mm_s": 0, "vy_mm_s": 0, "omega_mrad_s": 101, "hold_ms": 200}, "angular_speed_limited"),
+            ({"vx_mm_s": 50, "vy_mm_s": 0, "omega_mrad_s": 0, "hold_ms": 201}, "hold_duration_limited"),
+        ):
+            response = harness.feed("VELOCITY", payload, 500)[-1]
+            self.assertEqual(response["payload"]["code"], code)
+        self.assertFalse(any(isinstance(item, tuple) for item in harness.chassis.events))
+
     def test_heartbeat_renews_lease_then_expiry_stops_locally(self):
         harness = ServiceHarness(motion_permitted=True)
         harness.authenticate()

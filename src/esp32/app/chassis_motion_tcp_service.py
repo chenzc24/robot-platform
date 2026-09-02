@@ -81,6 +81,9 @@ class ChassisMotionTcpService:
         authorize=None,
         motion_permitted=False,
         clock_ms=None,
+        max_linear_mm_s=None,
+        max_omega_mrad_s=None,
+        max_hold_ms=None,
     ):
         self.transport = transport
         self.chassis = chassis
@@ -88,6 +91,15 @@ class ChassisMotionTcpService:
         self.authorize = authorize
         self.motion_permitted = motion_permitted is True
         self._clock_ms = clock_ms or _clock_ms
+        self.max_linear_mm_s = self._optional_positive_int(
+            max_linear_mm_s, "max_linear_mm_s"
+        )
+        self.max_omega_mrad_s = self._optional_positive_int(
+            max_omega_mrad_s, "max_omega_mrad_s"
+        )
+        self.max_hold_ms = self._optional_positive_int(
+            max_hold_ms, "max_hold_ms"
+        )
         self.decoder = MessageStreamDecoder()
         self.service_state = "safe_idle"
         self.error_code = None
@@ -99,6 +111,14 @@ class ChassisMotionTcpService:
         self._last_responses = None
         self._hold_deadline_ms = None
         self._active_velocity_sequence = None
+
+    @staticmethod
+    def _optional_positive_int(value, name):
+        if value is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            raise ValueError("%s must be a positive integer or None" % name)
+        return value
 
     def _response(self, request, response_type, payload):
         return encode_message(response_type, request["sequence"], 0, payload)
@@ -254,6 +274,23 @@ class ChassisMotionTcpService:
                 payload = request["payload"]
                 if payload["hold_ms"] > request["ttl_ms"]:
                     raise ChassisMotionRequestError("hold_exceeds_ttl")
+                if (
+                    self.max_linear_mm_s is not None
+                    and payload["vx_mm_s"] * payload["vx_mm_s"]
+                    + payload["vy_mm_s"] * payload["vy_mm_s"]
+                    > self.max_linear_mm_s * self.max_linear_mm_s
+                ):
+                    raise ChassisMotionRequestError("linear_speed_limited")
+                if (
+                    self.max_omega_mrad_s is not None
+                    and abs(payload["omega_mrad_s"]) > self.max_omega_mrad_s
+                ):
+                    raise ChassisMotionRequestError("angular_speed_limited")
+                if (
+                    self.max_hold_ms is not None
+                    and payload["hold_ms"] > self.max_hold_ms
+                ):
+                    raise ChassisMotionRequestError("hold_duration_limited")
                 self.chassis.drive(
                     payload["vx_mm_s"] / 1000.0,
                     payload["vy_mm_s"] / 1000.0,

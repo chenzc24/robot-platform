@@ -198,6 +198,56 @@ class WebRuntimeTests(unittest.TestCase):
         finally:
             runtime.close()
 
+    def test_slow_arm_poll_does_not_delay_chassis_heartbeats(self):
+        blocked, release, heartbeats_seen = threading.Event(), threading.Event(), threading.Event()
+        heartbeats = []
+        self.runtime.connect_chassis()
+        self.runtime.connect_arm()
+        original_status = self.arm.status
+        original_ping = self.chassis.ping
+
+        def slow_status():
+            blocked.set()
+            release.wait(4)
+            return original_status()
+
+        def observed_ping():
+            if blocked.is_set() and not release.is_set():
+                heartbeats.append(1)
+                if len(heartbeats) >= 3:
+                    heartbeats_seen.set()
+            return original_ping()
+
+        self.arm.status = slow_status
+        self.chassis.ping = observed_ping
+        try:
+            self.runtime._start_workers()
+            self.assertTrue(blocked.wait(1.5))
+            self.assertTrue(heartbeats_seen.wait(2.5))
+            self.assertGreaterEqual(len(heartbeats), 3)
+        finally:
+            release.set()
+
+    def test_background_arm_poll_skips_an_occupied_route(self):
+        owned, release = threading.Event(), threading.Event()
+        self.runtime.connect_arm()
+
+        def operator_call():
+            with self.runtime._arm_io:
+                owned.set()
+                release.wait(2)
+
+        worker = threading.Thread(target=operator_call)
+        worker.start()
+        try:
+            self.assertTrue(owned.wait(1))
+            calls_before = len(self.arm.calls)
+            self.runtime.arm_health_once()
+            self.assertEqual(len(self.arm.calls), calls_before)
+        finally:
+            release.set()
+            worker.join(2)
+
     def test_arm_controls_are_independent_and_validate_precise_vectors(self):
         self.runtime.connect_arm()
         self.runtime.arm_command("jog_joint", {"joint_delta_deg": [2, 0, 0, 0, 0, 0], "speed_pct": 20, "accel_pct": 20})

@@ -985,3 +985,28 @@ entry format:
   High-frequency/in-motion telemetry, raw vendor return-container capture,
   motion-completion accuracy, and UI acceptance were not established.
 - Commit intent: push sanitized L2 evidence on the existing deployment branch.
+
+## 2026-09-03 - Align arm deadlines and open the attended web console
+
+- Scope: shared PC arm request deadlines, separate web chassis/arm health
+  workers, six regression tests, console documentation and goal records.
+  User settings, device runtime sources, controller limits and secrets untouched.
+- PING/STATUS TTL is now 5 seconds; response budget is request TTL plus 1 second
+  with one absolute deadline. Motion TTL remains 60 seconds with no automatic
+  retry. Slow arm reads no longer serialize the chassis health worker.
+- L1: 37 runnable console tests and 25 dev tests passed. Two legacy Qt test
+  modules could not import because PySide6 is absent; not claimed as passed.
+- L2: default arm CLI returned READY/PONG/measured STATE; ESP32 returned v3
+  ready/disabled. Web sessions connected with valid live arm feedback and
+  independent chassis health. Only video was resumed after a KEY_OK exit;
+  controller, ESP32 and gateway were not restarted or redeployed this turn.
+- Restored checksum-verified MediaMTX/FFmpeg binaries to ignored `.tools/`.
+  Relay decoded 1280 x 720 H.264 at 19.99 fps; browser showed embedded WebRTC
+  video. Web UI remains at localhost:8080 with approved full manual controls.
+- Agent did not send Enable, nonzero velocity, jog or gripper commands. The
+  operator used the UI and its journal recorded DONE responses. Physical
+  execution is not independently accepted. Arm status also reported
+  `invalid_gripper` while the journal showed DONE and the fault list was empty;
+  this discrepancy is pending investigation. L3/L4/cold-boot not agent-tested.
+- Commit intent: commit/push only this goal on `target/arm-timeouts-manual-ui`,
+  preserving `.vscode/settings.json` unstaged; no merge to main.

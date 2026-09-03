@@ -101,6 +101,21 @@ labels the retained last valid values `STALE` and keeps their PC-side age.
 Target inputs never overwrite this box. Until stationary hardware verification
 is complete, motion completion still reports `terminal_position_supported=0`.
 
+## Request timing and independent health workers
+
+The shared MaixCam client gives PING and STATUS a 5000 ms request TTL. Its
+absolute send/response deadline is that TTL plus a 1-second transport margin;
+partial reads and lifecycle messages do not restart the budget. The configured
+3-second connection timeout is separate and is restored after the request.
+Motion calls retain their existing 60-second TTL. No state-changing command is
+automatically retried after a timeout or unknown outcome.
+
+The web backend runs chassis health and arm status in separate workers. A slow
+arm query therefore does not block chassis PING/STATUS. Arm polling waits
+500 ms after each completed query and skips an occupied arm route instead of
+accumulating polls. This is request-driven feedback, not high-frequency or
+in-motion telemetry. ESP32 heartbeat-stop and velocity-hold limits are unchanged.
+
 ## Camera and future vision
 
 The page embeds the local MediaMTX WebRTC player from `video.webrtc_url` and

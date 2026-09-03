@@ -89,7 +89,9 @@ class WebConsoleRuntime:
             self._start_workers()
 
     def _start_workers(self):
-        for target, name in ((self._health_loop, "console-health"), (self._motion_loop, "console-motion")):
+        for target, name in ((self._chassis_health_loop, "console-chassis-health"),
+                             (self._arm_health_loop, "console-arm-health"),
+                             (self._motion_loop, "console-motion")):
             thread = threading.Thread(target=target, name=name, daemon=True)
             thread.start()
             self._threads.append(thread)
@@ -330,25 +332,43 @@ class WebConsoleRuntime:
                 self._state["chassis"]["velocity"] = {"vx_mm_s": 0, "vy_mm_s": 0, "omega_mrad_s": 0}
 
     def health_once(self):
+        """Synchronous diagnostic tick; production workers use separate routes."""
+        self.chassis_health_once()
+        self.arm_health_once()
+
+    def chassis_health_once(self):
         with self._lock:
             chassis_online = self._chassis is not None
-            arm_online = self._arm is not None
         if chassis_online:
             try:
                 self._chassis_request("ping", journal=False)
                 self.refresh_chassis_status(journal=False)
             except WebConsoleError:
                 pass
-        if arm_online:
-            try:
-                self.refresh_arm_status(journal=False)
-            except WebConsoleError:
-                pass
+    def arm_health_once(self):
+        # Do not queue a background poll behind an operator's arm command.
+        if not self._arm_io.acquire(blocking=False):
+            return
+        try:
+            with self._lock:
+                arm_online = self._arm is not None
+            if arm_online:
+                try:
+                    self.refresh_arm_status(journal=False)
+                except WebConsoleError:
+                    pass
+        finally:
+            self._arm_io.release()
 
-    def _health_loop(self):
+    def _chassis_health_loop(self):
         interval = self.config.manual_chassis.health_interval_ms / 1000.0
         while not self._stop_event.wait(interval):
-            self.health_once()
+            self.chassis_health_once()
+
+    def _arm_health_loop(self):
+        # Wait after each completed read; never accumulate missed poll ticks.
+        while not self._stop_event.wait(0.5):
+            self.arm_health_once()
 
     def _motion_loop(self):
         interval = max(0.04, min(0.1, self.config.manual_chassis.velocity_hold_ms / 3000.0))

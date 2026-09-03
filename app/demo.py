@@ -4,12 +4,19 @@ Run from the repository with Python 3.10+: python app/demo.py --help.
 The existing MaixCam endpoint executes one primitive at a time, without cp=100.
 """
 
+# EDIT SPEEDS HERE: integer percentages from 1 to 100, not mm/s.
+# CLI --draw-speed / --travel-speed / --accel override these defaults.
+# Higher values need a new attended safety check; defaults are unchanged.
+DRAW_SPEED_PCT = 15    # Drawing line segments while the pen is down.
+TRAVEL_SPEED_PCT = 5   # Joint homing, first-point positioning, pen down/up.
+ACCEL_PCT = 5          # Acceleration for all joint and linear moves.
+
 import argparse
 import json
 import math
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -48,9 +55,9 @@ class DrawingConfig:
     gripper_mm: int = 1
     user: int = 0
     tool: int = 0
-    draw_speed: int = 15
-    travel_speed: int = 5
-    accel: int = 5
+    draw_speed: int = field(default_factory=lambda: DRAW_SPEED_PCT)
+    travel_speed: int = field(default_factory=lambda: TRAVEL_SPEED_PCT)
+    accel: int = field(default_factory=lambda: ACCEL_PCT)
 
     def __post_init__(self):
         if len(self.home_joints) != 6:
@@ -216,8 +223,8 @@ def argument_parser():
 
 
 def main(argv=None):
-    args = argument_parser().parse_args(argv)
     try:
+        args = argument_parser().parse_args(argv)
         config = DrawingConfig(**{name: getattr(args, name) for name in DrawingConfig.__dataclass_fields__})
         strokes = load_strokes(args.json_path)
         steps = build_plan(strokes, config)

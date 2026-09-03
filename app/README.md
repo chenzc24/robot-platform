@@ -19,6 +19,29 @@ launched from another working directory. Explicit relative paths use the
 current working directory. `dataset/` is ignored; obtain the point file locally
 after cloning. Tests use synthetic points, not a committed copy of the dataset.
 
+## Edit speed defaults at the top of demo.py
+
+Change these three constants in the file header, save, then run a preview:
+
+```python
+DRAW_SPEED_PCT = 15    # In-stroke drawing motion.
+TRAVEL_SPEED_PCT = 5   # Home, first-point positioning, pen down/up.
+ACCEL_PCT = 5          # All joint and linear motion.
+```
+
+Values are integer percentages **1..100**, not mm/s. Defaults remain the values
+used by the completed drawing test; no speed increase is applied automatically.
+CLI `--draw-speed`, `--travel-speed`, and `--accel` take precedence for that run.
+The preview prints effective draw/travel/acceleration values before any IO.
+Higher speeds need a new attended safety check, including pen pressure and the
+fact that travel speed also affects pen-down/up, not just motion between strokes.
+
+Speed settings change individual motion primitives. They do not remove the
+per-segment command/response wait or enable continuous blending. Short-segment
+jobs may therefore remain slow even after increasing motor speed; end-to-end
+timing components have not been separately measured. The two per-stroke pauses
+total only 2 seconds over this four-stroke job and are not changed here.
+
 ## Mapping retained from the supplied demo
 
 The JSON uses version `1.0`, `coordinate_space: normalized`, a unit canvas,

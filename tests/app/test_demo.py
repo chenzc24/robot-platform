@@ -164,6 +164,42 @@ class DemoTests(unittest.TestCase):
         self.assertEqual(moves[-1]["translation_mm"], [4, 0, 0])
         self.assertTrue(all(move["user"] == 2 and move["tool"] == 3 and move["accel_pct"] == 3 for move in moves))
 
+    def test_header_speed_defaults_reach_cli_and_native_options(self):
+        with mock.patch.multiple(demo, DRAW_SPEED_PCT=19, TRAVEL_SPEED_PCT=7, ACCEL_PCT=9):
+            config = demo.DrawingConfig()
+            args = demo.argument_parser().parse_args([])
+            self.assertEqual((config.draw_speed, config.travel_speed, config.accel), (19, 7, 9))
+            self.assertEqual((args.draw_speed, args.travel_speed, args.accel), (19, 7, 9))
+            connection = FakeConnection()
+            self.run_offline(connection)
+        self.assertEqual(connection.calls[1][1][1], {"a": 9, "v": 7, "cp": 0})
+        for index, (_name, (_vector, options)) in enumerate(connection.calls[2:]):
+            self.assertEqual(options["a"], 9)
+            self.assertEqual(options["v"], 19 if index in (2, 3, 4) else 7)
+
+    def test_cli_speed_overrides_win_over_header_defaults_in_preview(self):
+        with mock.patch.multiple(demo, DRAW_SPEED_PCT=19, TRAVEL_SPEED_PCT=7, ACCEL_PCT=9):
+            with mock.patch.object(demo, "open_connection") as connect, redirect_stdout(io.StringIO()) as output:
+                result = demo.main([str(self.path), "--draw-speed", "11", "--travel-speed", "3",
+                                    "--accel", "4", "--show-commands"])
+            self.assertEqual(result, 0)
+            connect.assert_not_called()
+        self.assertIn("draw/travel/accel: 11/3/4%", output.getvalue())
+        commands = [json.loads(line) for line in output.getvalue().splitlines() if line.startswith("{")]
+        moves = [c for c in commands if c["command"] in ("arm.move_joint", "arm.jog_xyz")]
+        for move in moves:
+            self.assertEqual(move["payload"]["accel_pct"], 4)
+            self.assertEqual(move["payload"]["speed_pct"], 11 if ": point " in move["label"] else 3)
+
+    def test_invalid_header_speeds_fail_cleanly_before_connection(self):
+        for name, value in (("DRAW_SPEED_PCT", 0), ("TRAVEL_SPEED_PCT", 101),
+                            ("ACCEL_PCT", 5.5), ("DRAW_SPEED_PCT", True)):
+            with self.subTest(name=name, value=value), mock.patch.object(demo, name, value):
+                with mock.patch.object(demo, "open_connection") as connect, redirect_stderr(io.StringIO()) as errors:
+                    self.assertEqual(demo.main([str(self.path), "--execute"]), 2)
+                self.assertIn("must be an integer in 1..100", errors.getvalue())
+                connect.assert_not_called()
+
     def test_each_stroke_homes_and_lifts_with_gripper_only_once(self):
         data = document()
         data["strokes"].append({"order": 2, "points": [[0.5, 0.5], [0.5, 0.6]]})

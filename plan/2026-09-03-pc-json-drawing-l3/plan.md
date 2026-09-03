@@ -1,6 +1,6 @@
 # Attended PC JSON drawing hardware test
 
-- Status: command-path L3 run complete; operator drawing-quality acceptance pending
+- Status: command-path L3 run complete; operator confirms drawing completeness
 - Baseline: 832d238, target/pc-json-drawing-demo
 - Highest intended validation: L3, one arm only; no chassis motion or L4 task
 
@@ -147,8 +147,10 @@ review branch; do not merge the branch or include earlier dirty work.
 
 ## Remaining acceptance and publication
 
-Await operator confirmation of four complete strokes and pen clear of paper;
-no automatic repeat is authorized. Continuous blending, metrology, emergency
+The operator subsequently confirmed that the picture was completely drawn,
+while reporting that execution was too slow. This accepts visual completeness,
+not quantified accuracy, pen pressure, or separately stated final pen clearance.
+No automatic repeat is authorized. Continuous blending, metrology, emergency
 stop actuation, link-loss behavior, and coordinated L4 operation were not tested.
 The pre-motion handoff rejection is a separate reliability signal; no runtime
 repair was made or claimed. Commit only this factual plan and the new log hunk

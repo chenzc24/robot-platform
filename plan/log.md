@@ -1211,3 +1211,21 @@ entry format:
 - Commit/push only this section and plan/2026-09-03-pc-json-drawing-l3/plan.md
   on the existing drawing review branch. Preserve prior XYZ log, user settings,
   and unrelated diagnosis/review files; no merge or new runtime changes.
+
+## 2026-09-03 - Expose drawing speed controls in the file header
+
+- Operator confirmed the preceding picture was completely drawn, but too slow.
+  Updated the L3 plan with that visual-completeness acceptance; no quantified
+  accuracy or separately stated physical pen-clearance claim was added.
+- Added DRAW_SPEED_PCT, TRAVEL_SPEED_PCT and ACCEL_PCT at the top of app/demo.py.
+  DrawingConfig/CLI use these defaults; explicit CLI options win. Defaults stay
+  15/5/5 percent. Travel includes homing, positioning and pen-down/up.
+- Updated app/README.md and added three propagation/override/invalid-value
+  regressions. Invalid header defaults fail cleanly before network IO. All 19
+  demo tests and the unchanged supplied-data preview passed; diff check passed.
+- L0/L1 only: no device connection, motion, deployment, session or service change.
+  No point filtering, pauses, geometry, blending or timeouts were changed.
+  Per-segment command latency remains; increased motor speed was not tested.
+- Commit/push scope: app code/docs, demo tests, updated L3 acceptance, the new
+  header-controls plan and this log hunk on target/pc-json-drawing-demo.
+  Preserve the prior XYZ log, user settings and unrelated diagnostic files.

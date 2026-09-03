@@ -1114,3 +1114,39 @@ entry format:
   browser connection-aborted traceback; fresh API/asset checks succeeded.
 - Commit/push scope is this factual record and the repair-plan update only;
   preserve user settings and the separate uncommitted XYZ diagnosis/log entry.
+
+## 2026-09-03 - Arm fault diagnosis and explicit recovery foundation
+
+- Local implementation on target/arm-fault-foundation in an isolated clean
+  worktree based on c313e88. Original settings, uncommitted XYZ diagnosis and
+  shared-log additions were preserved, not staged or copied into this commit.
+- XYZ now preflights in the requested User/Tool frame. Native path-check codes,
+  API names, bounded raw evidence/truncation and source timestamps propagate
+  through MaixCam to the PC fault UI and configured journal. PC receipt time
+  and diagnostic staleness remain distinct from the controller clock.
+- CAPS/FAULTS/CLEARERR/RECOVER separate capability, diagnostic and recovery
+  operations. Clear and service reset require explicit confirmation and fresh
+  verified stationary/empty-queue/no-estop state. Neither enables, resumes,
+  replays, clears history or converts historical UNKNOWN into success.
+- Current controller project exports do not include GetErrorID/RobotMode/
+  ClearError. Their real-device adapter remains unsupported; UI controls stay
+  disabled. Supported-adapter paths are tested with fakes only, not claimed
+  to be connected on hardware. No undocumented binary call or native socket
+  was introduced. Network roles, chassis, safety settings and taught points
+  remain unchanged.
+- ACK/RUNNING flush before synchronous motion; this is not concurrent alarm
+  monitoring. Buffered requests can expire; partial state-changing writes and
+  reply loss remain UNKNOWN without retry. UI ACK only marks evidence as seen.
+- Validation: 227 relevant Python tests, 25 development-tool tests and 16 Node
+  tests passed; 43 Python
+  source/generated files compile; disabled and YOLO controller builds succeed.
+  Expanded ESP32 suite has one pre-existing local-config absence (54/55 pass).
+  Repository validator has two pre-existing non-ASCII lines in legacy views.py.
+  Those files are unchanged; no unrelated fixes or secrets were introduced.
+- L2/L3/L4 and browser visual acceptance not run. No hardware connection,
+  deployment, service restart, alarm clear, enable or motion was performed.
+  Matching endpoint deployment and actual API/return-shape verification remain
+  required. This is diagnosis/recovery infrastructure, not automatic avoidance.
+- Diff validation passed. Commit/push intent: scoped feature commit and stacked
+  PR against target/chassis-hold-release-fix; do not merge or deploy. Git/PR
+  provides the resulting commit identity and synchronization state.

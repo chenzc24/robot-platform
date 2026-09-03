@@ -18,14 +18,15 @@ def main():
     error, socket_id = TCPCreate(True, LISTEN_IP, LISTEN_PORT)
     if error or _failed(TCPStart(socket_id, 0)):
         raise RuntimeError("tcp_start_failed")
+    def send_reply(reply):
+        if _failed(TCPWrite(socket_id, reply.decode("ascii"))):
+            raise RuntimeError("tcp_write_failed")
     while True:
         error, data = TCPRead(socket_id)
         if error:
             raise RuntimeError("tcp_read_failed")
-        replies, _ = service.feed(data)
-        for reply in replies:
-            if _failed(TCPWrite(socket_id, reply.decode("ascii"))):
-                raise RuntimeError("tcp_write_failed")
+        # ACK/RUNNING are written before entering the synchronous vendor call.
+        service.feed(data, emit=send_reply)
 
 
 main()

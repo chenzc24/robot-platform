@@ -108,7 +108,16 @@
   <aside class="diagnostics" id="diagnostics">
     <button class="diagnostic-toggle" id="diagnostic-toggle"><span>DIAGNOSTICS</span><span><b id="fault-count">0</b> FAULTS · <b id="event-count">0</b> EVENTS</span><i>⌃</i></button>
     <div class="diagnostic-body">
-      <section><h2>Active faults</h2><div id="fault-list" class="fault-list"><p class="empty">No active faults</p></div></section>
+      <section><h2>Fault history / acknowledgement</h2>
+        <div class="fault-tools">
+          <button id="arm-diagnostics">READ ARM FAULTS</button>
+          <button id="arm-clear-errors" disabled>CLEAR CONTROLLER ALARMS</button>
+          <button id="arm-recover-service" disabled>RECOVER SERVICE</button>
+        </div>
+        <p id="arm-fault-capabilities" class="empty">Read capabilities before recovery. ACK only marks a fault as seen.</p>
+        <pre id="arm-fault-detail" class="fault-evidence">No diagnostic sample</pre>
+        <div id="fault-list" class="fault-list"><p class="empty">No recorded faults</p></div>
+      </section>
       <section><h2>Recent events</h2><div class="event-table"><table><thead><tr><th>TIME</th><th>TARGET</th><th>COMMAND</th><th>STATE</th><th>RESULT</th></tr></thead><tbody id="event-list"></tbody></table></div></section>
     </div>
   </aside>

@@ -9,6 +9,33 @@
       "ttl_ms": 1000,
       "payload": "",
       "frame": "RPA2|PING|1|1000||4256\n"
+    },
+    {
+      "name": "rpa2_capabilities",
+      "marker": "RPA2",
+      "type": "CAPS",
+      "sequence": 2,
+      "ttl_ms": 1000,
+      "payload": "",
+      "frame": "RPA2|CAPS|2|1000||777E\n"
+    },
+    {
+      "name": "rpa2_clear_confirmed",
+      "marker": "RPA2",
+      "type": "CLEARERR",
+      "sequence": 3,
+      "ttl_ms": 1000,
+      "payload": "confirm=1",
+      "frame": "RPA2|CLEARERR|3|1000|confirm=1|BE68\n"
+    },
+    {
+      "name": "rpa2_fault_26",
+      "marker": "RPA2",
+      "type": "ERROR",
+      "sequence": 3,
+      "ttl_ms": 0,
+      "payload": "error_code=path_check_rejected;retryable=0;category=preflight;vendor_code=26;vendor_api=CheckMovL;raw_hex=3236;raw_truncated=0;sample_time_ms=1234;fault_id=1",
+      "frame": "RPA2|ERROR|3|0|error_code=path_check_rejected;retryable=0;category=preflight;vendor_code=26;vendor_api=CheckMovL;raw_hex=3236;raw_truncated=0;sample_time_ms=1234;fault_id=1|5618\n"
     }
   ]
 }

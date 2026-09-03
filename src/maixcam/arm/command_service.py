@@ -2,6 +2,7 @@
 
 from control_envelope import EnvelopeStreamDecoder, encode_message, lifecycle, validate_message
 from arm_motion_gateway import ArmMotionGatewayError, arm_payload
+from motion_link import MotionLinkError, decode_fault
 
 
 MOTION_NAMES = {"arm.move_joint", "arm.move_linear", "arm.jog_joint", "arm.jog_xyz", "arm.gripper"}
@@ -32,6 +33,7 @@ class ArmCommandService:
         self.last_sequence = message["sequence"]
         if self.active is not None:
             return [self._reject(message, "request_in_flight")]
+        command = None
         try:
             command, payload = arm_payload(message["name"], message["payload"])
             if message["name"] in MOTION_NAMES:
@@ -39,6 +41,9 @@ class ArmCommandService:
                     return [self._reject(message, "admission_rejected")]
             sequence = self.gateway.start(command, payload, message["ttl_ms"])
         except (ArmMotionGatewayError, ValueError) as error:
+            if getattr(error, "code", None) in ("uart_write_failed", "uart_short_write"):
+                outcome = "FAULT" if command in ("PING", "STATUS", "CAPS", "FAULTS") else "UNKNOWN"
+                return [self._reply(message, outcome, {"error_code": error.code, "retryable": False})]
             return [self._reject(message, getattr(error, "code", str(error)))]
         self.active = message
         return [self._reply(message, "RECEIVED"), self._reply(message, "ACCEPTED", {"downstream_sequence": sequence})]
@@ -70,7 +75,15 @@ class ArmCommandService:
                 replies.append(self._reply(self.active, "DONE", {"downstream_sequence": frame["sequence"], "terminal_position": "unknown", "downstream_payload": frame["payload"]}))
                 self.active = None
             else:
-                replies.append(self._reply(self.active, "FAULT", {"error_code": code or "downstream_fault", "retryable": False}))
+                detail = {"error_code": code or "downstream_fault", "retryable": False}
+                if frame["type"] == "ERROR" and code != "invalid_error_payload":
+                    try:
+                        detail["fault"] = decode_fault(frame["payload"])
+                        detail["downstream_payload"] = frame["payload"]
+                        detail["downstream_sequence"] = frame["sequence"]
+                    except MotionLinkError:
+                        pass
+                replies.append(self._reply(self.active, "FAULT", detail))
                 self.active = None
         return self._encode(replies)
 

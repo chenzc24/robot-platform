@@ -87,3 +87,6 @@
   touch-action: none;
   user-select: none;
 }
+/* Fault evidence is text, never interpreted as markup or discarded by ACK. */
+.fault-tools { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.fault-evidence { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 180px; overflow: auto; font-size: 11px; line-height: 1.45; }

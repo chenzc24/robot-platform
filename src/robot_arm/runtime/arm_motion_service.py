@@ -4,6 +4,7 @@ import math
 import time
 
 from motion_link import FrameStreamDecoder, MotionLinkError, decode_fields, encode_fields, encode_frame
+from arm_faults import ArmFault, ControllerFaultAccess, controller_state_payload, fault_record, fault_payload
 
 
 MARKER = "RPA2"
@@ -16,6 +17,8 @@ def _clock_ms():
 
 
 def _number(value, code):
+    if isinstance(value, bool):
+        raise ValueError(code)
     try:
         result = float(value)
     except (ValueError, TypeError):
@@ -153,7 +156,7 @@ class DobotControllerApi:
     """Adapter for the controller-resident Python API exposed by pluginPy."""
 
     def __init__(self, check_movj, movj, check_movl, movl, set_parallel_gripper,
-                 rel_joint_movj, rel_movl_user, get_angle, get_pose):
+                 rel_joint_movj, rel_movl_user, get_angle, get_pose, fault_access=None):
         functions = (check_movj, movj, check_movl, movl, set_parallel_gripper,
                      rel_joint_movj, rel_movl_user, get_angle, get_pose)
         if not all(callable(item) for item in functions):
@@ -163,37 +166,64 @@ class DobotControllerApi:
         self.set_parallel_gripper = set_parallel_gripper
         self.rel_joint_movj, self.rel_movl_user = rel_joint_movj, rel_movl_user
         self.get_angle, self.get_pose = get_angle, get_pose
+        self.fault_access = fault_access or ControllerFaultAccess()
 
     @staticmethod
-    def _check_result(value):
-        value = value[0] if isinstance(value, tuple) and value else value
-        if isinstance(value, bool) or not isinstance(value, int):
-            return -1
-        return value
+    def _check_result(value, vendor_api):
+        code = value[0] if isinstance(value, tuple) and len(value) == 1 else value
+        if type(code) is not int or not -2147483648 <= code <= 2147483647:
+            raise ArmFault("preflight_result_unverified", "preflight", vendor_api, raw=value)
+        if code != 0:
+            raise ArmFault("path_check_rejected", "preflight", vendor_api, code, value)
+
+    def check_linear(self, point, options):
+        try:
+            result = self.check_movl(point, options)
+        except Exception as error:
+            raise ArmFault("preflight_call_failed", "preflight", "CheckMovL", raw=str(error))
+        self._check_result(result, "CheckMovL")
 
     def move_joint(self, joints, accel, speed):
         point, options = {"joint": list(joints)}, {"a": accel, "v": speed, "cp": 0}
-        if self._check_result(self.check_movj(point, options)) != 0:
-            raise ValueError("joint_path_rejected")
-        self.movj(point, options)
+        try:
+            result = self.check_movj(point, options)
+        except Exception as error:
+            raise ArmFault("preflight_call_failed", "preflight", "CheckMovJ", raw=str(error))
+        self._check_result(result, "CheckMovJ")
+        self._invoke("MovJ", self.movj, point, options)
+
+    @staticmethod
+    def _invoke(name, function, *args):
+        try:
+            return function(*args)
+        except Exception as error:
+            raise ArmFault(str(error), "controller", name, getattr(error, "code", None), str(error))
 
     def move_linear(self, pose, user, tool, accel, speed):
         point = {"pose": list(pose)}
         options = {"user": user, "tool": tool, "a": accel, "v": speed, "r": 0}
-        if self._check_result(self.check_movl(point, options)) != 0:
-            raise ValueError("linear_path_rejected")
-        self.movl(point, options)
+        self.check_linear(point, options)
+        self._invoke("MovL", self.movl, point, options)
 
     def gripper(self, width):
-        self.set_parallel_gripper(width)
+        self._invoke("SetParallelGripper", self.set_parallel_gripper, width)
 
     def jog_joint(self, joint_delta_deg, accel, speed):
         options = {"a": accel, "v": speed, "cp": 0}
-        self.rel_joint_movj(list(joint_delta_deg), options)
+        self._invoke("RelJointMovJ", self.rel_joint_movj, list(joint_delta_deg), options)
 
     def jog_xyz(self, translation_mm, user, tool, accel, speed):
         options = {"user": user, "tool": tool, "a": accel, "v": speed, "r": 0}
-        self.rel_movl_user(list(translation_mm) + [0, 0, 0], options)
+        raw_pose = None
+        try:
+            raw_pose = self.get_pose(user, tool)
+            current = _feedback_vector(raw_pose, "pose",
+                                       ("x", "y", "z", "rx", "ry", "rz"), "invalid_pose_feedback")
+            target = [_number(current[i] + translation_mm[i], "invalid_pose_target") for i in range(3)] + list(current[3:])
+        except Exception as error:
+            raise ArmFault("xyz_preflight_pose_unavailable", "preflight", "GetPose", raw={"error": str(error), "result": raw_pose})
+        self.check_linear({"pose": target}, options)
+        self._invoke("RelMovLUser", self.rel_movl_user, list(translation_mm) + [0, 0, 0], options)
 
     def read_feedback(self, user=0, tool=0):
         joints = _feedback_vector(
@@ -217,13 +247,47 @@ class ArmMotionService:
         self.last_sequence, self.last_fingerprint, self.last_responses = 0, None, None
         self.service_state, self.error_code, self.active_sequence = "ready", None, None
         self.feedback_sample_id = 0
+        self.fault_access = getattr(api, "fault_access", None) or ControllerFaultAccess()
+        self.fault_history, self.next_fault_id = [], 1
+        self._emit = None
+        self._emitted = 0
 
     def _response(self, request, kind, payload=""):
         return encode_frame(MARKER, kind, request["sequence"], 0, payload)
 
     def _error(self, request, code):
-        self.error_code = code
-        return (self._response(request, "ERROR", encode_fields((("error_code", code), ("retryable", 0)))),)
+        error = code if isinstance(code, Exception) else ArmFault(code)
+        record = fault_record(error, self.clock_ms, self.next_fault_id)
+        self.next_fault_id += 1
+        self.fault_history.append(record)
+        self.fault_history[:] = self.fault_history[-16:]
+        self.error_code = record["error_code"]
+        return (self._response(request, "ERROR", fault_payload(record)),)
+
+    def _capabilities(self):
+        access = self.fault_access
+        return encode_fields((("fault_version", 1), ("xyz_preflight", int(isinstance(self.api, DobotControllerApi))),
+                              ("controller_query", int(access.read is not None)),
+                              ("controller_clear", int(access.read is not None and access.clear is not None)),
+                              ("service_recover", int(access.read is not None))))
+
+    def _fault_query(self, request):
+        values = decode_fields(request["payload"], ("scope",))
+        if values["scope"] == "controller":
+            payload = controller_state_payload(self.fault_access.snapshot(self.clock_ms))
+        elif values["scope"] == "service":
+            record = self.fault_history[-1] if self.fault_history else fault_record(ArmFault("none"), self.clock_ms, 0)
+            payload = fault_payload(record)
+        else:
+            raise ValueError("invalid_fault_scope")
+        return (self._response(request, "FAULTSTATE", payload),)
+
+    def _recover(self):
+        if self.active_sequence is not None:
+            raise ArmFault("request_in_flight", "recovery")
+        self.fault_access.verify_recovery(self.clock_ms)
+        # History and sequence deduplication remain intact. No motion is replayed.
+        self.service_state, self.error_code = "ready", None
 
     def _state(self):
         self.feedback_sample_id = 1 if self.feedback_sample_id >= 2147483647 else self.feedback_sample_id + 1
@@ -249,17 +313,22 @@ class ArmMotionService:
     def _run(self, request, function, done_payload):
         self.service_state, self.active_sequence = "running", request["sequence"]
         replies = (self._response(request, "ACK"), self._response(request, "RUNNING"))
+        if self._emit is not None:
+            for reply in replies:
+                self._emit(reply)
+                self._emitted += 1
         try:
             function()
         except ValueError as error:
-            self.service_state, self.active_sequence = "ready", None
-            return replies + self._error(request, str(error))
+            self.service_state = "fault" if isinstance(error, ArmFault) and error.category == "controller" else "ready"
+            self.active_sequence = None
+            return replies + self._error(request, error)
         except RuntimeError as error:
             self.service_state, self.active_sequence = "fault", None
-            return replies + self._error(request, str(error))
-        except Exception:
+            return replies + self._error(request, error)
+        except Exception as error:
             self.service_state, self.active_sequence = "fault", None
-            return replies + self._error(request, "execution_failed")
+            return replies + self._error(request, ArmFault("execution_failed", "controller", raw=str(error)))
         self.service_state, self.active_sequence, self.error_code = "ready", None, None
         return replies + (self._response(request, "DONE", done_payload),)
 
@@ -274,6 +343,22 @@ class ArmMotionService:
             if kind == "STATUS":
                 decode_fields(request["payload"], ())
                 return (self._response(request, "STATE", self._state()),)
+            if kind == "CAPS":
+                decode_fields(request["payload"], ())
+                return (self._response(request, "CAPSTATE", self._capabilities()),)
+            if kind == "FAULTS":
+                return self._fault_query(request)
+            if kind in ("CLEARERR", "RECOVER"):
+                values = decode_fields(request["payload"], ("confirm",))
+                if values["confirm"] != "1":
+                    raise ArmFault("recovery_confirmation_required", "recovery")
+                if kind == "CLEARERR":
+                    state = self.fault_access.clear_alarms(self.clock_ms)
+                    payload = controller_state_payload(state)
+                else:
+                    self._recover()
+                    payload = "recovery=service_ready;motion_resumed=0"
+                return (self._response(request, "ACK"), self._response(request, "DONE", payload))
             if self.service_state == "fault":
                 return self._error(request, "service_fault")
             if kind == "MOVEJ":
@@ -315,22 +400,35 @@ class ArmMotionService:
                 return self._run(request, lambda: self.api.gripper(width), "width_mm=%d;terminal_position=unknown" % width)
             return self._error(request, "unsupported_command")
         except (MotionLinkError, ValueError) as error:
-            return self._error(request, getattr(error, "code", str(error)))
+            return self._error(request, error)
 
-    def handle_message(self, request, received_at_ms=None, now_ms=None):
+    def handle_message(self, request, received_at_ms=None, now_ms=None, emit=None):
         now, received = self.clock_ms() if now_ms is None else now_ms, self.clock_ms() if received_at_ms is None else received_at_ms
         fingerprint = encode_frame(MARKER, request["type"], request["sequence"], request["ttl_ms"], request["payload"])
         if request["sequence"] == self.last_sequence:
-            return self.last_responses if fingerprint == self.last_fingerprint else self._error(request, "sequence_conflict")
-        if request["sequence"] < self.last_sequence:
-            return self._error(request, "sequence_replay")
-        replies = self._execute(request, received, now)
-        self.last_sequence, self.last_fingerprint, self.last_responses = request["sequence"], fingerprint, replies
+            replies = self.last_responses if fingerprint == self.last_fingerprint else self._error(request, "sequence_conflict")
+        elif request["sequence"] < self.last_sequence:
+            replies = self._error(request, "sequence_replay")
+        else:
+            self._emit, self._emitted = emit, 0
+            try:
+                replies = self._execute(request, received, now)
+            finally:
+                self._emit = None
+            self.last_sequence, self.last_fingerprint, self.last_responses = request["sequence"], fingerprint, replies
+            if emit is not None:
+                for reply in replies[self._emitted:]:
+                    emit(reply)
+            return replies
+        if emit is not None:
+            for reply in replies:
+                emit(reply)
         return replies
 
-    def feed(self, data, received_at_ms=None, now_ms=None):
+    def feed(self, data, received_at_ms=None, now_ms=None, emit=None):
         frames, errors = self.decoder.feed(data)
+        received_at_ms = self.clock_ms() if received_at_ms is None else received_at_ms
         replies = []
         for frame in frames:
-            replies.extend(self.handle_message(frame, received_at_ms, now_ms))
+            replies.extend(self.handle_message(frame, received_at_ms, now_ms, emit))
         return tuple(replies), errors

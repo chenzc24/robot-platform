@@ -90,11 +90,12 @@ function render(state) {
   $$('[data-motion], #apply-vector').forEach(node => node.disabled = !canMove);
   $("#arm-connect").textContent = a.gateway === "online" ? "DISCONNECT" : "CONNECT";
   $("#arm-status").disabled = a.gateway !== "online";
-  const armMove = a.gateway === "online" && a.controller === "online" && a.motion_permitted && a.task !== "running";
+  const armMove = a.gateway === "online" && a.controller === "online" && a.motion_permitted && a.task !== "running" && a.recovery_result !== "pending";
   $$("#device-arm button[data-arm-command], #move-joints, #move-linear, #set-gripper").forEach(node => node.disabled = !armMove);
   $("#fault-count").textContent = state.faults.filter(f => !f.acknowledged).length;
   $("#event-count").textContent = state.events.length;
   renderFaults(state.faults);
+  renderArmFaults(a);
   renderEvents(state.events);
   if (!videoLoaded && state.video.webrtc_url) {
     $("#video-frame").src = state.video.webrtc_url;
@@ -113,9 +114,32 @@ function renderFaults(faults) {
     const title = document.createElement("strong"); title.textContent = fault.code;
     const detail = document.createElement("small"); detail.textContent = `${fault.source} · ${fault.summary}`;
     info.append(title, detail); card.append(info);
+    if (fault.evidence) {
+      const evidence = document.createElement("pre"); evidence.className = "fault-evidence";
+      evidence.textContent = JSON.stringify(fault.evidence, null, 2); info.append(evidence);
+    }
     if (!fault.acknowledged) { const button = document.createElement("button"); button.textContent = "ACK"; button.onclick = () => act("/api/faults/ack", {code: fault.code}); card.append(button); }
     root.append(card);
   });
+}
+
+function renderArmFaults(arm, one = $) {
+  const caps = arm.fault_capabilities;
+  const available = arm.gateway === "online" && arm.task !== "running" && arm.recovery_result !== "pending";
+  one("#arm-diagnostics").disabled = !available;
+  one("#arm-clear-errors").disabled = !(available && caps?.controller_clear);
+  one("#arm-recover-service").disabled = !(available && caps?.service_recover);
+  one("#arm-fault-capabilities").textContent = caps
+    ? `XYZ preflight: ${caps.xyz_preflight ? "YES" : "NO"} · Controller query/clear: ${caps.controller_query ? "YES" : "UNSUPPORTED"}/${caps.controller_clear ? "YES" : "UNSUPPORTED"} · Recovery: ${arm.recovery_result || "not requested"}. No automatic enable or resume.`
+    : "Read capabilities before recovery. ACK only marks a fault as seen.";
+  one("#arm-fault-detail").textContent = JSON.stringify(arm.fault_diagnostics || {}, null, 2);
+}
+
+function requestArmRecovery(action, confirm = message => window.confirm(message), request = act) {
+  const label = action === "clear_errors" ? "clear controller alarms" : "recover the service state";
+  if (confirm(`Confirm ${label}? Resolve the fault cause first. The robot must be stationary, its motion queue empty, and physical emergency stop released safely. This will NOT enable or resume motion.`)) {
+    return request("/api/arm/recovery", {action, confirm:true});
+  }
 }
 
 function renderEvents(events) {
@@ -271,6 +295,9 @@ function bind() {
   $("#chassis-status").onclick=()=>act("/api/chassis/status",{});
   $("#arm-connect").onclick=()=>act(currentState?.arm.gateway==="online"?"/api/arm/disconnect":"/api/arm/connect",{});
   $("#arm-status").onclick=()=>act("/api/arm/status",{});
+  $("#arm-diagnostics").onclick=()=>act("/api/arm/diagnostics",{});
+  $("#arm-clear-errors").onclick=()=>requestArmRecovery("clear_errors");
+  $("#arm-recover-service").onclick=()=>requestArmRecovery("recover_service");
   bindChassisInput(chassisInput);
   $("#linear-speed").oninput=()=>$("#linear-output").textContent=`${$("#linear-speed").value} mm/s`;
   $("#angular-speed").oninput=()=>$("#angular-output").textContent=`${$("#angular-speed").value} mrad/s`;
@@ -283,7 +310,7 @@ function bind() {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = {ChassisInput, bindChassisInput};
+  module.exports = {ChassisInput, bindChassisInput, renderArmFaults, requestArmRecovery};
 } else {
   chassisInput = new ChassisInput(api, () => currentState, message => toast(message, true));
   bind(); poll(); setInterval(poll,500); setInterval(()=>chassisInput.pulse(),200);

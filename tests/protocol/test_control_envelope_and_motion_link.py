@@ -7,7 +7,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "protocol"))
 
 from control_envelope import EnvelopeError, EnvelopeStreamDecoder, encode_message, lifecycle
-from motion_link import MotionLinkError, decode_fields, decode_frame, encode_fields, encode_frame
+from motion_link import MotionLinkError, decode_fault, decode_fields, decode_frame, encode_fields, encode_frame
 
 
 def command():
@@ -49,5 +49,14 @@ class MotionLinkTests(unittest.TestCase):
         with self.assertRaises(MotionLinkError): decode_fields("b=2;a=1", ("a", "b"))
 
     def test_motion_link_golden_vector(self):
-        vector = json.loads((ROOT / "protocol" / "motion-link-v1-vectors.json").read_text())["vectors"][0]
-        self.assertEqual(encode_frame(vector["marker"], vector["type"], vector["sequence"], vector["ttl_ms"], vector["payload"]), vector["frame"].encode("ascii"))
+        for vector in json.loads((ROOT / "protocol" / "motion-link-v1-vectors.json").read_text())["vectors"]:
+            self.assertEqual(encode_frame(vector["marker"], vector["type"], vector["sequence"], vector["ttl_ms"], vector["payload"]), vector["frame"].encode("ascii"))
+
+    def test_fault_fields_are_strict_and_legacy_errors_remain_readable(self):
+        self.assertEqual(decode_fault("error_code=legacy_fault;retryable=0")["error_code"], "legacy_fault")
+        valid = "error_code=path_check_rejected;retryable=0;category=preflight;vendor_code=26;vendor_api=CheckMovL;raw_hex=3236;raw_truncated=0;sample_time_ms=1234;fault_id=1"
+        self.assertEqual(decode_fault(valid)["vendor_code"], "26")
+        for bad in (valid.replace("vendor_code=26", "vendor_code=--1"), valid.replace("3236", "xyz"),
+                    valid + ";extra=1", valid.replace("retryable=0", "retryable=1"),
+                    valid.replace("sample_time_ms=1234", "sample_time_ms=-1")):
+            with self.assertRaises(MotionLinkError): decode_fault(bad)

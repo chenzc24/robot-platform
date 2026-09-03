@@ -37,3 +37,13 @@ marks the sample valid only when both calls normalize to six finite values; a
 read or shape failure is reported as unavailable without stopping the service.
 The actual controller return containers still require one stationary L2 check
 before this source is rebuilt and deployed.
+
+Fault-v1 adds bounded structured error evidence, User/Tool-correct XYZ preflight,
+CAPS/FAULTS and explicit capability-gated CLEARERR/RECOVER contracts. The current
+project does not wire undocumented controller alarm functions: controller query,
+clear and verified service recovery remain unsupported. See
+[fault management](../../../docs/robot-arm/fault-management.md).
+
+The builder also inlines arm_faults.py. ACK/RUNNING are emitted before native
+motion calls; a blocked native call still prevents concurrent status/clear in
+this single-threaded project. No cancellation, auto-enable or resume is added.

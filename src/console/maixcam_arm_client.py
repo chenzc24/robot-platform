@@ -60,7 +60,7 @@ class MaixCamArmClient:
         message_id = "%s-%d" % (self.session_id, sequence)
         command = {"version": 1, "kind": "command", "message_id": message_id, "sequence": sequence,
                    "target": "arm", "name": name, "ttl_ms": ttl_ms, "payload": payload or {}}
-        state_changing = name in ("arm.move_joint", "arm.move_linear", "arm.jog_joint", "arm.jog_xyz", "arm.gripper")
+        state_changing = name in ("arm.move_joint", "arm.move_linear", "arm.jog_joint", "arm.jog_xyz", "arm.gripper", "arm.clear_errors", "arm.recover_service")
         get_timeout = getattr(self.connection, "gettimeout", None)
         set_timeout = getattr(self.connection, "settimeout", None)
         restore_timeout = callable(get_timeout) and callable(set_timeout)
@@ -94,6 +94,14 @@ class MaixCamArmClient:
 
     def ping(self, ttl_ms=QUERY_TTL_MS): return self.command("arm.ping", {}, ttl_ms)
     def status(self, ttl_ms=QUERY_TTL_MS): return self.command("arm.status", {}, ttl_ms)
+    def capabilities(self, ttl_ms=QUERY_TTL_MS): return self.command("arm.capabilities", {}, ttl_ms)
+    def faults(self, scope="service", ttl_ms=QUERY_TTL_MS): return self.command("arm.faults", {"scope": scope}, ttl_ms)
+    def clear_errors(self, confirm=False, ttl_ms=QUERY_TTL_MS):
+        if confirm is not True: raise ValueError("recovery_confirmation_required")
+        return self.command("arm.clear_errors", {"confirm": True}, ttl_ms)
+    def recover_service(self, confirm=False, ttl_ms=QUERY_TTL_MS):
+        if confirm is not True: raise ValueError("recovery_confirmation_required")
+        return self.command("arm.recover_service", {"confirm": True}, ttl_ms)
     def move_joint(self, joint_deg, accel_pct=5, speed_pct=5, ttl_ms=60000):
         return self.command("arm.move_joint", {"joint_deg": list(joint_deg), "accel_pct": accel_pct, "speed_pct": speed_pct}, ttl_ms)
     def move_linear(self, pose, user=0, tool=0, accel_pct=5, speed_pct=5, ttl_ms=60000):

@@ -1,6 +1,7 @@
 """Stateful, UI-independent runtime for the localhost robot console."""
 
 import math
+import json
 import threading
 import time
 import uuid
@@ -9,7 +10,8 @@ from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 
-from runtime_core import MOTION_ARM_COMMANDS, close_client, default_arm_factory, default_chassis_factory, dispatch_arm, dispatch_chassis
+from runtime_core import MOTION_ARM_COMMANDS, RECOVERY_ARM_COMMANDS, close_client, default_arm_factory, default_chassis_factory, dispatch_arm, dispatch_chassis
+import arm_fault_mapping
 from status_mapping import StatusMappingError, parse_arm_status, parse_chassis_status
 
 
@@ -75,6 +77,10 @@ class WebConsoleRuntime:
                 },
             },
             "arm": {
+                "fault_capabilities": None,
+                "fault_diagnostics": {},
+                "last_fault": None,
+                "recovery_result": None,
                 "gateway": "offline",
                 "controller": "offline",
                 "task": "idle",
@@ -108,7 +114,7 @@ class WebConsoleRuntime:
     def _touch(self):
         self._revision += 1
 
-    def _event(self, target, command, lifecycle, result):
+    def _event(self, target, command, lifecycle, result, evidence=None):
         timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
         with self._lock:
             self._event_index += 1
@@ -120,8 +126,12 @@ class WebConsoleRuntime:
                 "lifecycle": lifecycle,
                 "result": str(result)[:160],
             })
+            if evidence is not None:
+                self._events[0]["evidence"] = deepcopy(evidence)
             self._touch()
             self._append_log("%s EVENT target=%s command=%s lifecycle=%s result=%s" % (timestamp, target, command, lifecycle, str(result)[:160]))
+            if evidence is not None:
+                self._append_log("%s ARM_EVIDENCE %s" % (timestamp, json.dumps(evidence, ensure_ascii=True, sort_keys=True)))
 
     def _fault(self, code, source, summary):
         with self._lock:
@@ -160,6 +170,10 @@ class WebConsoleRuntime:
             state["chassis"]["motion"]["input_remaining_ms"] = None if self._input_deadline is None else max(0, int((self._input_deadline - now) * 1000))
             state["arm"]["health_age_ms"] = None if self._last_arm_health is None else max(0, int((now - self._last_arm_health) * 1000))
             state["arm"]["measurement"]["age_ms"] = None if self._last_arm_sample_received is None else max(0, int((now - self._last_arm_sample_received) * 1000))
+            for diagnostic in state["arm"]["fault_diagnostics"].values():
+                received = diagnostic.pop("received_monotonic_ms", None)
+                diagnostic["age_ms"] = None if received is None else max(0, int(now * 1000 - received))
+                diagnostic["fresh"] = bool(diagnostic.get("fresh") and received is not None and diagnostic["age_ms"] <= 5000)
             return {
                 "revision": self._revision,
                 "log_error": self._log_error,
@@ -523,6 +537,9 @@ class WebConsoleRuntime:
                 reported_state="disconnected",
             )
             self._state["arm"]["measurement"].update(valid=False, error="disconnected")
+            self._state["arm"]["fault_capabilities"] = None
+            for diagnostic in self._state["arm"]["fault_diagnostics"].values():
+                diagnostic["fresh"] = False
             self._touch()
         close_client(client)
 
@@ -552,23 +569,115 @@ class WebConsoleRuntime:
                         self._last_arm_health = self._clock()
                         self._state["arm"]["last_error"] = code
                         self._touch()
-                    self._record_arm_fault(code, repeat=not journal)
+                    evidence = None
+                    downstream = getattr(error, "payload", {}).get("downstream_payload")
+                    if downstream:
+                        try:
+                            evidence = arm_fault_mapping.fault(downstream)
+                            evidence["received_at"] = datetime.now().astimezone().isoformat(timespec="milliseconds")
+                            evidence["command"] = command
+                            evidence["downstream_sequence"] = error.payload.get("downstream_sequence")
+                        except (ValueError, KeyError):
+                            evidence = {"error_code": "invalid_fault_evidence"}
+                    self._record_arm_fault(code, repeat=not journal, evidence=evidence)
                     if journal:
-                        self._event("Arm", command, outcome, code)
+                        self._event("Arm", command, outcome, code, evidence=evidence)
                     raise WebConsoleError(code) from error
                 self._disconnect_arm_state()
                 self._fault("arm_transport_failed", "maixcam", code)
                 if journal:
-                    outcome = outcome or ("UNKNOWN" if command in MOTION_ARM_COMMANDS else "FAULT")
+                    outcome = outcome or ("UNKNOWN" if command in MOTION_ARM_COMMANDS | RECOVERY_ARM_COMMANDS else "FAULT")
                     self._event("Arm", command, outcome, code)
                 raise WebConsoleError(code, 503) from error
 
-    def _record_arm_fault(self, code, repeat=False):
+    def _record_arm_fault(self, code, repeat=False, evidence=None):
         """Retain errors without re-arming acknowledgement on every status poll."""
         key = "arm_" + code
         with self._lock:
             if not repeat or key not in self._faults:
                 self._fault(key, "arm", code)
+            if evidence is not None:
+                self._faults[key]["evidence"] = deepcopy(evidence)
+                self._state["arm"]["last_fault"] = deepcopy(evidence)
+
+    def arm_diagnostics(self):
+        """Explicit non-motion queries; never probe an unsupported clear path."""
+        with self._arm_io:
+            with self._lock:
+                self._state["arm"]["fault_capabilities"] = None
+                for diagnostic in self._state["arm"]["fault_diagnostics"].values():
+                    diagnostic["fresh"] = False
+            response = self._arm_request("capabilities", journal=False)
+            try:
+                caps = arm_fault_mapping.capabilities(arm_fault_mapping.raw_payload(response))
+            except (ValueError, KeyError, TypeError) as error:
+                raise WebConsoleError("invalid_fault_capabilities", 502) from error
+            with self._lock:
+                self._state["arm"]["fault_capabilities"] = caps
+            for scope in ("service", "controller"):
+                if scope == "controller" and not caps["controller_query"]:
+                    with self._lock:
+                        self._state["arm"]["fault_diagnostics"][scope] = {"supported": False, "fresh": False}
+                    continue
+                response = self._arm_request("faults", {"scope": scope}, journal=False)
+                try:
+                    parse = arm_fault_mapping.fault if scope == "service" else arm_fault_mapping.controller_state
+                    detail = parse(arm_fault_mapping.raw_payload(response))
+                except (ValueError, KeyError, TypeError) as error:
+                    raise WebConsoleError("invalid_fault_diagnostics", 502) from error
+                detail.update(supported=True, fresh=True, received_monotonic_ms=int(self._clock() * 1000), received_at=datetime.now().astimezone().isoformat(timespec="milliseconds"))
+                with self._lock:
+                    self._state["arm"]["fault_diagnostics"][scope] = detail
+                    self._touch()
+                if scope == "service" and detail["error_code"] != "none":
+                    self._record_arm_fault(detail["error_code"], repeat=True, evidence=detail)
+                self._event("Arm", "faults_" + scope, "DONE", "snapshot", evidence=detail)
+            return self.snapshot()
+
+    def arm_recovery(self, action, confirm=False):
+        if action not in RECOVERY_ARM_COMMANDS:
+            raise WebConsoleError("unsupported_recovery_action", 400)
+        if confirm is not True:
+            raise WebConsoleError("recovery_confirmation_required", 400)
+        with self._lock:
+            if self._state["arm"]["task"] == "running" or self._state["arm"]["recovery_result"] == "pending":
+                raise WebConsoleError("arm_request_in_flight")
+            self._state["arm"]["recovery_result"] = "pending"
+            self._touch()
+        with self._arm_io:
+            try:
+                # Re-read capabilities, not a stale browser assertion.
+                response = self._arm_request("capabilities", journal=False)
+                caps = arm_fault_mapping.capabilities(arm_fault_mapping.raw_payload(response))
+                capability = "controller_clear" if action == "clear_errors" else "service_recover"
+                with self._lock:
+                    self._state["arm"]["fault_capabilities"] = caps
+                if not caps[capability]:
+                    raise WebConsoleError(capability + "_unsupported")
+                response = self._arm_request(action, {"confirm": True}, journal=False)
+                payload = arm_fault_mapping.raw_payload(response)
+                if action == "clear_errors":
+                    result = arm_fault_mapping.controller_state(payload, cleared=True)
+                    if result["controller_state"] != "clear" or not result["stationary"] or not result["queue_empty"] or result["emergency_stop"]:
+                        raise WebConsoleError("controller_clear_unconfirmed")
+                elif payload != "recovery=service_ready;motion_resumed=0":
+                    raise WebConsoleError("service_recovery_unconfirmed")
+                else:
+                    result = {"recovery": "service_ready", "motion_resumed": False}
+                with self._lock:
+                    self._state["arm"]["recovery_result"] = "confirmed"
+                self._event("Arm", action, "DONE", "confirmed_no_resume", evidence=result)
+            except Exception as error:
+                with self._lock:
+                    self._state["arm"]["recovery_result"] = "unsupported" if self._error_code(error).endswith("_unsupported") else "unconfirmed"
+                    self._touch()
+                cause = error.__cause__
+                outcome = getattr(cause, "lifecycle", None) or ("UNKNOWN" if isinstance(error, WebConsoleError) and error.http_status == 503 else "FAULT")
+                self._event("Arm", action, outcome, self._error_code(error), evidence=getattr(cause, "payload", None))
+                if isinstance(error, WebConsoleError):
+                    raise
+                raise WebConsoleError("invalid_recovery_response", 502) from error
+            return self.refresh_arm_status(journal=False)
 
     def refresh_arm_status(self, journal=True):
         responses = self._arm_request("status", journal=journal)
@@ -657,6 +766,8 @@ class WebConsoleRuntime:
         clean = self._arm_payload(command, payload)
         with self._lock:
             arm = self._state["arm"]
+            if arm["recovery_result"] == "pending":
+                raise WebConsoleError("arm_recovery_in_progress")
             if not (arm["gateway"] == "online" and arm["controller"] == "online" and arm["motion_permitted"]):
                 raise WebConsoleError("arm_motion_not_enabled")
             arm["task"] = "running"

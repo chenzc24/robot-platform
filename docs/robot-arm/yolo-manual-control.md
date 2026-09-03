@@ -71,3 +71,13 @@ absolute Cartesian, and gripper commands use the same route.
 
 The computer application does not alter controller limits, collision settings,
 user/tool calibration, or emergency-stop behavior.
+
+## Fault diagnosis and recovery foundation
+
+The local fault-v1 candidate preflights XYZ through CheckMovL using a fresh pose
+in the requested User/Tool frame and preserves numeric vendor errors. The web
+console Diagnostics separates reading faults, clearing controller alarms and
+recovering service state. ACK is only acknowledgement, never reset. Current
+controller alarm query/clear/recovery capabilities remain unsupported pending a
+verified vendor adapter. Do not deploy only one endpoint or assume this candidate
+has passed machine validation. See [fault management](fault-management.md).

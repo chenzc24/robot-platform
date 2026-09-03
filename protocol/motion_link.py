@@ -7,8 +7,34 @@ serial/TCP232 byte boundary.
 
 MAX_FRAME_BYTES = 512
 MAX_SEQUENCE = 2147483647
-REQUEST_TYPES = ("PING", "STATUS", "MOVEJ", "MOVEL", "RELJOINT", "RELLINEAR", "GRIPPER")
-RESPONSE_TYPES = ("PONG", "STATE", "ACK", "RUNNING", "DONE", "ERROR")
+REQUEST_TYPES = ("PING", "STATUS", "MOVEJ", "MOVEL", "RELJOINT", "RELLINEAR", "GRIPPER",
+                 "CAPS", "FAULTS", "CLEARERR", "RECOVER")
+RESPONSE_TYPES = ("PONG", "STATE", "ACK", "RUNNING", "DONE", "ERROR", "CAPSTATE", "FAULTSTATE")
+FAULT_FIELDS = ("error_code", "retryable", "category", "vendor_code", "vendor_api",
+                "raw_hex", "raw_truncated", "sample_time_ms", "fault_id")
+
+
+def decode_fault(payload):
+    """Accept legacy errors or the exact fault-v1 fields; reject malformed data."""
+    if len(payload.split(";")) == 2:
+        return decode_fields(payload, ("error_code", "retryable"))
+    fields = decode_fields(payload, FAULT_FIELDS)
+    for key in ("error_code", "category", "vendor_api"):
+        if not 1 <= len(fields[key]) <= 64 or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789" for c in fields[key]):
+            raise MotionLinkError("invalid_error_payload")
+    if fields["retryable"] != "0" or fields["raw_truncated"] not in ("0", "1"):
+        raise MotionLinkError("invalid_error_payload")
+    raw = fields["raw_hex"]
+    if not 2 <= len(raw) <= 128 or len(raw) % 2 or any(c not in "0123456789abcdef" for c in raw):
+        raise MotionLinkError("invalid_error_payload")
+    code = fields["vendor_code"]
+    numeric = code[1:] if code.startswith("-") else code
+    if code != "unknown" and (not numeric.isdigit() or len(code) > 11 or not -2147483648 <= int(code) <= 2147483647):
+        raise MotionLinkError("invalid_error_payload")
+    for key in ("sample_time_ms", "fault_id"):
+        if not fields[key].isdigit() or len(fields[key]) > 19:
+            raise MotionLinkError("invalid_error_payload")
+    return fields
 
 
 class MotionLinkError(ValueError):

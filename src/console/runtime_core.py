@@ -7,7 +7,8 @@ from pathlib import Path
 
 
 SAFE_CHASSIS_COMMANDS = {"ping", "status"}
-SAFE_ARM_COMMANDS = {"ping", "status"}
+SAFE_ARM_COMMANDS = {"ping", "status", "capabilities", "faults"}
+RECOVERY_ARM_COMMANDS = {"clear_errors", "recover_service"}
 MOTION_CHASSIS_COMMANDS = {"enable", "velocity", "stop", "disable"}
 MOTION_ARM_COMMANDS = {
     "move_joint",
@@ -38,11 +39,12 @@ class SessionFault:
 class ArmLifecycleError(RuntimeError):
     """Preserve a non-success arm outcome instead of returning it as success."""
 
-    def __init__(self, code, lifecycle, explicit_terminal=False):
+    def __init__(self, code, lifecycle, explicit_terminal=False, payload=None):
         super().__init__(code)
         self.code = code
         self.lifecycle = lifecycle
         self.explicit_terminal = explicit_terminal
+        self.payload = payload or {}
 
 
 class ArmLifecycleRejection(ArmLifecycleError):
@@ -129,6 +131,10 @@ def dispatch_arm(client, command, payload=None):
     handlers = {
         "ping": client.ping,
         "status": client.status,
+        "capabilities": lambda: client.capabilities(),
+        "faults": lambda: client.faults(payload.get("scope", "service")),
+        "clear_errors": lambda: client.clear_errors(confirm=payload.get("confirm", False)),
+        "recover_service": lambda: client.recover_service(confirm=payload.get("confirm", False)),
         "move_joint": lambda: client.move_joint(
             payload["joint_deg"],
             payload.get("accel_pct", 5),
@@ -160,12 +166,12 @@ def dispatch_arm(client, command, payload=None):
     responses = handlers[command]()
     terminal = responses[-1] if isinstance(responses, (list, tuple)) and responses else None
     if not isinstance(terminal, dict) or not isinstance(terminal.get("payload"), dict):
-        raise ArmLifecycleError("arm_invalid_terminal_response", "UNKNOWN" if command in MOTION_ARM_COMMANDS else "FAULT")
+        raise ArmLifecycleError("arm_invalid_terminal_response", "UNKNOWN" if command in MOTION_ARM_COMMANDS | RECOVERY_ARM_COMMANDS else "FAULT")
     outcome, reply = terminal.get("lifecycle"), terminal["payload"]
     if outcome == "REJECTED":
         raise ArmLifecycleRejection(reply.get("error_code", "arm_request_rejected"))
     if outcome in {"FAULT", "UNKNOWN"}:
-        raise ArmLifecycleError(reply.get("error_code", "arm_" + outcome.lower()), outcome, explicit_terminal=True)
+        raise ArmLifecycleError(reply.get("error_code", "arm_" + outcome.lower()), outcome, explicit_terminal=True, payload=reply)
     if outcome != "DONE":
-        raise ArmLifecycleError("arm_invalid_terminal_response", "UNKNOWN" if command in MOTION_ARM_COMMANDS else "FAULT")
+        raise ArmLifecycleError("arm_invalid_terminal_response", "UNKNOWN" if command in MOTION_ARM_COMMANDS | RECOVERY_ARM_COMMANDS else "FAULT")
     return responses

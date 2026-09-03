@@ -101,6 +101,8 @@ def _handler(runtime, static_root):
                     "/api/arm/connect": runtime.connect_arm,
                     "/api/arm/disconnect": runtime.disconnect_arm,
                     "/api/arm/status": runtime.refresh_arm_status,
+                    "/api/arm/diagnostics": runtime.arm_diagnostics,
+                    "/api/arm/recovery": lambda: runtime.arm_recovery(body.get("action"), body.get("confirm", False)),
                     "/api/arm/command": lambda: runtime.arm_command(body.get("command"), body.get("payload")),
                     "/api/faults/ack": lambda: runtime.acknowledge_fault(body.get("code")),
                 }

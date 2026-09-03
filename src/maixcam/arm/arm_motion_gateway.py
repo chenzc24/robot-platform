@@ -2,7 +2,7 @@
 
 import time
 
-from motion_link import FrameStreamDecoder, MotionLinkError, decode_fields, encode_fields, encode_frame
+from motion_link import FrameStreamDecoder, MotionLinkError, decode_fault, decode_fields, encode_fields, encode_frame
 
 
 class ArmMotionGatewayError(RuntimeError):
@@ -41,7 +41,7 @@ class ArmMotionGateway:
             self.state, self.error_code = "fault", "uart_short_write"
             raise ArmMotionGatewayError("uart_short_write")
         self.pending = {"sequence": sequence, "command": command, "deadline": self.clock_ms() + ttl_ms,
-                        "accepted": False, "motion": command not in ("PING", "STATUS")}
+                        "accepted": False, "motion": command not in ("PING", "STATUS", "CAPS", "FAULTS")}
         self.state, self.error_code = "waiting", None
         return sequence
 
@@ -66,15 +66,15 @@ class ArmMotionGateway:
                 continue
             if frame["type"] == "ERROR":
                 try:
-                    code = decode_fields(frame["payload"], ("error_code", "retryable"))["error_code"]
+                    code = decode_fault(frame["payload"])["error_code"]
                 except MotionLinkError:
                     code = "invalid_error_payload"
                 self.pending, self.state, self.error_code = None, "fault", code
                 events.append(("ERROR", code, frame))
-            elif frame["type"] in ("PONG", "STATE"):
-                expected = "PONG" if self.pending["command"] == "PING" else "STATE"
+            elif frame["type"] in ("PONG", "STATE", "CAPSTATE", "FAULTSTATE"):
+                expected = {"PING": "PONG", "STATUS": "STATE", "CAPS": "CAPSTATE", "FAULTS": "FAULTSTATE"}.get(self.pending["command"])
                 if frame["type"] != expected:
-                    self.state, self.error_code = "fault", "invalid_lifecycle"
+                    self.pending, self.state, self.error_code = None, "fault", "invalid_lifecycle"
                     events.append(("ERROR", "invalid_lifecycle", frame))
                 else:
                     self.pending, self.state, self.error_code = None, "ready", None
@@ -112,6 +112,17 @@ def arm_payload(name, payload):
     if name in ("arm.ping", "arm.status"):
         if payload: raise ArmMotionGatewayError("invalid_payload_fields")
         return ("PING" if name.endswith("ping") else "STATUS"), ""
+    if name == "arm.capabilities":
+        if payload: raise ArmMotionGatewayError("invalid_payload_fields")
+        return "CAPS", ""
+    if name == "arm.faults":
+        if set(payload) != {"scope"} or payload["scope"] not in ("service", "controller"):
+            raise ArmMotionGatewayError("invalid_payload_fields")
+        return "FAULTS", encode_fields((("scope", payload["scope"]),))
+    if name in ("arm.clear_errors", "arm.recover_service"):
+        if set(payload) != {"confirm"} or payload["confirm"] is not True:
+            raise ArmMotionGatewayError("recovery_confirmation_required")
+        return ("CLEARERR" if name == "arm.clear_errors" else "RECOVER"), "confirm=1"
     if name == "arm.jog_joint":
         if set(payload) != {"joint_delta_deg", "accel_pct", "speed_pct"} or not isinstance(payload["joint_delta_deg"], (list, tuple)) or len(payload["joint_delta_deg"]) != 6:
             raise ArmMotionGatewayError("invalid_payload_fields")

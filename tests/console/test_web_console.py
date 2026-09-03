@@ -145,7 +145,8 @@ class WebRuntimeTests(unittest.TestCase):
         self.assertEqual(self.runtime.snapshot()["chassis"]["link"], "online")
         self.runtime.enable_chassis()
         self.assertTrue(self.runtime.snapshot()["chassis"]["motion_enabled"])
-        self.runtime.start_chassis_motion({"vx_mm_s": 300, "vy_mm_s": 400, "omega_mrad_s": 700})
+        self.runtime.start_chassis_motion({"vx_mm_s": 300, "vy_mm_s": 400, "omega_mrad_s": 700,
+            "input_mode": "momentary", "motion_epoch": self.runtime.snapshot()["chassis"]["motion"]["epoch"]})
         self.runtime.motion_once()
         velocities = [call for call in self.chassis.calls if call[0] == "velocity"]
         self.assertEqual(len(velocities), 2)

@@ -3,6 +3,7 @@
 import math
 import threading
 import time
+import uuid
 from collections import deque
 from copy import deepcopy
 from datetime import datetime
@@ -24,6 +25,8 @@ class WebConsoleError(RuntimeError):
 class WebConsoleRuntime:
     """Own hardware sessions and expose sanitized state to one local browser."""
 
+    INPUT_TIMEOUT_S = 1.0
+
     def __init__(self, config, chassis_factory=None, arm_factory=None, start_workers=True, clock=None, event_log_path=None):
         self.config = config
         self._chassis_factory = chassis_factory or default_chassis_factory
@@ -39,7 +42,11 @@ class WebConsoleRuntime:
         self._events = deque(maxlen=80)
         self._faults = {}
         self._event_log_path = Path(event_log_path) if event_log_path else None
+        self._log_error = None
         self._held_velocity = None
+        self._motion_epoch = uuid.uuid4().hex
+        self._input_deadline = None
+        self._stops_pending = 0
         self._last_chassis_health = None
         self._last_arm_health = None
         self._last_arm_sample_received = None
@@ -59,6 +66,8 @@ class WebConsoleRuntime:
                 "reported_state": "disconnected",
                 "last_error": "none",
                 "velocity": {"vx_mm_s": 0, "vy_mm_s": 0, "omega_mrad_s": 0},
+                "motion": {"epoch": self._motion_epoch, "mode": "idle", "reason": "startup",
+                           "refresh_count": 0, "input_timeout_ms": int(self.INPUT_TIMEOUT_S * 1000)},
                 "limits": {
                     "linear_mm_s": config.manual_chassis.linear_limit_mm_s,
                     "angular_mrad_s": config.manual_chassis.angular_limit_mrad_s,
@@ -128,9 +137,14 @@ class WebConsoleRuntime:
     def _append_log(self, line):
         if self._event_log_path is None:
             return
-        self._event_log_path.parent.mkdir(parents=True, exist_ok=True)
-        with self._event_log_path.open("a", encoding="utf-8") as handle:
-            handle.write(line.replace("\r", " ").replace("\n", " ") + "\n")
+        try:
+            self._event_log_path.parent.mkdir(parents=True, exist_ok=True)
+            with self._event_log_path.open("a", encoding="utf-8") as handle:
+                handle.write(line.replace("\r", " ").replace("\n", " ") + "\n")
+            self._log_error = None
+        except OSError as error:
+            # An unavailable log disk must never prevent STOP or input clearing.
+            self._log_error = error.__class__.__name__
 
     def _clear_fault(self, code):
         with self._lock:
@@ -143,10 +157,12 @@ class WebConsoleRuntime:
             state = deepcopy(self._state)
             now = self._clock()
             state["chassis"]["health_age_ms"] = None if self._last_chassis_health is None else max(0, int((now - self._last_chassis_health) * 1000))
+            state["chassis"]["motion"]["input_remaining_ms"] = None if self._input_deadline is None else max(0, int((self._input_deadline - now) * 1000))
             state["arm"]["health_age_ms"] = None if self._last_arm_health is None else max(0, int((now - self._last_arm_health) * 1000))
             state["arm"]["measurement"]["age_ms"] = None if self._last_arm_sample_received is None else max(0, int((now - self._last_arm_sample_received) * 1000))
             return {
                 "revision": self._revision,
+                "log_error": self._log_error,
                 "video": state["video"],
                 "chassis": state["chassis"],
                 "arm": state["arm"],
@@ -194,7 +210,7 @@ class WebConsoleRuntime:
     def _disconnect_chassis_state(self):
         with self._lock:
             client, self._chassis = self._chassis, None
-            self._held_velocity = None
+            self._cancel_motion("connection_closed")
             self._last_chassis_health = None
             self._state["chassis"].update(
                 link="offline", authenticated=False, motion_permitted=False,
@@ -205,17 +221,20 @@ class WebConsoleRuntime:
         close_client(client)
 
     def disconnect_chassis(self):
-        with self._chassis_io:
-            with self._lock:
-                client = self._chassis
-                self._held_velocity = None
-            if client is not None:
-                for command in ("stop", "disable"):
-                    try:
-                        dispatch_chassis(client, command)
-                    except Exception:
-                        break
-            self._disconnect_chassis_state()
+        self._cancel_motion("disconnect", stopping=True)
+        try:
+            with self._chassis_io:
+                with self._lock:
+                    client = self._chassis
+                if client is not None:
+                    for command in ("stop", "disable"):
+                        try:
+                            dispatch_chassis(client, command)
+                        except Exception:
+                            break
+                self._disconnect_chassis_state()
+        finally:
+            self._finish_stop()
         self._event("ESP32", "disconnect", "DONE", "disconnected")
         return self.snapshot()
 
@@ -246,6 +265,11 @@ class WebConsoleRuntime:
                 raise WebConsoleError("chassis_transport_failed", 503) from error
 
     def refresh_chassis_status(self, journal=True):
+        # A late status response must not overwrite a subsequent STOP/Disable.
+        with self._chassis_io:
+            return self._refresh_chassis_status_locked(journal)
+
+    def _refresh_chassis_status_locked(self, journal):
         response = self._chassis_request("status", journal=journal)
         try:
             status = parse_chassis_status(response)
@@ -261,6 +285,8 @@ class WebConsoleRuntime:
                 last_error=status.last_error,
             )
             self._last_chassis_health = self._clock()
+            if not status.motion_enabled and self._held_velocity is not None:
+                self._cancel_motion("device_disabled")
             self._touch()
         self._clear_fault("chassis_status_invalid")
         return self.snapshot()
@@ -272,10 +298,36 @@ class WebConsoleRuntime:
         return self.refresh_chassis_status(journal=False)
 
     def disable_chassis(self):
+        self._cancel_motion("disable", stopping=True)
+        try:
+            with self._chassis_io:
+                self._chassis_request("disable")
+                return self.refresh_chassis_status(journal=False)
+        finally:
+            self._finish_stop()
+
+    def _motion_log(self, event, reason):
+        motion = self._state["chassis"]["motion"]
+        self._append_log("%s MOTION event=%s epoch=%s mode=%s reason=%s refreshes=%d" % (
+            datetime.now().strftime("%H:%M:%S.%f")[:-3], event, motion["epoch"],
+            motion["mode"], reason, motion["refresh_count"]))
+
+    def _cancel_motion(self, reason, stopping=False):
+        """Invalidate work before waiting for I/O; never hold state lock over I/O."""
         with self._lock:
+            self._motion_log("clear", reason)
+            self._motion_epoch = uuid.uuid4().hex
             self._held_velocity = None
-        self._chassis_request("disable")
-        return self.refresh_chassis_status(journal=False)
+            self._input_deadline = None
+            self._stops_pending += int(stopping)
+            self._state["chassis"]["motion"].update(epoch=self._motion_epoch, mode="idle", reason=reason, refresh_count=0)
+            self._state["chassis"]["velocity"] = {"vx_mm_s": 0, "vy_mm_s": 0, "omega_mrad_s": 0}
+            self._touch()
+            return self._motion_epoch
+
+    def _finish_stop(self):
+        with self._lock:
+            self._stops_pending -= 1
 
     @staticmethod
     def _integer(value, name):
@@ -297,39 +349,96 @@ class WebConsoleRuntime:
         if not self.config.manual_chassis.enabled:
             raise WebConsoleError("manual_chassis_disabled")
         command = self._validate_velocity(payload)
-        with self._lock:
-            chassis = self._state["chassis"]
-            if not (chassis["link"] == "online" and chassis["authenticated"] and chassis["motion_permitted"] and chassis["motion_enabled"]):
-                raise WebConsoleError("chassis_motion_not_enabled")
-        self._chassis_request("velocity", command)
-        with self._lock:
-            self._held_velocity = command
-            self._state["chassis"]["velocity"] = {key: command[key] for key in ("vx_mm_s", "vy_mm_s", "omega_mrad_s")}
-            self._touch()
+        mode = payload.get("input_mode")
+        if mode not in ("momentary", "hold") or not isinstance(payload.get("motion_epoch"), str):
+            raise WebConsoleError("motion_metadata_required", 400)
+        # Includes time spent waiting behind another device request.
+        deadline = self._clock() + self.INPUT_TIMEOUT_S
+        with self._chassis_io:
+            with self._lock:
+                chassis = self._state["chassis"]
+                if payload["motion_epoch"] != self._motion_epoch or self._stops_pending or self._stop_event.is_set():
+                    self._event("ESP32", "motion.start", "REJECTED", "stale_motion_epoch")
+                    raise WebConsoleError("stale_motion_epoch")
+                if self._clock() >= deadline:
+                    raise WebConsoleError("motion_input_expired")
+                if not (chassis["link"] == "online" and chassis["authenticated"] and chassis["motion_permitted"] and chassis["motion_enabled"]):
+                    raise WebConsoleError("chassis_motion_not_enabled")
+                epoch = self._cancel_motion("replaced")
+                chassis["motion"].update(mode=mode, reason="starting")
+                self._input_deadline = deadline
+            try:
+                self._chassis_request("velocity", command)
+            except WebConsoleError:
+                with self._lock:
+                    if epoch == self._motion_epoch:
+                        self._cancel_motion("start_failed")
+                # A rejected replacement must not keep the old vector alive.
+                if self._chassis is not None:
+                    self.stop_chassis_motion(reason="start_failed")
+                raise
+            with self._lock:
+                if epoch != self._motion_epoch:
+                    raise WebConsoleError("motion_cancelled")
+                expired = self._clock() >= deadline
+                if not expired:
+                    self._held_velocity = command
+                    chassis["velocity"] = {key: command[key] for key in ("vx_mm_s", "vy_mm_s", "omega_mrad_s")}
+                    chassis["motion"]["reason"] = "active"
+                    self._motion_log("start", "operator_input")
+                    self._touch()
+            if expired:
+                self.stop_chassis_motion(reason="browser_input_expired")
+                raise WebConsoleError("motion_input_expired")
         return self.snapshot()
 
-    def stop_chassis_motion(self):
-        with self._lock:
-            self._held_velocity = None
-            self._state["chassis"]["velocity"] = {"vx_mm_s": 0, "vy_mm_s": 0, "omega_mrad_s": 0}
-            online = self._chassis is not None
-            self._touch()
-        if online:
-            self._chassis_request("stop")
-            self.refresh_chassis_status(journal=False)
+    def stop_chassis_motion(self, reason="operator_stop"):
+        self._cancel_motion(reason, stopping=True)
+        try:
+            with self._chassis_io:
+                if self._chassis is not None:
+                    self._chassis_request("stop")
+                    self.refresh_chassis_status(journal=False)
+        finally:
+            self._finish_stop()
+        return self.snapshot()
+
+    def keep_chassis_motion(self, payload):
+        """Input presence only: cannot start motion, change vectors or revive expiry."""
+        with self._chassis_io:
+            with self._lock:
+                if (payload.get("motion_epoch") != self._motion_epoch or self._held_velocity is None
+                        or self._stops_pending or self._stop_event.is_set()):
+                    raise WebConsoleError("stale_motion_epoch")
+                expired = self._clock() >= self._input_deadline
+                if not expired:
+                    self._input_deadline = self._clock() + self.INPUT_TIMEOUT_S
+            if expired:
+                self.stop_chassis_motion(reason="browser_input_expired")
+                raise WebConsoleError("motion_input_expired")
         return self.snapshot()
 
     def motion_once(self):
-        with self._lock:
-            command = deepcopy(self._held_velocity)
-        if command is None:
-            return
-        try:
-            self._chassis_request("velocity", command, journal=False)
-        except WebConsoleError:
+        # Never copy a command before obtaining I/O: STOP may have overtaken us.
+        with self._chassis_io:
             with self._lock:
-                self._held_velocity = None
-                self._state["chassis"]["velocity"] = {"vx_mm_s": 0, "vy_mm_s": 0, "omega_mrad_s": 0}
+                command = self._held_velocity
+                epoch = self._motion_epoch
+                if command is None or self._stops_pending or self._stop_event.is_set():
+                    return
+                expired = self._clock() >= self._input_deadline
+            try:
+                if expired:
+                    self.stop_chassis_motion(reason="browser_input_expired")
+                    return
+                self._chassis_request("velocity", command, journal=False)
+                with self._lock:
+                    if epoch == self._motion_epoch:
+                        self._state["chassis"]["motion"]["refresh_count"] += 1
+                        self._touch()
+            except WebConsoleError as error:
+                self._event("ESP32", "motion.refresh", "FAULT", error.code)
+                self.stop_chassis_motion(reason="refresh_failed")
 
     def health_once(self):
         """Synchronous diagnostic tick; production workers use separate routes."""
@@ -373,7 +482,11 @@ class WebConsoleRuntime:
     def _motion_loop(self):
         interval = max(0.04, min(0.1, self.config.manual_chassis.velocity_hold_ms / 3000.0))
         while not self._stop_event.wait(interval):
-            self.motion_once()
+            try:
+                self.motion_once()
+            except WebConsoleError:
+                # Transport failures already close/clear only the chassis route.
+                pass
 
     def connect_arm(self):
         with self._arm_io:
@@ -569,10 +682,9 @@ class WebConsoleRuntime:
     def close(self):
         self._stop_event.set()
         try:
-            self.stop_chassis_motion()
+            self.disconnect_chassis()
         except Exception:
             pass
-        self._disconnect_chassis_state()
         self._disconnect_arm_state()
         for thread in self._threads:
             thread.join(timeout=1.0)

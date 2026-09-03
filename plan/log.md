@@ -1053,3 +1053,45 @@ entry format:
   movement and gripping remain operator acceptance, not claimed as passed.
 - Commit intent: push the scoped repair and supporting diagnostic records on
   `target/arm-ui-command-fixes`; preserve user settings; do not merge main.
+
+## 2026-09-03 - Diagnose chassis hold persisting after release
+
+- Diagnosis only; runtime sources and services were not changed. Preserved user
+  settings and preceding XYZ diagnostic records. Only existing PC GET state was
+  used for live inspection; no motion, disconnect, reset or deployment occurred.
+- Confirmed two PC races using actual WebConsoleRuntime with fake clients:
+  a delayed start can reassign held velocity after completed STOP and continuously
+  refresh it; an already-copied refresh can send one stale velocity after STOP.
+- ESP32 source clears hold on STOP/Disable/expiry, but each incoming VELOCITY
+  renews its deadline. PC-side continuous refresh therefore prevents expiry.
+  Lost browser release is also unbounded while this worker continues to run;
+  the current documentation's undelivered-STOP fallback claim is inaccurate.
+- Existing journal includes STOP DONE but hides refreshes and input/hold state.
+  Exact historical trigger and physical stop cannot be established from it.
+- L1: 15 ESP32 service tests and 13 web-console tests passed; two deterministic
+  offline reproductions demonstrated missing concurrency coverage. Diff/status
+  checks passed. Proposed lifecycle invalidation and better release diagnostics;
+  implementation and attended acceptance remain pending. No commit/push.
+
+## 2026-09-03 - Repair chassis hold/release lifecycle
+
+- Scope: PC web runtime, HTTP input metadata, JS input bindings, diagnostic
+  state/logging, console docs and tests. No firmware, device protocol, limits,
+  credentials, raw resources, arm logic or user VS Code settings were modified.
+- STOP invalidates motion before waiting for I/O. Serialized dispatch and epochs
+  prevent old starts or queued refreshes from restoring a cleared hold. Disable,
+  connection loss and reconnect also leave motion cleared. Late browser replies
+  cannot re-arm released input; exact HOLD no longer leaks into direction input.
+- Browser presence is automatic (200 ms); after 1000 ms without accepted presence
+  the PC clears refresh and requests STOP. No additional operator gate is added.
+  Old/expired presence does not restart motion; failures are not retried.
+- MOTION logs capture epoch, mode, clear reason and refresh totals. Log disk
+  failure cannot block STOP. Corrected the old claim that ESP32 timeout alone
+  covers an undelivered browser STOP while the PC continues to refresh.
+- L1: 99 console, 55 ESP32, 25 dev-tool and 13 Node input-binding tests passed;
+  Python/JS syntax and diff checks passed. Both diagnosed interleavings now have
+  deterministic regression coverage. No hardware calls or motion were made.
+- Backend restart/reload and attended physical acceptance are pending operator
+  coordination. Do not claim the current running process contains this fix.
+- Commit/push intent: scoped target/chassis-hold-release-fix; no main merge.
+  Preserve user settings and separate uncommitted XYZ diagnosis/log section.

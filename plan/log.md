@@ -1155,3 +1155,26 @@ entry format:
   Existing fault history retained. L2 only; no agent L3/L4 validation.
 - Commit/push only recovery plan and this section. Preserve user settings,
   unrelated XYZ log, video diagnosis, and parallel drawing app/gitignore/plans.
+
+## 2026-09-03 - Add PC JSON stroke drawing demo
+
+- Added app/demo.py and app/README.md, reading version 1.0 normalized JSON via
+  the existing PC -> MaixCam -> TCP232 -> Dobot route. No protocol/device edits.
+- Preserved supplied home joints, 100 mm YZ mapping, User X -20/+20 pen travel,
+  stroke boundaries/all points, one gripper action and draw speed 15%. Travel
+  speed/acceleration explicitly default to 5%; User/Tool default to 0/0 and
+  remain configurable. JSON 210 mm metadata does not enlarge the workspace.
+- Existing route has zero blending, not cp=100. Each primitive waits for DONE;
+  that still means API return, not verified physical terminal position. Default
+  execution is a no-network preview; --execute requires an attended prompt.
+  Fault/UNKNOWN/timeout/interruption sends no retries or cleanup motion.
+- Copied the supplied railway JSON unchanged into ignored dataset/: 4 strokes,
+  269 points. SHA-256 equality and git ignore passed; no dataset is committed.
+- L0/L1: 16 new tests and 50 existing client/arm/gateway/protocol tests passed.
+  Full supplied-data fake route recorded 282 API calls without network/hardware;
+  preview worked from repository root and another working directory.
+  git diff --check passed. L2/L3/L4 not run; no real motion, deployment, device
+  connection or service changes by this goal. Safe setup/accuracy remain untested.
+- User approved this log append. Commit intent: only app, tests/app, .gitignore,
+  this goal's plan and this log hunk on target/pc-json-drawing-demo, then push.
+  Preserve prior XYZ dirty log, editor settings and other diagnostic artifacts.

@@ -6,6 +6,9 @@
 # Temporary document extraction and inspection output
 /tmp/
 
+# Local drawing point datasets
+/dataset/
+
 # Local secrets and device-specific settings
 .env
 .env.*

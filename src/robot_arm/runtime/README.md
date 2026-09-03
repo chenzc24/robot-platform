@@ -35,5 +35,8 @@ are unchanged.
 `STATUS` now samples `GetAngle()` and `GetPose(0, 0)`. The fixed state payload
 marks the sample valid only when both calls normalize to six finite values; a
 read or shape failure is reported as unavailable without stopping the service.
-The actual controller return containers still require one stationary L2 check
-before this source is rebuilt and deployed.
+Live normalized joint/pose feedback passed the
+[2026-09-03 L2 check](../../../docs/deployment/2026-09-03-esp32-maixcam.md), and
+the later [attended drawing](../../../plan/2026-09-03-pc-json-drawing-l3/plan.md)
+completed. Raw vendor return containers were not captured; these results do
+not prove independent position accuracy or a new firmware's compatibility.

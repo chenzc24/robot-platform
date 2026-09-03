@@ -1229,3 +1229,26 @@ entry format:
 - Commit/push scope: app code/docs, demo tests, updated L3 acceptance, the new
   header-controls plan and this log hunk on target/pc-json-drawing-demo.
   Preserve the prior XYZ log, user settings and unrelated diagnostic files.
+
+## 2026-09-03 - Consolidate the drawing lineage into main
+
+- User approved integration after the read-only branch review. The selected
+  lineage is main f7527c9 through drawing 838f61b (15 commits), including measured
+  feedback, arm deadline/integer fixes, chassis hold cancellation and drawing.
+  Keep fault-foundation draft PR #2 and historical divergent branches separate.
+- Added plan/2026-09-03-main-drawing-consolidation/plan.md before editing.
+  Fixed only test isolation: explicit drawing fixture speeds, MaixCam example
+  import plus synthetic override precedence, and synthetic ESP32 L2 config with
+  absent credential. Updated six entry documents with dated acceptance limits.
+- L1 passed: 301 Python tests and 13 chassis JavaScript tests. Extra app runs
+  passed with committed defaults and synthetic 100/90/80 defaults (19 each).
+  Local-config-blocked ESP32/MaixCam runs passed 55/57 tests respectively.
+  Documentation links and diff checks passed; no runtime behavior was changed.
+- L2/L3/L4 not run. No device connection, deployment, restart, motion or alarm
+  change. The actual drawing acceptance remains the earlier attended 15/5/5 run.
+- Preserve local app/demo.py speed 60%, editor settings, the prior XYZ log and
+  three diagnostic directories. Stage only this log section and planned files;
+  no local config, secret, dataset or raw-resource content enters the commit.
+- Publication intent: push the correction on target/pc-json-drawing-demo,
+  retarget PR #3 to main and merge without squashing the reviewed ancestry.
+  Publication outcome will be recorded after the remote operation completes.

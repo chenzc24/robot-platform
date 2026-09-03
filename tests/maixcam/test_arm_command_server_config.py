@@ -1,7 +1,9 @@
 import importlib
 import pathlib
 import sys
+import types
 import unittest
+from unittest import mock
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -16,16 +18,23 @@ from motion_link import decode_frame, encode_frame
 
 class ArmCommandServerConfigTests(unittest.TestCase):
     def test_default_deny_configuration_template_is_importable_by_the_server(self):
-        sys.modules.pop("arm_service_config", None)
-        sys.modules.pop("arm_service_config_example", None)
         sys.modules.pop("arm_command_server", None)
         server = importlib.import_module("arm_command_server")
-        config = server._settings()
+        # A local deployment override must not become the default-deny fixture.
+        with mock.patch.dict(sys.modules, {"arm_service_config": None}):
+            config = server._settings()
         self.assertEqual(config.LISTEN_ADDRESS, "0.0.0.0")
         self.assertEqual(config.LISTEN_PORT, 8780)
         self.assertEqual(config.UART_DEVICE, "/dev/ttyS0")
         self.assertEqual(config.UART_BAUD, 115200)
         self.assertFalse(config.YOLO_MODE)
+
+    def test_explicit_local_override_takes_precedence_over_the_template(self):
+        server = importlib.import_module("arm_command_server")
+        local = types.ModuleType("arm_service_config")
+        local.YOLO_MODE = True
+        with mock.patch.dict(sys.modules, {"arm_service_config": local}):
+            self.assertIs(server._settings(), local)
 
     def test_yolo_mode_admits_motion_without_named_allowlist(self):
         sys.modules.pop("arm_command_server", None)

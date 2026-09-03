@@ -88,9 +88,9 @@ class DemoTests(unittest.TestCase):
     def plan(self, config=None):
         return demo.build_plan(demo.load_strokes(self.path), config or demo.DrawingConfig())
 
-    def run_offline(self, connection):
+    def run_offline(self, connection, config=None):
         sleep = mock.Mock()
-        demo.run_plan(MaixCamArmClient(connection), self.plan(), sleep=sleep, report=lambda _: None)
+        demo.run_plan(MaixCamArmClient(connection), self.plan(config), sleep=sleep, report=lambda _: None)
         return sleep
 
     def test_entire_schema_and_all_points_checked(self):
@@ -137,7 +137,9 @@ class DemoTests(unittest.TestCase):
 
     def test_original_geometry_reaches_native_api_without_frame_swapping(self):
         connection = FakeConnection()
-        sleep = self.run_offline(connection)
+        # Geometry regression uses fixed test speeds, not operator header edits.
+        config = demo.DrawingConfig(draw_speed=15, travel_speed=5, accel=5)
+        sleep = self.run_offline(connection, config)
         self.assertEqual(connection.calls[0], ("SetParallelGripper", (1,)))
         self.assertEqual(connection.calls[1], ("MovJ", (
             {"joint": [-120, 0, -90, -90, -30, 90]}, {"a": 5, "v": 5, "cp": 0})))

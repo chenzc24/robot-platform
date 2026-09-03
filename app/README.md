@@ -88,13 +88,25 @@ controller calibration writes.
   API returned, **not** verified physical terminal position. Offline tests do
   not prove accuracy, pen pressure, safe reachability or absence of singularity.
 
-## Attended execution (not tested on hardware in this goal)
+## Attended execution
+
+The [2026-09-03 attended test](../plan/2026-09-03-pc-json-drawing-l3/plan.md)
+completed four strokes / 282 arm commands at 15/5/5% draw/travel/acceleration;
+the operator confirmed drawing completeness. This is not calibrated accuracy,
+new-speed acceptance or permission to repeat motion without a current check.
 
 Use the already deployed YOLO arm runtime described in
 `docs/robot-arm/yolo-manual-control.md`. Do not run alongside an active console
 arm session or another script. The demo does not take over a session, auto-enable
 the controller, clear an alarm, change safety settings, or touch the chassis.
 It requires a ready/idle motion-enabled YOLO status, valid feedback and no error.
+
+When switching from the console, wait for arm work to finish and disconnect
+only its arm session; keep the chassis stopped. Closing the browser alone does
+not necessarily release the backend's arm connection. The script bypasses the
+UI backend but uses the same client and single-client MaixCam endpoint. Do not
+reconnect UI arm control during the run. After normal script exit and physical
+inspection, reconnect it explicitly. The script does not automate either handoff.
 
 After verifying the physical setup and the preview, run:
 

@@ -1,8 +1,14 @@
 # Deployment and Maintenance Baseline
 
-- Status: individual development channels are available; an offline, motion-disabled release-manifest template now exists, but atomic release and real rollback acceptance remain incomplete
+- Status (2026-09-03): ESP32 v3 and MaixCam arm/video publication and bounded live checks are recorded; atomic release, cold-start and rollback acceptance remain incomplete
 - Scope: publishing code from the computer to ESP32, MaixCam, and the robot arm; configuring TCP232; startup, health checks, and recovery
 - Excludes: normal task commands and runtime behavior; see [Runtime Baseline](../runtime/README.md)
+
+The [dated deployment record](2026-09-03-esp32-maixcam.md) and its file manifest
+record publication, readback and feedback evidence. Later
+[attended drawing acceptance](../../plan/2026-09-03-pc-json-drawing-l3/plan.md)
+is separate from deployment. Git consolidation does not upload files, restart
+services or replace the operator's controller project.
 
 ## 1. Deployment Topology
 
@@ -144,9 +150,9 @@ The computer aggregates independently reported ESP32 and arm state into the syst
 
 | Target | Available now | Still required |
 |---|---|---|
-| ESP32 | USB recovery, WebREPL single-file maintenance, protected reset | Release manifest, atomic upload, version query, rollback, production TCP service deployment |
-| MaixCam | SSH/SCP, separate video and arm diagnostic directories, start/stop logs | Unified arm/video gateway release directory, auto-start, version switching, unified resource recovery |
-| Robot arm | LAN2 project deployment, LAN1 diagnostic project, operation without LAN2 | Generic task project, version status, standard startup checks, rollback acceptance |
-| TCP232 | Current parameters support RPA1 validation | Archived configuration export and automated read-only pre-release verification |
+| ESP32 | USB/readback-backed v3 deployment manifest and authenticated runtime readiness; historical WebREPL maintenance | Atomic upload, cold-start/rollback acceptance, post-release WebREPL recovery verification |
+| MaixCam | Hash-verified arm/video activation, measured arm route, video decode and stop/start evidence | Unified atomic release, auto-start, version switching, unified resource recovery |
+| Robot arm | Generated RPA2 project, live normalized feedback, attended drawing primitives; historical LAN2-disconnected operation | Controller project readback, independent terminal-position verification, cold-start and rollback acceptance |
+| TCP232 | Existing parameters carry RPA2 feedback and drawing | Archived configuration export and automated read-only pre-release verification |
 
 The current offline candidate supplies the ESP32 TCP listener, computer/MaixCam arm contract, and default-deny arm project. See [Offline Runtime Integration](../integration/offline-runtime-candidate.md). Do not begin with a three-device one-click deployment command that can trigger real hardware.

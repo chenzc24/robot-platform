@@ -1252,3 +1252,10 @@ entry format:
 - Publication intent: push the correction on target/pc-json-drawing-demo,
   retarget PR #3 to main and merge without squashing the reviewed ancestry.
   Publication outcome will be recorded after the remote operation completes.
+- Publication outcome: correction 153b6e2 pushed; PR #3 retargeted to main and
+  merged at 2026-09-03 08:09:23 UTC as 5394fbc. The merged tree exactly matches
+  the tested candidate. Local main was advanced and selected, with 0/0 remote
+  divergence. No protection bypass, branch deletion, stash or device operation.
+- Post-merge protected-file hashes and the prior unstaged XYZ log hunk are
+  unchanged. Draft PR #2 remains open and excluded; its worktree is clean.
+  Commit/push this documentation-only outcome record on main, then recheck sync.

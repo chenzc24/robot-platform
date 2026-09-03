@@ -1,6 +1,6 @@
 # Consolidate the validated drawing lineage into main
 
-- Status: L0/L1 validated; publication and PR merge pending
+- Status: completed; PR #3 merged into main, local main synchronized
 - Owner: Codex, single-agent integration
 - Validation ceiling: L1; no hardware connections, deployment or motion
 - Authorization: user approved consolidation after the branch review.
@@ -100,4 +100,17 @@ L2/L3/L4 are not run: this is repository integration, not device release.
   No new runtime source, protocol, secrets, raw archive or dataset is staged.
 - L2/L3/L4 not run. Existing services, controller, session owners and physical
   state were not queried or changed. No higher-speed motion acceptance claimed.
-- Next: selectively commit/push this scope, retarget PR #3 and merge into main.
+- Correction commit 153b6e2 was selectively staged, committed and pushed. PR #3
+  was retargeted from target/chassis-hold-release-fix to main with the expanded
+  16-commit scope, validation and exclusions recorded in its description.
+- GitHub merged PR #3 at 2026-09-03 08:09:23 UTC as 5394fbc, preserving ancestry.
+  The fetched merged tree exactly matches tested head 153b6e2. No branch
+  protection was bypassed; the PR had no configured status-check results.
+- Local main advanced from ancestor f7527c9 to origin/main; the primary checkout
+  switched to main without stashing, overwriting or committing user work.
+  main/origin divergence was 0/0 immediately after merge.
+- Post-merge hashes of user speed/editor files and four diagnostic files match
+  the initial audit. The unstaged XYZ log hunk is unchanged. Draft PR #2 remains
+  open, its worktree clean at 32dad12 and its unique commit absent from main.
+- All branch references are retained. This final documentation-only outcome
+  record is committed/pushed on main; Git records its resulting commit ID.

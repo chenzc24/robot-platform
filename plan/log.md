@@ -876,3 +876,379 @@ entry format:
 - Commit status: reference committed on `main` as `834e82d`
   (`docs(arm): record relevant controller APIs`); this factual status update is
   committed after it, and both commits are pushed together.
+
+## 2026-09-02 - Add measured robot-arm status feedback
+
+- Goal: implement the minimal measured-state route from controller
+  `GetAngle/GetPose` calls through RPA2 and MaixCam to the PC parser, localhost
+  state, and web arm panel.
+- Modified scope: robot-arm status sampling and adapter injection, strict PC
+  arm-status parsing/storage, the web Current display, focused fixtures/tests,
+  and arm/console documentation. MaixCam runtime code did not need modification
+  because its existing transparent payload behavior was proved by test.
+- Contract: a status sample contains validity/error, six measured joints, six
+  measured pose values, User/Tool indices, sample sequence, and controller
+  timestamp. Invalid reads are explicit and non-fatal. Targets and measurements
+  remain separate, and `terminal_position_supported` remains false.
+- Validation: 243 L1 tests passed across all six suites; 57 affected Python
+  files and the web JavaScript passed syntax checks; a generated DobotStudio
+  two-file YOLO project compiled and contained the new API path; localhost
+  visual inspection at 1280 x 720 showed both complete Current rows without
+  clipping controls; `git diff --check` passed. The workspace validator still
+  reports two pre-existing non-ASCII lines in legacy `src/console/ui/views.py`.
+- Hardware state: no device connection, deployment, write, or motion occurred.
+  Stationary L2 return-shape verification and an independently authorized L3
+  2-degree feedback-change check remain pending.
+- Local exception: the user's `.vscode/settings.json` change remains untouched,
+  unstaged, and uncommitted.
+- Commit status: implementation and records are committed on
+  `target/arm-measured-feedback` and pushed for review after this record.
+
+## 2026-09-03 - Deploy ESP32 v3; publish MaixCam arm/video sources
+
+- Goal: deploy the reviewed source baseline `adf4af2` to ESP32 and MaixCam and
+  verify non-motion communication. No arm controller deployment or motion test.
+- Scope: deployment plan/evidence/hash manifest, ignored staging/backups and
+  bounded helpers. Runtime source and user `.vscode/settings.json` unchanged.
+- ESP32: WebREPL upgrade timed out. After operator safety confirmation and USB
+  connection, COM7 backup/readback succeeded. Eleven files were deployed in
+  L2 first; the final approved `tcp_v3_l3` configuration was then read back and
+  reset. Wireless HELLO/PING/STATUS returned v3 WELCOME/PONG/STATE, ready,
+  disabled, zero hold, and no error, including a later fresh-session recheck.
+- MaixCam: SSH and backup succeeded. Seventeen current arm/video files were
+  activated with matching SHA256 hashes; thirteen Python sources compiled on
+  device. The existing `num` camera/UART0 application still owns resources.
+  New service startup, video decode, and downstream arm PING remain pending
+  operator exit/stop agreement. Its code and auto-start settings are unchanged.
+- Validation: 137 L1 tests passed (55 ESP32, 54 MaixCam, 28 protocol). No Enable,
+  velocity, jog, or gripper command was sent; CAN-backed startup/cleanup can
+  send zero/disable output. L3/L4 and cold-boot acceptance were not run.
+- Remaining: MaixCam activation, new arm-controller measured-feedback deployment,
+  separate UI credential provisioning, and WebREPL recovery acceptance.
+- Commit status: sanitized partial-deployment records prepared for commit/push
+  on `target/deploy-esp32-maixcam-20260903`; no merge to `main`.
+
+## 2026-09-03 - Activate MaixCam services after authorized num shutdown
+
+- Prior partial-deployment record was committed/pushed as `7a080e4`. The
+  operator then authorized stopping `num`; its process exited and its source
+  hash remained unchanged. Auto-start configuration was not modified.
+- Runtime activation exposed buffered video readiness logs and SIGTERM ignored
+  after native initialization. Patched only the video entry point and start
+  script: unbuffered stdout, post-initialization signal registration, and
+  retained ownership evidence if timeout cleanup leaves a live process.
+- Scope: these two sources, focused tests, deployment plan/manifest/evidence,
+  video current-state documentation, and this log. User settings untouched.
+- L1: 14 focused tests passed; 56 MaixCam tests passed with local deployment
+  configuration excluded. An unisolated run had one existing template-test
+  failure caused by reading the ignored YOLO=true configuration.
+- L2: fixed files read back by hash; video ready/stop/restart passed. Final
+  direct probe decoded 101 frames in 6.078 s at 1280 x 720 H.264 (nominal 20 fps).
+  MaixCam ICMP PING returned 2/2 replies. Arm gateway listens on 8780 and owns
+  UART0 exclusively; its downstream PING returned FAULT/response_timeout.
+  ESP32 recheck returned v3 WELCOME/PONG/STATE, ready/disabled, no error.
+- Hardware remains with video/gateway running and chassis disabled. No motion,
+  controller deployment, TCP232 change, or cold-boot acceptance was performed.
+  Arm downstream connectivity and measured feedback remain unresolved; PC
+  relay/UI and credential provisioning remain separately unverified.
+- Commit intent: push the bounded repair and factual results on the existing
+  deployment branch; no merge to `main`.
+
+## 2026-09-03 - Prepare the current robot-arm import package
+
+- Operator requested the deployment package location. Inspection found the
+  older `build/robot-arm-yolo` lacked current measured-feedback code.
+- Preserved it and generated `build/robot-arm-yolo-20260903` using the existing
+  builder with `--yolo`. The package includes both code files and both required
+  JSON metadata files; source/runtime policy code was not modified.
+- L1: all four files exactly match builder output; Python syntax, JSON parsing,
+  YOLO mode, and measured-feedback inclusion passed. No hardware connection,
+  controller import, startup, or motion occurred. User settings untouched.
+- Commit intent: push only package-location/evidence records on the existing
+  deployment branch. The generated package remains Git-ignored.
+
+## 2026-09-03 - Read measured feedback from the operator-started arm project
+
+- Operator reported the TCP project running and requested information. No
+  controller import or file readback was performed by the agent.
+- Default CLI PING returned PONG, but STATUS exceeded its 1000 ms TTL. A
+  separate read-only session with the supported 5000 ms TTL returned PONG
+  (828 ms) and three valid STATE responses (2641, 1875, 1812 ms).
+- Production PC parsing passed for all three: joint angles
+  [-90, 0, -140, -40, 0, 0]; pose
+  [-150.8, -102.846018, 130.632889, 90, 0, -90], User 0 / Tool 0;
+  sample IDs 2/3/4; ready, YOLO, no active command or service error.
+- Scope: deployment evidence/manifest, current plan, this log, and ignored
+  diagnostic helper/output only. Runtime code, defaults, credentials, and
+  the user's settings were untouched. No motion or service restart occurred.
+- Remaining: default STATUS deadline/polling alignment and latency diagnosis.
+  High-frequency/in-motion telemetry, raw vendor return-container capture,
+  motion-completion accuracy, and UI acceptance were not established.
+- Commit intent: push sanitized L2 evidence on the existing deployment branch.
+
+## 2026-09-03 - Align arm deadlines and open the attended web console
+
+- Scope: shared PC arm request deadlines, separate web chassis/arm health
+  workers, six regression tests, console documentation and goal records.
+  User settings, device runtime sources, controller limits and secrets untouched.
+- PING/STATUS TTL is now 5 seconds; response budget is request TTL plus 1 second
+  with one absolute deadline. Motion TTL remains 60 seconds with no automatic
+  retry. Slow arm reads no longer serialize the chassis health worker.
+- L1: 37 runnable console tests and 25 dev tests passed. Two legacy Qt test
+  modules could not import because PySide6 is absent; not claimed as passed.
+- L2: default arm CLI returned READY/PONG/measured STATE; ESP32 returned v3
+  ready/disabled. Web sessions connected with valid live arm feedback and
+  independent chassis health. Only video was resumed after a KEY_OK exit;
+  controller, ESP32 and gateway were not restarted or redeployed this turn.
+- Restored checksum-verified MediaMTX/FFmpeg binaries to ignored `.tools/`.
+  Relay decoded 1280 x 720 H.264 at 19.99 fps; browser showed embedded WebRTC
+  video. Web UI remains at localhost:8080 with approved full manual controls.
+- Agent did not send Enable, nonzero velocity, jog or gripper commands. The
+  operator used the UI and its journal recorded DONE responses. Physical
+  execution is not independently accepted. Arm status also reported
+  `invalid_gripper` while the journal showed DONE and the fault list was empty;
+  this discrepancy is pending investigation. L3/L4/cold-boot not agent-tested.
+- Commit intent: commit/push only this goal on `target/arm-timeouts-manual-ui`,
+  preserving `.vscode/settings.json` unstaged; no merge to main.
+
+## 2026-09-03 - Diagnose arm UI DONE without movement
+
+- Diagnosis only; runtime sources and devices were not modified or restarted.
+- Live PC status reported `invalid_acceleration`, unchanged valid joint values
+  and empty faults despite existing UI jog_joint DONE entries. Deployed MaixCam
+  gateway/service hashes matched the repository.
+- Proven root cause: web normalization converts integer acceleration/speed and
+  gripper width to floats; the controller rejects `20.0` / `28.0` as invalid
+  integer strings before calling motion APIs. PC dispatch ignores a terminal
+  FAULT and the web layer manufactures DONE; status errors are not surfaced.
+- L1 offline production-chain reproduction passed for joint/XYZ jog, absolute
+  joint/pose and gripper: controller ERROR, zero recording-API calls, UI DONE,
+  empty faults. An integer-input control reached the fake API once. No physical
+  motion request, browser click or direct controller-file readback occurred.
+- Scope: diagnostic plan, this factual entry and ignored temporary reproduction.
+  Runtime repair awaits a change request. No commit/push for this diagnosis-only
+  turn; user `.vscode/settings.json` remains untouched.
+
+## 2026-09-03 - Repair integer arm parameters and false-success reporting
+
+- Scope: PC shared terminal dispatch, web parameter/error handling, 11 new
+  cross-layer tests, console docs, current repair and preceding diagnostic
+  records. No device runtime, protocol schema, limits, credentials or user
+  `.vscode/settings.json` was modified.
+- Web emits integer speed/acceleration/gripper fields and rejects fractions
+  without rounding; all five arm primitives now reach the recording-only API
+  in L1. FAULT/REJECTED remain failures in HTTP/events/faults while retaining
+  healthy links. Unknown outcomes are not retried or reported as success.
+- L1: 73 runnable tests passed (48 console, 25 dev), including integer boundaries,
+  no-write validation, controller failure, unknown/lost reply, HTTP failures and
+  status fault retention. Syntax/diff checks passed. Two legacy Qt modules remain
+  unrun due to missing optional PySide6.
+- The first PC restart attempt was aborted after operator reconnection. After
+  explicit restart approval, only the identified web backend was replaced;
+  devices and video services kept running. Reconnection returned arm ready/YOLO
+  with valid sample 550 and chassis ready/disabled. The old controller
+  `invalid_acceleration` is now visible in faults and the text log.
+- No Enable, nonzero chassis velocity, arm motion or gripper command was sent
+  by the agent. Existing disconnect performed chassis STOP/Disable. L3 physical
+  movement and gripping remain operator acceptance, not claimed as passed.
+- Commit intent: push the scoped repair and supporting diagnostic records on
+  `target/arm-ui-command-fixes`; preserve user settings; do not merge main.
+
+## 2026-09-03 - Diagnose chassis hold persisting after release
+
+- Diagnosis only; runtime sources and services were not changed. Preserved user
+  settings and preceding XYZ diagnostic records. Only existing PC GET state was
+  used for live inspection; no motion, disconnect, reset or deployment occurred.
+- Confirmed two PC races using actual WebConsoleRuntime with fake clients:
+  a delayed start can reassign held velocity after completed STOP and continuously
+  refresh it; an already-copied refresh can send one stale velocity after STOP.
+- ESP32 source clears hold on STOP/Disable/expiry, but each incoming VELOCITY
+  renews its deadline. PC-side continuous refresh therefore prevents expiry.
+  Lost browser release is also unbounded while this worker continues to run;
+  the current documentation's undelivered-STOP fallback claim is inaccurate.
+- Existing journal includes STOP DONE but hides refreshes and input/hold state.
+  Exact historical trigger and physical stop cannot be established from it.
+- L1: 15 ESP32 service tests and 13 web-console tests passed; two deterministic
+  offline reproductions demonstrated missing concurrency coverage. Diff/status
+  checks passed. Proposed lifecycle invalidation and better release diagnostics;
+  implementation and attended acceptance remain pending. No commit/push.
+
+## 2026-09-03 - Repair chassis hold/release lifecycle
+
+- Scope: PC web runtime, HTTP input metadata, JS input bindings, diagnostic
+  state/logging, console docs and tests. No firmware, device protocol, limits,
+  credentials, raw resources, arm logic or user VS Code settings were modified.
+- STOP invalidates motion before waiting for I/O. Serialized dispatch and epochs
+  prevent old starts or queued refreshes from restoring a cleared hold. Disable,
+  connection loss and reconnect also leave motion cleared. Late browser replies
+  cannot re-arm released input; exact HOLD no longer leaks into direction input.
+- Browser presence is automatic (200 ms); after 1000 ms without accepted presence
+  the PC clears refresh and requests STOP. No additional operator gate is added.
+  Old/expired presence does not restart motion; failures are not retried.
+- MOTION logs capture epoch, mode, clear reason and refresh totals. Log disk
+  failure cannot block STOP. Corrected the old claim that ESP32 timeout alone
+  covers an undelivered browser STOP while the PC continues to refresh.
+- L1: 99 console, 55 ESP32, 25 dev-tool and 13 Node input-binding tests passed;
+  Python/JS syntax and diff checks passed. Both diagnosed interleavings now have
+  deterministic regression coverage. No hardware calls or motion were made.
+- Backend restart/reload and attended physical acceptance are pending operator
+  coordination. Do not claim the current running process contains this fix.
+- Commit/push intent: scoped target/chassis-hold-release-fix; no main merge.
+  Preserve user settings and separate uncommitted XYZ diagnosis/log section.
+
+## 2026-09-03 - Restart PC backend with hold/release repair
+
+- Operator explicitly approved backend replacement. Old web PID 24504 returned
+  chassis offline/disabled after existing disconnect; a second GET confirmed it
+  before terminating only that verified process. No device source/config changed.
+- Existing credential-preserving launcher started wrapper PID 27312; child PID
+  34424 serves localhost:8080 with source e2d668f. Credential stayed in the child
+  environment and was not printed, changed or committed.
+- L2: new motion metadata and browser asset verified. Chassis reconnected with
+  authenticated=true, disabled, zero requested vector, idle mode, refresh_count=0,
+  last_error=none and no faults. Arm remained offline as found. No Enable,
+  VELOCITY, arm motion or gripper call was sent by the agent.
+- MediaMTX 8889 listener retained PID 15684; device/gateway/video services were
+  not restarted. Operator must reload the page before manual acceptance.
+- L3 physical hold/release acceptance is not run. Existing stderr has an undated
+  browser connection-aborted traceback; fresh API/asset checks succeeded.
+- Commit/push scope is this factual record and the repair-plan update only;
+  preserve user settings and the separate uncommitted XYZ diagnosis/log entry.
+
+## 2026-09-03 - Restore three services and open the UI
+
+- Reused web backend PID 34424. Reconnected ESP32 through its existing TCP client:
+  online, authenticated, disabled/idle, zero requested vector. No WebREPL/reset;
+  the legacy CLI's WebREPL warning does not describe production TCP availability.
+- MaixCam video and arm gateway were absent after reboot. Verified guarded arm
+  startup source/hash and launcher UART0 ownership, then started existing deployed
+  services: arm gateway PID 777, RTSP PID 787. No device source/config deployment.
+- Controller service was already running: routed STATUS returned ready/YOLO,
+  last_error=none and valid measured joints/pose, with advancing sample numbers.
+  No controller reset, Enable, chassis velocity, arm movement or gripper command.
+- Recovered the half-running local video relay using its managed restart:
+  MediaMTX PID 8308 and FFmpeg PID 25524. H264 path ready/online, incoming byte
+  count increased, and one relayed frame decoded successfully to null.
+- UI HTTP 200; browser-panel open was requested (app queued it). Existing chassis
+  TimeoutError remains as historical fault evidence, not a current failed link.
+- L2 complete; no L3/L4 test. Commit/push only this operational plan/log section;
+  preserve user settings and unrelated XYZ diagnostic/YZ drawing-review files.
+
+## 2026-09-03 - Recover video and arm gateway after interruption
+
+- Operator authorized service recovery and reported no DobotStudio error.
+  Verified and gracefully replaced only MaixCam arm gateway 777 with 1061,
+  using the existing UART ownership guard. No source/config deployment.
+- PING recovered; initial STATUS still timed out. UI independently reconnected
+  at 14:10:16 and recorded jog_joint DONE at 14:10:28. Read-only snapshots then
+  showed online/ready, valid joints/pose, sample 21 advancing to 52 and no current
+  arm error. Stopped extra CLI access after observing UI session ownership.
+  The agent sent no motion; physical completion and original timeout cause
+  were not established. Do not attribute recovery solely to the gateway restart.
+- Video recovered and decoded, then exited again through native KEY_OK at
+  uptime 135592 ms. FFmpeg received EOF. Asked operator about key/screen events;
+  repeated only the authorized video/relay recovery. Final RTSP PID 1195,
+  MediaMTX 12456 and FFmpeg 1196: ready/online, a decoded frame, 5.4 MB received
+  and no relay input frame errors at inspection. Recurring exit remains unresolved.
+- PC backend 34424 and ESP32 left running; chassis remained online/idle. No
+  motion/Enable/alarm clear/controller reset or timeout-command replay by agent.
+  Existing fault history retained. L2 only; no agent L3/L4 validation.
+- Commit/push only recovery plan and this section. Preserve user settings,
+  unrelated XYZ log, video diagnosis, and parallel drawing app/gitignore/plans.
+
+## 2026-09-03 - Add PC JSON stroke drawing demo
+
+- Added app/demo.py and app/README.md, reading version 1.0 normalized JSON via
+  the existing PC -> MaixCam -> TCP232 -> Dobot route. No protocol/device edits.
+- Preserved supplied home joints, 100 mm YZ mapping, User X -20/+20 pen travel,
+  stroke boundaries/all points, one gripper action and draw speed 15%. Travel
+  speed/acceleration explicitly default to 5%; User/Tool default to 0/0 and
+  remain configurable. JSON 210 mm metadata does not enlarge the workspace.
+- Existing route has zero blending, not cp=100. Each primitive waits for DONE;
+  that still means API return, not verified physical terminal position. Default
+  execution is a no-network preview; --execute requires an attended prompt.
+  Fault/UNKNOWN/timeout/interruption sends no retries or cleanup motion.
+- Copied the supplied railway JSON unchanged into ignored dataset/: 4 strokes,
+  269 points. SHA-256 equality and git ignore passed; no dataset is committed.
+- L0/L1: 16 new tests and 50 existing client/arm/gateway/protocol tests passed.
+  Full supplied-data fake route recorded 282 API calls without network/hardware;
+  preview worked from repository root and another working directory.
+  git diff --check passed. L2/L3/L4 not run; no real motion, deployment, device
+  connection or service changes by this goal. Safe setup/accuracy remain untested.
+- User approved this log append. Commit intent: only app, tests/app, .gitignore,
+  this goal's plan and this log hunk on target/pc-json-drawing-demo, then push.
+  Preserve prior XYZ dirty log, editor settings and other diagnostic artifacts.
+- Published implementation d80df5b on origin/target/pc-json-drawing-demo;
+  local/remote comparison is 0 ahead / 0 behind. PR #3 targets the original
+  target/chassis-hold-release-fix branch; no merge. Completion records are a
+  documentation-only follow-up; unrelated dirty work remains uncommitted.
+
+## 2026-09-03 - Run attended PC JSON drawing on the arm
+
+- Operator requested the real test, confirmed physical e-stop/environment, then
+  explicitly confirmed stopped/restrained chassis, safe pose/pen/load, User/Tool
+  0/0, 100 mm YZ mapping, X -20/+20 mm pen travel, 1 mm gripper, draw 15% and
+  travel/acceleration 5%, with continuous on-site supervision.
+- Preview and 16 local demo tests passed again. The input hash and 4 strokes /
+  269 points were unchanged. Fresh non-motion arm/chassis status passed; only
+  the idle console arm session was released for the standalone program.
+- First launch was rejected at PING with request_in_flight, before any gripper
+  or motion command. A non-motion connection with ordinary gateway polling
+  subsequently passed PING/STATUS, showing ready/no error and unchanged pose.
+  Source/fake reproduction supports a stale query across session handoff; the
+  exact live pending frame was not captured. No restart or configuration fix.
+- The subsequent unchanged demo executed one full authorized sequence: all
+  282 arm commands and 8 pauses completed, process exit 0, including every
+  pen-up. No motion failure, timeout, UNKNOWN or retry. Periodic chassis status
+  remained enabled_stopped/idle with zero velocity; no chassis motion sent.
+- Restored the existing console arm session after clean exit. At 14:40:28,
+  fresh valid sample 317 reported ready/idle/YOLO, last_error=none. Final User/
+  Tool 0/0 pose: [-219.907865,-84.7529646,272.6681,-44.3547931,-90,44.3547931].
+  No extra home, gripper release, deployment, alarm clear or service restart.
+- L3 command-path evidence only: operator drawing quality and physical pen
+  clearance confirmation remain pending. DONE is API return, not metrology.
+  No L4, deliberate link-loss or physical emergency-stop actuation test.
+- Commit/push only this section and plan/2026-09-03-pc-json-drawing-l3/plan.md
+  on the existing drawing review branch. Preserve prior XYZ log, user settings,
+  and unrelated diagnosis/review files; no merge or new runtime changes.
+
+## 2026-09-03 - Expose drawing speed controls in the file header
+
+- Operator confirmed the preceding picture was completely drawn, but too slow.
+  Updated the L3 plan with that visual-completeness acceptance; no quantified
+  accuracy or separately stated physical pen-clearance claim was added.
+- Added DRAW_SPEED_PCT, TRAVEL_SPEED_PCT and ACCEL_PCT at the top of app/demo.py.
+  DrawingConfig/CLI use these defaults; explicit CLI options win. Defaults stay
+  15/5/5 percent. Travel includes homing, positioning and pen-down/up.
+- Updated app/README.md and added three propagation/override/invalid-value
+  regressions. Invalid header defaults fail cleanly before network IO. All 19
+  demo tests and the unchanged supplied-data preview passed; diff check passed.
+- L0/L1 only: no device connection, motion, deployment, session or service change.
+  No point filtering, pauses, geometry, blending or timeouts were changed.
+  Per-segment command latency remains; increased motor speed was not tested.
+- Commit/push scope: app code/docs, demo tests, updated L3 acceptance, the new
+  header-controls plan and this log hunk on target/pc-json-drawing-demo.
+  Preserve the prior XYZ log, user settings and unrelated diagnostic files.
+
+## 2026-09-03 - Consolidate the drawing lineage into main
+
+- User approved integration after the read-only branch review. The selected
+  lineage is main f7527c9 through drawing 838f61b (15 commits), including measured
+  feedback, arm deadline/integer fixes, chassis hold cancellation and drawing.
+  Keep fault-foundation draft PR #2 and historical divergent branches separate.
+- Added plan/2026-09-03-main-drawing-consolidation/plan.md before editing.
+  Fixed only test isolation: explicit drawing fixture speeds, MaixCam example
+  import plus synthetic override precedence, and synthetic ESP32 L2 config with
+  absent credential. Updated six entry documents with dated acceptance limits.
+- L1 passed: 301 Python tests and 13 chassis JavaScript tests. Extra app runs
+  passed with committed defaults and synthetic 100/90/80 defaults (19 each).
+  Local-config-blocked ESP32/MaixCam runs passed 55/57 tests respectively.
+  Documentation links and diff checks passed; no runtime behavior was changed.
+- L2/L3/L4 not run. No device connection, deployment, restart, motion or alarm
+  change. The actual drawing acceptance remains the earlier attended 15/5/5 run.
+- Preserve local app/demo.py speed 60%, editor settings, the prior XYZ log and
+  three diagnostic directories. Stage only this log section and planned files;
+  no local config, secret, dataset or raw-resource content enters the commit.
+- Publication intent: push the correction on target/pc-json-drawing-demo,
+  retarget PR #3 to main and merge without squashing the reviewed ancestry.
+  Publication outcome will be recorded after the remote operation completes.

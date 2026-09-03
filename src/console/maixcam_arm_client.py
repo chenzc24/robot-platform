@@ -1,8 +1,13 @@
 """Non-retrying computer client for the MaixCam arm NDJSON endpoint."""
 
 import socket
+import time
 
 from control_envelope import EnvelopeStreamDecoder, encode_message
+
+
+QUERY_TTL_MS = 5000
+RESPONSE_MARGIN_SECONDS = 1.0
 
 
 class MaixCamArmClientError(RuntimeError):
@@ -22,15 +27,25 @@ class MaixCamArmClient:
         self.connection, self.session_id = connection, session_id
         self.decoder, self.sequence, self._pending = EnvelopeStreamDecoder(), 1, []
 
-    def _send_all(self, data):
+    def _remaining_timeout(self, deadline):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("arm_response_deadline")
+        setter = getattr(self.connection, "settimeout", None)
+        if callable(setter):
+            setter(remaining)
+
+    def _send_all(self, data, deadline):
         sent = 0
         while sent < len(data):
+            self._remaining_timeout(deadline)
             count = self.connection.send(data[sent:])
             if not count: raise MaixCamArmClientError("connection_closed_during_write")
             sent += count
 
-    def _next(self):
+    def _next(self, deadline):
         while not self._pending:
+            self._remaining_timeout(deadline)
             data = self.connection.recv(4096)
             if not data: raise MaixCamArmClientError("connection_closed_before_response")
             messages, errors = self.decoder.feed(data)
@@ -38,7 +53,7 @@ class MaixCamArmClient:
             self._pending.extend(messages)
         return self._pending.pop(0)
 
-    def command(self, name, payload=None, ttl_ms=1000):
+    def command(self, name, payload=None, ttl_ms=QUERY_TTL_MS):
         sequence = self.sequence
         self.sequence = None if sequence >= 2147483647 else sequence + 1
         if sequence is None: raise MaixCamArmClientError("sequence_exhausted")
@@ -46,11 +61,17 @@ class MaixCamArmClient:
         command = {"version": 1, "kind": "command", "message_id": message_id, "sequence": sequence,
                    "target": "arm", "name": name, "ttl_ms": ttl_ms, "payload": payload or {}}
         state_changing = name in ("arm.move_joint", "arm.move_linear", "arm.jog_joint", "arm.jog_xyz", "arm.gripper")
+        get_timeout = getattr(self.connection, "gettimeout", None)
+        set_timeout = getattr(self.connection, "settimeout", None)
+        restore_timeout = callable(get_timeout) and callable(set_timeout)
+        original_timeout = get_timeout() if restore_timeout else None
         try:
-            self._send_all(encode_message(command))
+            data = encode_message(command)
+            deadline = time.monotonic() + ttl_ms / 1000.0 + RESPONSE_MARGIN_SECONDS
+            self._send_all(data, deadline)
             states = []
             while True:
-                response = self._next()
+                response = self._next(deadline)
                 if response.get("kind") != "lifecycle" or response.get("correlation_id") != message_id:
                     raise MaixCamArmClientError("unexpected_response")
                 states.append(response)
@@ -64,9 +85,15 @@ class MaixCamArmClient:
         except Exception as error:
             if state_changing: raise MaixCamArmUnknown("outcome_unknown") from error
             raise
+        finally:
+            if restore_timeout:
+                try:
+                    set_timeout(original_timeout)
+                except OSError:
+                    pass
 
-    def ping(self, ttl_ms=1000): return self.command("arm.ping", {}, ttl_ms)
-    def status(self, ttl_ms=1000): return self.command("arm.status", {}, ttl_ms)
+    def ping(self, ttl_ms=QUERY_TTL_MS): return self.command("arm.ping", {}, ttl_ms)
+    def status(self, ttl_ms=QUERY_TTL_MS): return self.command("arm.status", {}, ttl_ms)
     def move_joint(self, joint_deg, accel_pct=5, speed_pct=5, ttl_ms=60000):
         return self.command("arm.move_joint", {"joint_deg": list(joint_deg), "accel_pct": accel_pct, "speed_pct": speed_pct}, ttl_ms)
     def move_linear(self, pose, user=0, tool=0, accel_pct=5, speed_pct=5, ttl_ms=60000):

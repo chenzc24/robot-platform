@@ -53,10 +53,12 @@ def run(args, service_factory=None, status=None):
     def request_stop(_signum, _frame):
         stop_requested["value"] = True
 
-    signal.signal(signal.SIGTERM, request_stop)
-    signal.signal(signal.SIGINT, request_stop)
     service.start()
     try:
+        # MaixPy initialization installs native signal handlers. Register ours
+        # afterwards so SIGTERM actually reaches the service shutdown loop.
+        signal.signal(signal.SIGTERM, request_stop)
+        signal.signal(signal.SIGINT, request_stop)
         while not stop_requested["value"]:
             time.sleep(0.5)
     finally:

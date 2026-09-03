@@ -35,6 +35,31 @@ class RtspServerSettingsTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.server.validate_settings(args)
 
+    def test_stop_handlers_are_registered_after_backend_initialization(self):
+        args = self.server.build_parser().parse_args([])
+        service = mock.Mock()
+        handlers = {}
+
+        def backend_start():
+            # Simulate native imports replacing previously installed handlers.
+            handlers.clear()
+
+        service.start.side_effect = backend_start
+
+        def register(signum, handler):
+            handlers[signum] = handler
+
+        def tick(_seconds):
+            self.assertIn(self.server.signal.SIGTERM, handlers)
+            self.assertIn(self.server.signal.SIGINT, handlers)
+            handlers[self.server.signal.SIGTERM](self.server.signal.SIGTERM, None)
+
+        with mock.patch.object(self.server.signal, "signal", side_effect=register), \
+                mock.patch.object(self.server.time, "sleep", side_effect=tick):
+            self.server.run(args, service_factory=lambda **_kwargs: service)
+        service.start.assert_called_once_with()
+        service.stop.assert_called_once_with()
+
 
 class RtspProbeSettingsTests(unittest.TestCase):
     def setUp(self):
@@ -98,6 +123,14 @@ class DeviceLifecycleScriptTests(unittest.TestCase):
         self.assertIn("pid_matches_server", start)
         self.assertIn('"event": "rtsp_started"', start)
         self.assertIn("RTSP_START_TIMEOUT", start)
+        self.assertIn('nohup python3 -u "$video_dir/rtsp_server.py"', start)
+
+    def test_start_timeout_retains_live_process_ownership(self):
+        start = self._script("start.sh")
+        cleanup = start.split('echo "RTSP_START_TIMEOUT', 1)[1]
+        self.assertIn('if pid_matches_server "$new_pid"; then', cleanup)
+        self.assertIn("pid_file_retained", cleanup)
+        self.assertIn('else\n    rm -f "$pid_file"\nfi', cleanup)
 
     def test_stop_refuses_to_signal_an_unowned_pid(self):
         stop = self._script("stop.sh")

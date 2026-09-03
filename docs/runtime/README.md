@@ -1,8 +1,13 @@
 # Direct Chassis and Arm-Gateway Runtime Baseline
 
-- Status: direct computer-to-ESP32 chassis boundary confirmed; non-motion TCP hardware proof passed; the v2 L2 listener and computer-to-MaixCam arm endpoint pass local L1 only; neither candidate is deployed
+- Status (2026-09-03): ESP32 v3 and MaixCam arm/video services published with bounded L2 evidence; measured arm feedback and one attended four-stroke drawing have passed; coordinated L4 and cold-start/recovery acceptance remain incomplete
 - Scope: normal operation of the computer, MaixCam, ESP32-S3, TCP232, and Magician 6 robot arm
 - Excludes: source deployment, firmware recovery, teaching, and device parameter configuration; see [Deployment and Maintenance](../deployment/README.md)
+
+Evidence: [dated deployment and feedback](../deployment/2026-09-03-esp32-maixcam.md),
+[console behavior](../console/control-console-ui.md), and
+[attended drawing](../../plan/2026-09-03-pc-json-drawing-l3/plan.md). These records
+describe observation-time results, not the current power or connection state.
 
 ## 1. Runtime Topology
 
@@ -40,9 +45,9 @@ The computer, MaixCam, and ESP32 must join the LAN at runtime. Robot arm LAN2 ma
 | Channel | Direction | Transport | Current status |
 |---|---|---|---|
 | Video | MaixCam → computer | RTSP/H.264; FFmpeg/MediaMTX exposes local RTSP, HLS, and WebRTC | Passed continuous real-device video validation |
-| Chassis commands and status | Computer ↔ ESP32 | RCP/TCP v3 persistent TCP service with bounded newline-delimited messages, sequence, TTL, authentication, and health polling | Earlier versions passed hardware checks; v3 currently passes L1 and awaits deployment |
-| Arm commands and status | Computer ↔ MaixCam | Persistent bidirectional NDJSON control envelope | L1 endpoint/client/simulator exist; default admission rejects all motion |
-| Arm commands and status | MaixCam ↔ TCP232 ↔ arm LAN1 | UART 115200 8N1, RPA2 CRC frames, and a robot-arm project | RPA1 diagnostics and one fixed action passed; RPA2 service passes L1 and defaults to motion-disabled |
+| Chassis commands and status | Computer ↔ ESP32 | RCP/TCP v3 persistent TCP service with bounded newline-delimited messages, sequence, TTL, authentication, and health polling | v3 deployed; authenticated non-motion readiness passed; the dated deployment did not test motion |
+| Arm commands and status | Computer ↔ MaixCam | Persistent bidirectional NDJSON control envelope | Measured feedback and attended drawing passed; committed configuration template remains default-deny; deployed attended configuration uses YOLO |
+| Arm commands and status | MaixCam ↔ TCP232 ↔ arm LAN1 | UART 115200 8N1, RPA2 CRC frames, and a robot-arm project | RPA2 feedback and sequential drawing passed; source defaults remain motion-disabled unless the reviewed YOLO project is generated |
 
 Video and control are independent channels. A dropped video frame must not block a stop command, and a healthy command connection must not imply that vision output is valid.
 
@@ -63,13 +68,16 @@ payload
 
 Byte-oriented device links require framing and integrity checks appropriate to their transport. TCP chassis messages use bounded newline-delimited JSON and rely on TCP integrity; UART arm messages retain explicit checksum requirements. A receiver rejects unknown versions or targets, invalid or out-of-range values, duplicate/expired/out-of-order commands, unauthenticated commands, commands illegal in the current state, oversized frames, and incomplete frames.
 
-Device command sets remain separate:
+Current device commands remain separate (not arbitrary API pass-through):
 
 ```text
 chassis: enable / velocity / stop / disable / ping / status
-arm:     ping / initialize / execute_named_action / cancel / status
-system:  snapshot / fault / estop_state
+arm:     ping / status / move_joint / move_linear / jog_joint / jog_xyz / gripper
 ```
+
+Arm network cancellation and controller alarm clearing are not available in
+this baseline. The separate fault-foundation draft is not deployed by merging
+the drawing lineage. Query/status capability does not imply a physical stop.
 
 ESP32 parses and validates direct chassis messages. MaixCam parses and validates robot-arm messages. Neither endpoint accepts arbitrary strings or unchecked actuator parameters. The computer combines their reported states for cross-device task gates but does not weaken either device's local checks.
 
@@ -84,8 +92,8 @@ RECEIVED → ACCEPTED → RUNNING → DONE
 
 - `RECEIVED`: a complete frame arrived.
 - `ACCEPTED`: the target validated and committed to handling it.
-- `RUNNING`: physical execution has started.
-- `DONE`: the target device reported successful completion; writing bytes is not completion.
+- `RUNNING`: the service reports execution in progress; this is not independent physical-motion feedback.
+- `DONE`: the target reports completion. For the current arm project this means the sequential controller API returned, not verified terminal pose or pen pressure; writing bytes alone is not completion.
 - `FAULT`: the target explicitly reported failure.
 - `REJECTED`: the command was not executed because state, parameters, TTL, or authentication were invalid.
 - `UNKNOWN`: a link failed and execution or completion cannot be determined. Never auto-retry a non-idempotent command in this state.
@@ -106,7 +114,7 @@ The resident chassis service starts in safe idle, opens its dedicated TCP runtim
 
 The legacy program's Wi-Fi/WebREPL bootstrap and PS2 loop do not expose a production TCP chassis service. WebREPL execution is not a substitute for the resident endpoint.
 
-The local v2 foundation now separates four responsibilities:
+The v3 implementation separates four responsibilities:
 
 ```text
 chassis_tcp_v3 codec
@@ -114,7 +122,7 @@ chassis_tcp_v3 codec
 ChassisMotionTcpService: authentication, commands, lifecycle, watchdogs
         ↓ injected interfaces
 SafeMecanumChassis
-        ↓ later L3 integration
+        ↓ configured CAN-backed runtime
 MotorBus + MicroPython CAN
 ```
 
@@ -123,6 +131,12 @@ MotorBus + MicroPython CAN
 ### 6.3 Robot Arm
 
 The controller runs a DobotStudio project that hosts a LAN1 TCP service and waits for TCP232 input. Once the project is running, LAN2 can be unplugged; non-motion PING and one fixed low-speed action have passed in that state.
+
+The later RPA2 project provides measured GetAngle/GetPose status and the
+attended drawing primitives. Normalized feedback has passed live checks, but
+raw vendor return containers and independent position accuracy were not
+captured. Arm STATUS uses a 5000 ms query TTL in the shared PC client; it is
+request-driven feedback, not concurrent in-motion telemetry.
 
 Do not assume cold-boot auto-start. The current safe sequence is to verify the initial pose and workspace, enable the arm, start the configured project with the controller's run button, and require a non-motion readiness handshake from MaixCam before accepting an action.
 
@@ -135,7 +149,7 @@ Do not assume cold-boot auto-start. The current safe sequence is to verify the i
 5. MaixCam acquires arm UART ownership and performs a non-motion handshake with the arm.
 6. MaixCam starts its arm command/status endpoint and video service.
 7. The computer connects independently to ESP32 and MaixCam and obtains complete status snapshots.
-8. After every required component is `READY`, the computer explicitly acquires task control.
+8. For a coordinated task, require current readiness and confirmed chassis stop before arm work. Attended YOLO/manual control remains independent as defined in the overall plan; there is no extra acquire/release API.
 
 A missing state keeps the system idle. Link recovery never replays an old command automatically.
 
@@ -153,6 +167,11 @@ A missing state keeps the system idle. Link recovery never replays an old comman
 The physical emergency stop, robot limits, and ESP32 local stop must not depend on the computer, Wi-Fi, SSH, WebREPL, or a MaixCam software stop.
 
 ## 9. Implementation Order
+
+This is the original staged roadmap, not a claim that every item is still
+unimplemented. Current publication and bounded acceptance are listed above;
+remaining work includes cold-start/recovery validation, calibrated drawing,
+vision-driven tasks and separately gated L4 coordination.
 
 1. Define the shared envelope, state semantics, cross-device vectors, and simulators.
 2. Implement the ESP32 TCP safety service and computer client; pass L1 plus non-motion hardware validation. RCP/TCP v3 is the current source contract; earlier versions provide historical hardware evidence only.

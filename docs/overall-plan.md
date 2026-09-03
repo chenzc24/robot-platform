@@ -156,6 +156,18 @@ protocol handling.
 
 Completed evidence as of 2026-09-01 includes ESP32 USB/WebREPL maintenance, PS2-CAN chassis operation, a bounded direct computer-to-ESP32 TCP non-motion handshake, MaixCam SSH/SCP, continuous RTSP video, and MaixCam-UART-TCP232-arm LAN1 PING plus one fixed low-speed action. The attempted MaixCam-ESP32 UART downlink did not pass, and the user confirmed direct computer-to-ESP32 TCP as the replacement runtime boundary. The TCP proof covers only `HELLO`, `PING`, and `STATUS`; these facts do not yet prove the resident chassis motion service, generic arm service, or coordinated system.
 
+Subsequent evidence as of 2026-09-03 advances that historical snapshot: the
+[deployment record](deployment/2026-09-03-esp32-maixcam.md) documents ESP32 v3
+publication and non-motion verification, MaixCam arm/video activation, and live
+normalized arm joint/pose feedback. The shared PC client now uses a 5-second
+query TTL. The [attended drawing record](../plan/2026-09-03-pc-json-drawing-l3/plan.md)
+records four strokes / 282 arm commands at draw/travel/acceleration 15/5/5%,
+followed by operator confirmation that the drawing was complete. This does not
+validate a speed increase, precise TCP placement, cold-start reliability or L4
+coordination. Fault-foundation protocol/recovery work remains a separate draft,
+not part of this validated lineage. Architecture and safety boundaries above
+are unchanged; see the runtime baseline for current source and evidence limits.
+
 ## 10. Frozen First-Version Decisions
 
 1. Daily development uses VS Code.

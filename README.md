@@ -23,6 +23,14 @@ Subsystem and operating documentation:
 - [Shared runtime foundation](docs/runtime-foundation.md)
 - [MaixCam-to-arm LAN1 diagnostics and controlled L3 validation](docs/robot-arm/lan1-diagnostic.md)
 - [Robot-arm YOLO manual control](docs/robot-arm/yolo-manual-control.md)
+- [PC JSON drawing demo](app/README.md)
+
+As of 2026-09-03, the [dated deployment record](docs/deployment/2026-09-03-esp32-maixcam.md)
+records the ESP32 v3 service, MaixCam arm/video activation and measured arm
+feedback. The [attended drawing test](plan/2026-09-03-pc-json-drawing-l3/plan.md)
+completed four strokes, with operator confirmation of drawing completeness.
+These are bounded L2/L3 results, not coordinated L4, metrology, cold-start or
+automatic recovery acceptance. A Git update does not deploy or start hardware.
 
 Use the flat CLI from the repository root for routine connection management:
 

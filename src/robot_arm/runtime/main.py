@@ -13,7 +13,7 @@ def main():
                              MAX_ACCEL_PCT, MAX_SPEED_PCT, GRIPPER_MIN_MM, GRIPPER_MAX_MM,
                              YOLO_MODE)
     api = DobotControllerApi(CheckMovJ, MovJ, CheckMovL, MovL, SetParallelGripper,
-                             RelJointMovJ, RelMovLUser)
+                             RelJointMovJ, RelMovLUser, GetAngle, GetPose)
     service = ArmMotionService(api, policy)
     error, socket_id = TCPCreate(True, LISTEN_IP, LISTEN_PORT)
     if error or _failed(TCPStart(socket_id, 0)):

@@ -1,6 +1,6 @@
 # PC JSON drawing demo
 
-- Status: implementation and L1 validation complete; commit/push pending
+- Status: completed (local implementation/L0/L1 scope; hardware release excluded)
 - Owner: Codex, single-agent implementation
 - Validation: L0/L1 only; hardware validation is deferred
 - Baseline: target/chassis-hold-release-fix, tracking its origin branch
@@ -111,6 +111,11 @@ and git ignore verification, git diff --check and final status/ownership audit.
   original cp=100 continuous blending is unsupported by the existing route;
   DONE does not establish physical terminal position. These are documented,
   not hidden by the offline test results.
+- Implementation committed as d80df5b and pushed to origin/target/pc-json-drawing-demo.
+  Local/remote comparison returned 0 ahead / 0 behind. PR #3 opened against
+  target/chassis-hold-release-fix: https://github.com/chenzc24/robot-platform/pull/3.
+  No merge performed. Only the original unrelated dirty paths remain.
+  This completion note is a scoped documentation follow-up on the same branch.
 
 ## Commit intent
 

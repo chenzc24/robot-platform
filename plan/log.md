@@ -1178,3 +1178,7 @@ entry format:
 - User approved this log append. Commit intent: only app, tests/app, .gitignore,
   this goal's plan and this log hunk on target/pc-json-drawing-demo, then push.
   Preserve prior XYZ dirty log, editor settings and other diagnostic artifacts.
+- Published implementation d80df5b on origin/target/pc-json-drawing-demo;
+  local/remote comparison is 0 ahead / 0 behind. PR #3 targets the original
+  target/chassis-hold-release-fix branch; no merge. Completion records are a
+  documentation-only follow-up; unrelated dirty work remains uncommitted.

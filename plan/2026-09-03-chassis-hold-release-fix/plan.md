@@ -1,6 +1,6 @@
 # Repair chassis hold/release lifecycle
 
-- Status: implemented and L1 validated; backend replacement and L3 pending
+- Status: implemented, pushed and PC backend replaced; L2 passed, operator L3 pending
 - Baseline: 58cc8d9 on target/arm-ui-command-fixes
 - Risk: motion-affecting PC code; L1 validation now, attended L3 acceptance later.
 - Request: fix confirmed PC hold resurrection and stale refresh after STOP.
@@ -82,3 +82,51 @@ not run and report that the running process still needs replacement.
   the PC backend may now be replaced; do not infer approval from test completion.
 - Full owned diff reviewed; only scoped files will be committed/pushed. User
   settings and unrelated XYZ diagnosis/log entry remain outside the commit.
+
+## Approved PC backend replacement
+
+The operator explicitly requested backend restart after the repair was pushed
+as e2d668f. Scope now includes replacing only the identified PC web process using
+the existing ignored credential-preserving launcher, its generated local logs,
+and L2 non-motion reconnection/status checks. No source or device changes needed.
+
+Preflight: localhost:8080 owner PID 24504, virtual-environment launcher parent
+38004; old API lacks chassis.motion. Chassis reports enabled_stopped with zero
+requested vector; arm route offline/idle. MediaMTX listener PID 15684 is excluded.
+Current dirty paths remain user settings and this agent's separate XYZ diagnostic
+plan/log record; preserve them outside this scoped record commit.
+
+Use existing disconnect to STOP/Disable and close the chassis session, verify
+offline before terminating only the identified backend, then launch hidden with
+the preserved credential in the child environment (never print it). Reconnect
+only the previously active chassis route, read status, and require disabled/idle
+with the new motion metadata. Leave arm offline as found; do not reset alarms,
+send motion/Enable, restart device/video services or write device files. Page
+reload is required. Recovery is the existing local launcher/configuration; if
+startup fails, retain chassis disconnected/disabled and report the error.
+
+Validation is L2 only; physical hold/release acceptance remains operator L3 work.
+Record actual restart results, diff/status and push only this plan/log update.
+
+### Replacement results
+
+- The old backend acknowledged chassis disconnect and reported offline/disabled;
+  a second GET confirmed no reconnection before process replacement. Only the
+  verified web listener PID 24504 was terminated. The existing ignored launcher
+  started PID 27312, whose Python child PID 34424 now owns localhost:8080.
+- Fresh API started both routes disconnected and exposed chassis.motion with
+  idle mode, input_timeout_ms=1000 and no log_error. Authenticated chassis
+  reconnection returned disabled, motion_enabled=false, last_error=none, zero
+  requested vector, refresh_count=0 and no faults. Arm stayed offline as found.
+- GET /assets/app.js verified the new ChassisInput and keepalive route. Page
+  reload was left to the operator; no browser control/motion buttons were used.
+- MediaMTX retained listener PID 15684 on 8889. No camera, ESP32, controller,
+  gateway or video service restart/file deployment was issued. No Enable,
+  VELOCITY, arm move or gripper command was sent by this restart procedure.
+- Existing append-only stderr contains a browser connection-aborted traceback;
+  its origin predates or overlaps this launch and was not independently dated.
+  The fresh state/asset requests succeeded; no claim of an entirely clean
+  historical stderr log is made.
+- L2 restart/reconnect checks passed. Hold/release physical behavior and stopping
+  distance remain untested by the agent. Source commit e2d668f is active; only
+  this factual record and the scoped log addition are committed in this follow-up.

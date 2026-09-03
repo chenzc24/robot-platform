@@ -1095,3 +1095,22 @@ entry format:
   coordination. Do not claim the current running process contains this fix.
 - Commit/push intent: scoped target/chassis-hold-release-fix; no main merge.
   Preserve user settings and separate uncommitted XYZ diagnosis/log section.
+
+## 2026-09-03 - Restart PC backend with hold/release repair
+
+- Operator explicitly approved backend replacement. Old web PID 24504 returned
+  chassis offline/disabled after existing disconnect; a second GET confirmed it
+  before terminating only that verified process. No device source/config changed.
+- Existing credential-preserving launcher started wrapper PID 27312; child PID
+  34424 serves localhost:8080 with source e2d668f. Credential stayed in the child
+  environment and was not printed, changed or committed.
+- L2: new motion metadata and browser asset verified. Chassis reconnected with
+  authenticated=true, disabled, zero requested vector, idle mode, refresh_count=0,
+  last_error=none and no faults. Arm remained offline as found. No Enable,
+  VELOCITY, arm motion or gripper call was sent by the agent.
+- MediaMTX 8889 listener retained PID 15684; device/gateway/video services were
+  not restarted. Operator must reload the page before manual acceptance.
+- L3 physical hold/release acceptance is not run. Existing stderr has an undated
+  browser connection-aborted traceback; fresh API/asset checks succeeded.
+- Commit/push scope is this factual record and the repair-plan update only;
+  preserve user settings and the separate uncommitted XYZ diagnosis/log entry.

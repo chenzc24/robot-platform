@@ -8,7 +8,7 @@ from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 
-from runtime_core import close_client, default_arm_factory, default_chassis_factory, dispatch_arm, dispatch_chassis
+from runtime_core import MOTION_ARM_COMMANDS, close_client, default_arm_factory, default_chassis_factory, dispatch_arm, dispatch_chassis
 from status_mapping import StatusMappingError, parse_arm_status, parse_chassis_status
 
 
@@ -431,14 +431,31 @@ class WebConsoleRuntime:
                 return response
             except Exception as error:
                 code = self._error_code(error)
-                if getattr(error, "explicit_rejection", False):
-                    self._event("Arm", command, "REJECTED", code)
+                outcome = getattr(error, "lifecycle", None)
+                known_failure = getattr(error, "explicit_terminal", False) and outcome in {"REJECTED", "FAULT"}
+                if known_failure or getattr(error, "explicit_rejection", False):
+                    outcome = outcome or "REJECTED"
+                    with self._lock:
+                        self._last_arm_health = self._clock()
+                        self._state["arm"]["last_error"] = code
+                        self._touch()
+                    self._record_arm_fault(code, repeat=not journal)
+                    if journal:
+                        self._event("Arm", command, outcome, code)
                     raise WebConsoleError(code) from error
                 self._disconnect_arm_state()
                 self._fault("arm_transport_failed", "maixcam", code)
                 if journal:
-                    self._event("Arm", command, "FAULT", code)
-                raise WebConsoleError("arm_transport_failed", 503) from error
+                    outcome = outcome or ("UNKNOWN" if command in MOTION_ARM_COMMANDS else "FAULT")
+                    self._event("Arm", command, outcome, code)
+                raise WebConsoleError(code, 503) from error
+
+    def _record_arm_fault(self, code, repeat=False):
+        """Retain errors without re-arming acknowledgement on every status poll."""
+        key = "arm_" + code
+        with self._lock:
+            if not repeat or key not in self._faults:
+                self._fault(key, "arm", code)
 
     def refresh_arm_status(self, journal=True):
         responses = self._arm_request("status", journal=journal)
@@ -474,6 +491,10 @@ class WebConsoleRuntime:
             self._last_arm_health = self._clock()
             self._touch()
         self._clear_fault("arm_status_invalid")
+        if status.last_error != "none":
+            self._record_arm_fault(status.last_error, repeat=True)
+        elif status.service_state == "fault":
+            self._record_arm_fault("controller_fault", repeat=True)
         return self.snapshot()
 
     @staticmethod
@@ -488,6 +509,14 @@ class WebConsoleRuntime:
         return result
 
     @classmethod
+    def _arm_integer(cls, value, low, high, code):
+        # JSON 20 and 20.0 both represent an integral value; never round 20.5.
+        if (isinstance(value, bool) or not isinstance(value, (int, float))
+                or not low <= value <= high or int(value) != value):
+            raise WebConsoleError(code, 400)
+        return int(value)
+
+    @classmethod
     def _arm_payload(cls, command, payload):
         payload = payload if isinstance(payload, dict) else {}
         if command in {"move_joint", "jog_joint"}:
@@ -498,17 +527,11 @@ class WebConsoleRuntime:
         elif command == "jog_xyz":
             clean = {"translation_mm": cls._finite_list(payload.get("translation_mm"), 3, "invalid_arm_vector")}
         elif command == "gripper":
-            width = payload.get("width_mm")
-            if isinstance(width, bool) or not isinstance(width, (int, float)) or not 0 <= width <= 70:
-                raise WebConsoleError("invalid_gripper_width", 400)
-            return {"width_mm": float(width)}
+            return {"width_mm": cls._arm_integer(payload.get("width_mm"), 0, 70, "invalid_gripper_width")}
         else:
             raise WebConsoleError("unsupported_arm_command", 400)
         for field in ("accel_pct", "speed_pct"):
-            value = payload.get(field, 5)
-            if isinstance(value, bool) or not isinstance(value, (int, float)) or not 1 <= value <= 100:
-                raise WebConsoleError("invalid_" + field, 400)
-            clean[field] = float(value)
+            clean[field] = cls._arm_integer(payload.get(field, 5), 1, 100, "invalid_" + field)
         if command in {"move_linear", "jog_xyz"}:
             for field in ("user", "tool"):
                 value = payload.get(field, 0)

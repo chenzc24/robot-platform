@@ -1010,3 +1010,46 @@ entry format:
   this discrepancy is pending investigation. L3/L4/cold-boot not agent-tested.
 - Commit intent: commit/push only this goal on `target/arm-timeouts-manual-ui`,
   preserving `.vscode/settings.json` unstaged; no merge to main.
+
+## 2026-09-03 - Diagnose arm UI DONE without movement
+
+- Diagnosis only; runtime sources and devices were not modified or restarted.
+- Live PC status reported `invalid_acceleration`, unchanged valid joint values
+  and empty faults despite existing UI jog_joint DONE entries. Deployed MaixCam
+  gateway/service hashes matched the repository.
+- Proven root cause: web normalization converts integer acceleration/speed and
+  gripper width to floats; the controller rejects `20.0` / `28.0` as invalid
+  integer strings before calling motion APIs. PC dispatch ignores a terminal
+  FAULT and the web layer manufactures DONE; status errors are not surfaced.
+- L1 offline production-chain reproduction passed for joint/XYZ jog, absolute
+  joint/pose and gripper: controller ERROR, zero recording-API calls, UI DONE,
+  empty faults. An integer-input control reached the fake API once. No physical
+  motion request, browser click or direct controller-file readback occurred.
+- Scope: diagnostic plan, this factual entry and ignored temporary reproduction.
+  Runtime repair awaits a change request. No commit/push for this diagnosis-only
+  turn; user `.vscode/settings.json` remains untouched.
+
+## 2026-09-03 - Repair integer arm parameters and false-success reporting
+
+- Scope: PC shared terminal dispatch, web parameter/error handling, 11 new
+  cross-layer tests, console docs, current repair and preceding diagnostic
+  records. No device runtime, protocol schema, limits, credentials or user
+  `.vscode/settings.json` was modified.
+- Web emits integer speed/acceleration/gripper fields and rejects fractions
+  without rounding; all five arm primitives now reach the recording-only API
+  in L1. FAULT/REJECTED remain failures in HTTP/events/faults while retaining
+  healthy links. Unknown outcomes are not retried or reported as success.
+- L1: 73 runnable tests passed (48 console, 25 dev), including integer boundaries,
+  no-write validation, controller failure, unknown/lost reply, HTTP failures and
+  status fault retention. Syntax/diff checks passed. Two legacy Qt modules remain
+  unrun due to missing optional PySide6.
+- The first PC restart attempt was aborted after operator reconnection. After
+  explicit restart approval, only the identified web backend was replaced;
+  devices and video services kept running. Reconnection returned arm ready/YOLO
+  with valid sample 550 and chassis ready/disabled. The old controller
+  `invalid_acceleration` is now visible in faults and the text log.
+- No Enable, nonzero chassis velocity, arm motion or gripper command was sent
+  by the agent. Existing disconnect performed chassis STOP/Disable. L3 physical
+  movement and gripping remain operator acceptance, not claimed as passed.
+- Commit intent: push the scoped repair and supporting diagnostic records on
+  `target/arm-ui-command-fixes`; preserve user settings; do not merge main.

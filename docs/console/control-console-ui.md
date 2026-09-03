@@ -93,6 +93,21 @@ online, and `motion_enabled=1`. There is no chassis dependency or application
 lease in YOLO/manual engineering mode. A motion call is one serialized request
 and is never retried after an unknown outcome.
 
+RPA2 speed/acceleration (1..100%) and gripper width (0..70 mm) are integer
+fields. The web backend accepts integral JSON numbers such as `20` or `20.0`
+but emits `20` on the wire. Fractional values for these fields are rejected
+locally without rounding. Joint and Cartesian coordinates retain decimals.
+
+Only a terminal `DONE` is logged as completed. `REJECTED` and `FAULT` preserve
+their device error codes in the HTTP error, journal and fault panel without
+disconnecting an otherwise healthy arm link or affecting the chassis. Missing
+or untrustworthy motion results are `UNKNOWN`, not success, and are not retried.
+Controller `last_error` also appears in the fault panel. Repeated status polls
+do not flood the log or reset acknowledgement; a newly failed operator command
+does re-open its fault. Historical faults remain visible after recovery and do
+not constitute an extra motion-enable gate. Controller `DONE` still does not
+prove measured terminal position or successful gripping.
+
 The compact `CURRENT` box is measurement-only. Each successful `arm.status`
 sample carries six joint angles, six Cartesian pose values, User/Tool indices,
 a controller sample sequence, and a controller timestamp. The browser labels

@@ -35,14 +35,23 @@ class SessionFault:
     state_changing: bool
 
 
-class ArmLifecycleRejection(RuntimeError):
+class ArmLifecycleError(RuntimeError):
+    """Preserve a non-success arm outcome instead of returning it as success."""
+
+    def __init__(self, code, lifecycle, explicit_terminal=False):
+        super().__init__(code)
+        self.code = code
+        self.lifecycle = lifecycle
+        self.explicit_terminal = explicit_terminal
+
+
+class ArmLifecycleRejection(ArmLifecycleError):
     """A MaixCam endpoint explicitly rejected a request without link failure."""
 
     explicit_rejection = True
 
     def __init__(self, code):
-        RuntimeError.__init__(self, code)
-        self.code = code
+        super().__init__(code, "REJECTED", explicit_terminal=True)
 
 
 def source_root():
@@ -150,7 +159,13 @@ def dispatch_arm(client, command, payload=None):
         raise ValueError("unsupported_arm_command")
     responses = handlers[command]()
     terminal = responses[-1] if isinstance(responses, (list, tuple)) and responses else None
-    if isinstance(terminal, dict) and terminal.get("lifecycle") == "REJECTED":
-        reply = terminal.get("payload") or {}
+    if not isinstance(terminal, dict) or not isinstance(terminal.get("payload"), dict):
+        raise ArmLifecycleError("arm_invalid_terminal_response", "UNKNOWN" if command in MOTION_ARM_COMMANDS else "FAULT")
+    outcome, reply = terminal.get("lifecycle"), terminal["payload"]
+    if outcome == "REJECTED":
         raise ArmLifecycleRejection(reply.get("error_code", "arm_request_rejected"))
+    if outcome in {"FAULT", "UNKNOWN"}:
+        raise ArmLifecycleError(reply.get("error_code", "arm_" + outcome.lower()), outcome, explicit_terminal=True)
+    if outcome != "DONE":
+        raise ArmLifecycleError("arm_invalid_terminal_response", "UNKNOWN" if command in MOTION_ARM_COMMANDS else "FAULT")
     return responses

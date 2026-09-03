@@ -1133,3 +1133,25 @@ entry format:
   TimeoutError remains as historical fault evidence, not a current failed link.
 - L2 complete; no L3/L4 test. Commit/push only this operational plan/log section;
   preserve user settings and unrelated XYZ diagnostic/YZ drawing-review files.
+
+## 2026-09-03 - Recover video and arm gateway after interruption
+
+- Operator authorized service recovery and reported no DobotStudio error.
+  Verified and gracefully replaced only MaixCam arm gateway 777 with 1061,
+  using the existing UART ownership guard. No source/config deployment.
+- PING recovered; initial STATUS still timed out. UI independently reconnected
+  at 14:10:16 and recorded jog_joint DONE at 14:10:28. Read-only snapshots then
+  showed online/ready, valid joints/pose, sample 21 advancing to 52 and no current
+  arm error. Stopped extra CLI access after observing UI session ownership.
+  The agent sent no motion; physical completion and original timeout cause
+  were not established. Do not attribute recovery solely to the gateway restart.
+- Video recovered and decoded, then exited again through native KEY_OK at
+  uptime 135592 ms. FFmpeg received EOF. Asked operator about key/screen events;
+  repeated only the authorized video/relay recovery. Final RTSP PID 1195,
+  MediaMTX 12456 and FFmpeg 1196: ready/online, a decoded frame, 5.4 MB received
+  and no relay input frame errors at inspection. Recurring exit remains unresolved.
+- PC backend 34424 and ESP32 left running; chassis remained online/idle. No
+  motion/Enable/alarm clear/controller reset or timeout-command replay by agent.
+  Existing fault history retained. L2 only; no agent L3/L4 validation.
+- Commit/push only recovery plan and this section. Preserve user settings,
+  unrelated XYZ log, video diagnosis, and parallel drawing app/gitignore/plans.

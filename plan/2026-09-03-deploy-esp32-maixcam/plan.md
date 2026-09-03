@@ -129,3 +129,20 @@ every other device/service boundary and do not add motion requests.
   relay/UI acceptance and cold-boot acceptance were not performed.
 - Commit/push the repair and final deployment evidence on this branch; retain
   the user's unrelated `.vscode/settings.json` change unstaged.
+
+## Prepare the requested controller import package
+
+The operator asked for the controller package path to perform deployment.
+Read-only comparison found `build/robot-arm-yolo` predates measured feedback.
+Preserve that package and generate the current YOLO variant into the new
+ignored `build/robot-arm-yolo-20260903` directory using the existing builder.
+Editable scope: that generated directory, this plan, deployment evidence, and
+`plan/log.md`. Runtime sources and user settings remain read-only. Validate
+all four generated files against the builder, Python syntax, JSON metadata,
+and feedback API inclusion. L1 only: no hardware connection, import, startup,
+or motion. Commit/push only sanitized package-location records on this branch.
+
+Result: generated all four files into the new directory; exact builder-content,
+syntax, metadata, YOLO, and measured-feedback inclusion checks passed. Old
+package untouched. Controller deployment remains an operator action, not a
+completed validation result.

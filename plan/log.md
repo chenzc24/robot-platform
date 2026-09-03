@@ -953,3 +953,16 @@ entry format:
   relay/UI and credential provisioning remain separately unverified.
 - Commit intent: push the bounded repair and factual results on the existing
   deployment branch; no merge to `main`.
+
+## 2026-09-03 - Prepare the current robot-arm import package
+
+- Operator requested the deployment package location. Inspection found the
+  older `build/robot-arm-yolo` lacked current measured-feedback code.
+- Preserved it and generated `build/robot-arm-yolo-20260903` using the existing
+  builder with `--yolo`. The package includes both code files and both required
+  JSON metadata files; source/runtime policy code was not modified.
+- L1: all four files exactly match builder output; Python syntax, JSON parsing,
+  YOLO mode, and measured-feedback inclusion passed. No hardware connection,
+  controller import, startup, or motion occurred. User settings untouched.
+- Commit intent: push only package-location/evidence records on the existing
+  deployment branch. The generated package remains Git-ignored.

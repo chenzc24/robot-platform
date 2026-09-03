@@ -39,7 +39,7 @@ for required_file in maix_runtime_status.py resource_guard.py video_service.py r
     fi
 done
 
-nohup python3 "$video_dir/rtsp_server.py" >"$log_file" 2>&1 &
+nohup python3 -u "$video_dir/rtsp_server.py" >"$log_file" 2>&1 &
 new_pid=$!
 echo "$new_pid" >"$pid_file"
 wait_count=0
@@ -61,6 +61,18 @@ done
 
 echo "RTSP_START_TIMEOUT pid=$new_pid" >&2
 cat "$log_file" >&2
-kill "$new_pid" 2>/dev/null || true
-rm -f "$pid_file"
+if pid_matches_server "$new_pid"; then
+    kill "$new_pid" 2>/dev/null || true
+fi
+cleanup_count=0
+while pid_matches_server "$new_pid" && test "$cleanup_count" -lt 10; do
+    sleep 1
+    cleanup_count=$((cleanup_count + 1))
+done
+if pid_matches_server "$new_pid"; then
+    # Keep ownership evidence so stop/status can still manage this process.
+    echo "RTSP_STOP_TIMEOUT pid=$new_pid pid_file_retained" >&2
+else
+    rm -f "$pid_file"
+fi
 exit 1

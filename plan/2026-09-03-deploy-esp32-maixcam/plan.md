@@ -1,6 +1,6 @@
 # Deploy ESP32 and MaixCam, Verify Non-Motion PING
 
-- Status: ESP32 complete; MaixCam files published, activation awaiting operator
+- Status: device deployment complete; downstream arm PING unresolved
 - Source baseline: `adf4af2`; no robot-arm controller deployment
 - Branch: `target/deploy-esp32-maixcam-20260903`
 - Validation: L1/L2 only; no enable, velocity, jog, or gripper requests
@@ -84,3 +84,48 @@ this branch; do not merge `main` or commit secrets/backups/local configuration.
 - User `.vscode/settings.json` remains untouched. Runtime source unchanged.
 - Commit intent: publish sanitized partial-deployment evidence on this branch;
   leave MaixCam activation explicitly pending rather than claiming completion.
+
+## Authorized continuation
+
+The operator explicitly authorized stopping `num`. Re-entry Git audit found
+only the same user-owned `.vscode/settings.json` change; retain it unchanged.
+Stop only the process verified as `/maixapp/apps/num/main.py`, preserving its
+source and auto-start configuration. Verify restored launcher ownership, then
+start video and the guarded arm gateway. Run bounded video decode and PING
+checks without any motion commands. Extend editable evidence scope to the
+current-state paragraph in `docs/maixcam/video.md`; no runtime source changes.
+Commit/push factual activation results on the existing deployment branch.
+
+### Bounded startup regression repair
+
+Activation exposed buffered readiness logs and SIGTERM ignored after MaixPy
+initialization (verified process signal mask). Video nevertheless decoded.
+Expand editable scope to `src/maixcam/video/rtsp_server.py`, `start.sh`, and
+`tests/maixcam/test_rtsp_tools.py`: use unbuffered launcher output, register
+stop handlers after hardware initialization, and retain a still-live owned
+PID after failed timeout cleanup. Validate ordering and startup-script
+contracts locally, deploy only these reviewed changes with a pre-fix backup,
+then verify readiness, decoding, and a bounded stop/start cycle. Preserve
+every other device/service boundary and do not add motion requests.
+
+### Continuation results
+
+- Verified `num` PID 297 exited after authorized SIGTERM; source hash unchanged.
+- Initial video source decoded but falsely timed out; MaixPy had ignored
+  SIGTERM and buffered readiness output. The owned process exited via SIGINT.
+- Applied the bounded startup repair locally, reviewed the diff, backed up
+  intermediate device files, deployed two changed files, and verified hashes.
+- Video startup succeeded (8 s), owned SIGTERM stop succeeded, and restart
+  succeeded (9 s). Final probe decoded 101 frames in 6.078 s, H.264 1280 x 720,
+  nominal 20 fps; actual media FPS unavailable. Video remains running.
+- Arm ownership guard started successfully; gateway is the sole UART0 owner
+  and listens on 8780. PING returned FAULT/response_timeout from the gateway;
+  downstream controller communication is not established. No automatic retry.
+- MaixCam ICMP 2/2 replies; ESP32 fresh v3 WELCOME/PONG/STATE still ready/disabled.
+- L1 repair: 14 focused tests passed; full MaixCam 56 tests passed with the
+  ignored local configuration excluded. Unisolated run: 55/56, one existing
+  example-config test incorrectly imports the real local YOLO=true config.
+- L2 only; no motion, arm-controller write, or auto-start change. Computer
+  relay/UI acceptance and cold-boot acceptance were not performed.
+- Commit/push the repair and final deployment evidence on this branch; retain
+  the user's unrelated `.vscode/settings.json` change unstaged.

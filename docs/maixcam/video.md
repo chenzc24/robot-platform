@@ -144,7 +144,10 @@ No chassis, CAN, robot-arm, UART, or TCP232 command was sent during this validat
 
 ## 8. Remaining work
 
-- Deploy the repository's newer modular video service and `status.sh`; the live device currently retains the previously validated compact service.
+- The modular video service and `status.sh` were deployed on 2026-09-03. Live
+  readiness, direct decoding, and stop/start passed after fixing buffered
+  readiness output and post-MaixPy signal registration. See the
+  [deployment evidence](../deployment/2026-09-03-esp32-maixcam.md).
 - Add vision inference, calibrated overlay coordinates, exposure controls, and recording/retention policy.
 - Decide whether the video service should start automatically after MaixCam boots.
 

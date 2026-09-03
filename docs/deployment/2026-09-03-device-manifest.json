@@ -1,5 +1,6 @@
 {
-  "source_commit": "adf4af2",
+  "source_baseline": "adf4af2",
+  "source_delta": "Video rtsp_server.py and start.sh startup/lifecycle fixes included in this manifest's Git commit; exact deployed content is identified by the file hashes.",
   "esp32": {
     "verification": "Eleven active files read back in L2; final device_config.py separately read back after replacement. No serial interruption after final reset.",
     "runtime_mode": "tcp_v3_l3",
@@ -18,7 +19,7 @@
     }
   },
   "maixcam": {
-    "verification": "All seventeen active files match staged SHA256 on device; startup pending resource release.",
+    "verification": "All seventeen files initially matched staged SHA256. The two video startup fixes were subsequently activated and reverified. Video and arm gateway are running; downstream arm PING returned response_timeout.",
     "files": {
       "arm/arm_command_server.py": "c22a553e6526392338a6a3848856a9b3e1927965ca883df916ca45da4bf4249b",
       "arm/arm_motion_gateway.py": "84cfeb81af60478698b8f736333affb30faf3b48282f7566480b88bfbb9cf3ae",
@@ -32,8 +33,8 @@
       "arm/run_arm_command_service.sh": "4ff834826f3cc646c70a2148a42c79043468cb36bee1828c8786e9d422c4c078",
       "video/maix_runtime_status.py": "bc0a1d4438942d38e3febd7ede9b879537f86f5d540317eef44aa375977b7fb8",
       "video/resource_guard.py": "27bc173c39bc290a41086b418786d4ea8088d69e20906a534ed2ac7552e4e280",
-      "video/rtsp_server.py": "c1a2a3d02ccb9ebd8d516ab04956635d3cd10a24bc1b8a1bb0482397f681b3cf",
-      "video/start.sh": "575424a8e1384799ba78b1516ef2dc1f7b4ca75b44eacb33615cf9e8584062bf",
+      "video/rtsp_server.py": "a3a28902470e8d8fc600a8a7cc44d88cd6ab11b0bb0fa730d5a4fb02c98d9bbb",
+      "video/start.sh": "3537be992e516206bcda5f4a8a5ddbd844309f5213f3be4ee448d81348b7db40",
       "video/status.sh": "311e33c6e2dfcacf96426c2d6d49fbb6658023e2fef694c183e2fef16f824725",
       "video/stop.sh": "8057a4716b4b302445420175d6f89be5ca760a9d0ead61816a2cc8341672ad18",
       "video/video_service.py": "402e5ac76c2b26053e825ba5a0b8a9ca993df9c35e902e3b306faf4f8c3f6e90"

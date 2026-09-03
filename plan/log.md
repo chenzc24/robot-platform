@@ -927,3 +927,29 @@ entry format:
   separate UI credential provisioning, and WebREPL recovery acceptance.
 - Commit status: sanitized partial-deployment records prepared for commit/push
   on `target/deploy-esp32-maixcam-20260903`; no merge to `main`.
+
+## 2026-09-03 - Activate MaixCam services after authorized num shutdown
+
+- Prior partial-deployment record was committed/pushed as `7a080e4`. The
+  operator then authorized stopping `num`; its process exited and its source
+  hash remained unchanged. Auto-start configuration was not modified.
+- Runtime activation exposed buffered video readiness logs and SIGTERM ignored
+  after native initialization. Patched only the video entry point and start
+  script: unbuffered stdout, post-initialization signal registration, and
+  retained ownership evidence if timeout cleanup leaves a live process.
+- Scope: these two sources, focused tests, deployment plan/manifest/evidence,
+  video current-state documentation, and this log. User settings untouched.
+- L1: 14 focused tests passed; 56 MaixCam tests passed with local deployment
+  configuration excluded. An unisolated run had one existing template-test
+  failure caused by reading the ignored YOLO=true configuration.
+- L2: fixed files read back by hash; video ready/stop/restart passed. Final
+  direct probe decoded 101 frames in 6.078 s at 1280 x 720 H.264 (nominal 20 fps).
+  MaixCam ICMP PING returned 2/2 replies. Arm gateway listens on 8780 and owns
+  UART0 exclusively; its downstream PING returned FAULT/response_timeout.
+  ESP32 recheck returned v3 WELCOME/PONG/STATE, ready/disabled, no error.
+- Hardware remains with video/gateway running and chassis disabled. No motion,
+  controller deployment, TCP232 change, or cold-boot acceptance was performed.
+  Arm downstream connectivity and measured feedback remain unresolved; PC
+  relay/UI and credential provisioning remain separately unverified.
+- Commit intent: push the bounded repair and factual results on the existing
+  deployment branch; no merge to `main`.

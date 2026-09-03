@@ -1,0 +1,42 @@
+{
+  "source_commit": "adf4af2",
+  "esp32": {
+    "verification": "Eleven active files read back in L2; final device_config.py separately read back after replacement. No serial interruption after final reset.",
+    "runtime_mode": "tcp_v3_l3",
+    "files": {
+      "chassis_tcp_v3.py": "0a4484806a7e59fa209ca6fdf04be96f1dfa3f83099ecb04497e4066ddc35c3e",
+      "application.py": "4a0eb9b7846dc47075cf8c69f56d9db409f9ec3d70588cd6bd8cb3fb5065ad05",
+      "esp_runtime_status.py": "b95309bb1c7c9d1cb7ef8dc6d6e31bb19feec2204ec14638693409a3fcf34ed8",
+      "chassis_control.py": "79bb9c9036b2de347b1e7ff1bb38ab730d97ccbcce8b90c3529c2902d65bc9c2",
+      "motor_bus.py": "5aa4e0ff1083f9c14dbc803a0b44afa371e5add9304b84b96b5c7b8a6f9ce3b4",
+      "can_runtime.py": "7e8a5188466e6116dcc376a33a9dfc9dc08027b86460d743a0e3b558c8c6bdb4",
+      "chassis_motion_tcp_service.py": "59fde16d112ab0260c486b0baddb75ca789d6d9bd94fccfdf213c2310af3f04d",
+      "chassis_motion_tcp_server.py": "1f7606ac3646fab530549b95fa4cba9a00f98427123cf4ba0b8c8baeb37da3bd",
+      "chassis_runtime_factory.py": "edb97571a0e8007fe2add186eaa415565e62cbabfd19363e9684a090ba9aba9c",
+      "main.py": "394e699e1e5e363791b66722659c6466fbb76335b090899843b4a043b4ddbbcb",
+      "device_config.py": "d93dda727b0141ed9a96a7694bf35d9722802c80c79041031c9f50ccc8bbaf93"
+    }
+  },
+  "maixcam": {
+    "verification": "All seventeen active files match staged SHA256 on device; startup pending resource release.",
+    "files": {
+      "arm/arm_command_server.py": "c22a553e6526392338a6a3848856a9b3e1927965ca883df916ca45da4bf4249b",
+      "arm/arm_motion_gateway.py": "84cfeb81af60478698b8f736333affb30faf3b48282f7566480b88bfbb9cf3ae",
+      "arm/arm_service_config.py": "2dac81d45a7b9455804c742477de39973a2f74c9c32f8f0377e51492e13efbb1",
+      "arm/arm_service_config_example.py": "b8187a41b35a4169f34630a3b0ee6ba492fa9b20f799dc6a66899826444baf7e",
+      "arm/command_runtime.py": "8afb699863df984f74f8a6fc4b356732d0d7740984568a21ca759bd29e6778e5",
+      "arm/command_service.py": "d063629abb494a719d0180da2dcad513cc4badc3063b6b5c8013036f249d4437",
+      "arm/control_envelope.py": "c6408047819f2b6d02c7fc795acbd9d8f3760ca5b50d03ff7b179628949729b7",
+      "arm/motion_link.py": "6f42500980dada915376ef679c8d8780b236c0c009bd436fd568b627d231f395",
+      "arm/posix_uart.py": "a8a130df0421c8a9171cc90482a109ba033c562064c7cc747d383008d0b5b749",
+      "arm/run_arm_command_service.sh": "4ff834826f3cc646c70a2148a42c79043468cb36bee1828c8786e9d422c4c078",
+      "video/maix_runtime_status.py": "bc0a1d4438942d38e3febd7ede9b879537f86f5d540317eef44aa375977b7fb8",
+      "video/resource_guard.py": "27bc173c39bc290a41086b418786d4ea8088d69e20906a534ed2ac7552e4e280",
+      "video/rtsp_server.py": "c1a2a3d02ccb9ebd8d516ab04956635d3cd10a24bc1b8a1bb0482397f681b3cf",
+      "video/start.sh": "575424a8e1384799ba78b1516ef2dc1f7b4ca75b44eacb33615cf9e8584062bf",
+      "video/status.sh": "311e33c6e2dfcacf96426c2d6d49fbb6658023e2fef694c183e2fef16f824725",
+      "video/stop.sh": "8057a4716b4b302445420175d6f89be5ca760a9d0ead61816a2cc8341672ad18",
+      "video/video_service.py": "402e5ac76c2b26053e825ba5a0b8a9ca993df9c35e902e3b306faf4f8c3f6e90"
+    }
+  }
+}

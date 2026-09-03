@@ -903,3 +903,27 @@ entry format:
   unstaged, and uncommitted.
 - Commit status: implementation and records are committed on
   `target/arm-measured-feedback` and pushed for review after this record.
+
+## 2026-09-03 - Deploy ESP32 v3; publish MaixCam arm/video sources
+
+- Goal: deploy the reviewed source baseline `adf4af2` to ESP32 and MaixCam and
+  verify non-motion communication. No arm controller deployment or motion test.
+- Scope: deployment plan/evidence/hash manifest, ignored staging/backups and
+  bounded helpers. Runtime source and user `.vscode/settings.json` unchanged.
+- ESP32: WebREPL upgrade timed out. After operator safety confirmation and USB
+  connection, COM7 backup/readback succeeded. Eleven files were deployed in
+  L2 first; the final approved `tcp_v3_l3` configuration was then read back and
+  reset. Wireless HELLO/PING/STATUS returned v3 WELCOME/PONG/STATE, ready,
+  disabled, zero hold, and no error, including a later fresh-session recheck.
+- MaixCam: SSH and backup succeeded. Seventeen current arm/video files were
+  activated with matching SHA256 hashes; thirteen Python sources compiled on
+  device. The existing `num` camera/UART0 application still owns resources.
+  New service startup, video decode, and downstream arm PING remain pending
+  operator exit/stop agreement. Its code and auto-start settings are unchanged.
+- Validation: 137 L1 tests passed (55 ESP32, 54 MaixCam, 28 protocol). No Enable,
+  velocity, jog, or gripper command was sent; CAN-backed startup/cleanup can
+  send zero/disable output. L3/L4 and cold-boot acceptance were not run.
+- Remaining: MaixCam activation, new arm-controller measured-feedback deployment,
+  separate UI credential provisioning, and WebREPL recovery acceptance.
+- Commit status: sanitized partial-deployment records prepared for commit/push
+  on `target/deploy-esp32-maixcam-20260903`; no merge to `main`.

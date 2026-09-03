@@ -1182,3 +1182,32 @@ entry format:
   local/remote comparison is 0 ahead / 0 behind. PR #3 targets the original
   target/chassis-hold-release-fix branch; no merge. Completion records are a
   documentation-only follow-up; unrelated dirty work remains uncommitted.
+
+## 2026-09-03 - Run attended PC JSON drawing on the arm
+
+- Operator requested the real test, confirmed physical e-stop/environment, then
+  explicitly confirmed stopped/restrained chassis, safe pose/pen/load, User/Tool
+  0/0, 100 mm YZ mapping, X -20/+20 mm pen travel, 1 mm gripper, draw 15% and
+  travel/acceleration 5%, with continuous on-site supervision.
+- Preview and 16 local demo tests passed again. The input hash and 4 strokes /
+  269 points were unchanged. Fresh non-motion arm/chassis status passed; only
+  the idle console arm session was released for the standalone program.
+- First launch was rejected at PING with request_in_flight, before any gripper
+  or motion command. A non-motion connection with ordinary gateway polling
+  subsequently passed PING/STATUS, showing ready/no error and unchanged pose.
+  Source/fake reproduction supports a stale query across session handoff; the
+  exact live pending frame was not captured. No restart or configuration fix.
+- The subsequent unchanged demo executed one full authorized sequence: all
+  282 arm commands and 8 pauses completed, process exit 0, including every
+  pen-up. No motion failure, timeout, UNKNOWN or retry. Periodic chassis status
+  remained enabled_stopped/idle with zero velocity; no chassis motion sent.
+- Restored the existing console arm session after clean exit. At 14:40:28,
+  fresh valid sample 317 reported ready/idle/YOLO, last_error=none. Final User/
+  Tool 0/0 pose: [-219.907865,-84.7529646,272.6681,-44.3547931,-90,44.3547931].
+  No extra home, gripper release, deployment, alarm clear or service restart.
+- L3 command-path evidence only: operator drawing quality and physical pen
+  clearance confirmation remain pending. DONE is API return, not metrology.
+  No L4, deliberate link-loss or physical emergency-stop actuation test.
+- Commit/push only this section and plan/2026-09-03-pc-json-drawing-l3/plan.md
+  on the existing drawing review branch. Preserve prior XYZ log, user settings,
+  and unrelated diagnosis/review files; no merge or new runtime changes.

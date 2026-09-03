@@ -1,6 +1,6 @@
 {
   "source_baseline": "adf4af2",
-  "source_delta": "Video rtsp_server.py and start.sh startup/lifecycle fixes included in this manifest's Git commit; exact deployed content is identified by the file hashes.",
+  "source_delta": "Video rtsp_server.py and start.sh startup/lifecycle fixes from 2e97899; exact deployed content is identified by the file hashes.",
   "esp32": {
     "verification": "Eleven active files read back in L2; final device_config.py separately read back after replacement. No serial interruption after final reset.",
     "runtime_mode": "tcp_v3_l3",
@@ -19,7 +19,7 @@
     }
   },
   "maixcam": {
-    "verification": "All seventeen files initially matched staged SHA256. The two video startup fixes were subsequently activated and reverified. Video and arm gateway are running; downstream arm PING returned response_timeout.",
+    "verification": "All seventeen files initially matched staged SHA256. Two video startup fixes were subsequently reverified. After operator controller startup, downstream PING and three measured STATUS samples passed with a 5000 ms diagnostic deadline; the default 1000 ms STATUS deadline timed out.",
     "files": {
       "arm/arm_command_server.py": "c22a553e6526392338a6a3848856a9b3e1927965ca883df916ca45da4bf4249b",
       "arm/arm_motion_gateway.py": "84cfeb81af60478698b8f736333affb30faf3b48282f7566480b88bfbb9cf3ae",

@@ -966,3 +966,22 @@ entry format:
   controller import, startup, or motion occurred. User settings untouched.
 - Commit intent: push only package-location/evidence records on the existing
   deployment branch. The generated package remains Git-ignored.
+
+## 2026-09-03 - Read measured feedback from the operator-started arm project
+
+- Operator reported the TCP project running and requested information. No
+  controller import or file readback was performed by the agent.
+- Default CLI PING returned PONG, but STATUS exceeded its 1000 ms TTL. A
+  separate read-only session with the supported 5000 ms TTL returned PONG
+  (828 ms) and three valid STATE responses (2641, 1875, 1812 ms).
+- Production PC parsing passed for all three: joint angles
+  [-90, 0, -140, -40, 0, 0]; pose
+  [-150.8, -102.846018, 130.632889, 90, 0, -90], User 0 / Tool 0;
+  sample IDs 2/3/4; ready, YOLO, no active command or service error.
+- Scope: deployment evidence/manifest, current plan, this log, and ignored
+  diagnostic helper/output only. Runtime code, defaults, credentials, and
+  the user's settings were untouched. No motion or service restart occurred.
+- Remaining: default STATUS deadline/polling alignment and latency diagnosis.
+  High-frequency/in-motion telemetry, raw vendor return-container capture,
+  motion-completion accuracy, and UI acceptance were not established.
+- Commit intent: push sanitized L2 evidence on the existing deployment branch.

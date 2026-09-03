@@ -1,6 +1,6 @@
 # Deploy ESP32 and MaixCam, Verify Non-Motion PING
 
-- Status: device deployment complete; downstream arm PING unresolved
+- Status: device deployment and stationary feedback L2 complete; default STATUS timing remains unresolved
 - Source baseline: `adf4af2`; no robot-arm controller deployment
 - Branch: `target/deploy-esp32-maixcam-20260903`
 - Validation: L1/L2 only; no enable, velocity, jog, or gripper requests
@@ -146,3 +146,26 @@ Result: generated all four files into the new directory; exact builder-content,
 syntax, metadata, YOLO, and measured-feedback inclusion checks passed. Old
 package untouched. Controller deployment remains an operator action, not a
 completed validation result.
+
+## Operator-started controller: read-only L2 verification
+
+The operator reports the controller TCP project is now running and requests
+information retrieval. Re-entry Git audit found only the same unrelated user
+settings change. Use the existing MaixCam gateway and client to send PING and
+STATUS, then parse repeated stationary samples with the production PC mapper.
+Editable scope is limited to this plan, deployment evidence, `plan/log.md`,
+and ignored diagnostic output/helpers. Runtime source, deployed files, device
+configuration, and all motion commands remain out of scope. Do not restart
+services or change protocol behavior to make this diagnostic pass. L2 only;
+record failed parsing or downstream errors faithfully. Commit/push sanitized
+test evidence on the current branch.
+
+Read-only verification result: default CLI PING passed but 1 s STATUS timed
+out. A separate session using supported 5 s request TTL returned PONG (828 ms)
+and three valid measured STATE samples (2641/1875/1812 ms), all accepted by the
+production PC mapper. Samples 2/3/4 have increasing controller times and stable
+joint/pose vectors; service ready, YOLO, no active command, no service error.
+Runtime defaults were not changed. Normal CLI/UI timeout and polling alignment,
+raw controller return types, and in-motion feedback remain outside this test.
+No motion, device-file write, service restart, or controller readback occurred.
+Ignored evidence: `logs/arm-l2/20260903-085225-feedback.json`.

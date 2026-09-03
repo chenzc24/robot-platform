@@ -1114,3 +1114,22 @@ entry format:
   browser connection-aborted traceback; fresh API/asset checks succeeded.
 - Commit/push scope is this factual record and the repair-plan update only;
   preserve user settings and the separate uncommitted XYZ diagnosis/log entry.
+
+## 2026-09-03 - Restore three services and open the UI
+
+- Reused web backend PID 34424. Reconnected ESP32 through its existing TCP client:
+  online, authenticated, disabled/idle, zero requested vector. No WebREPL/reset;
+  the legacy CLI's WebREPL warning does not describe production TCP availability.
+- MaixCam video and arm gateway were absent after reboot. Verified guarded arm
+  startup source/hash and launcher UART0 ownership, then started existing deployed
+  services: arm gateway PID 777, RTSP PID 787. No device source/config deployment.
+- Controller service was already running: routed STATUS returned ready/YOLO,
+  last_error=none and valid measured joints/pose, with advancing sample numbers.
+  No controller reset, Enable, chassis velocity, arm movement or gripper command.
+- Recovered the half-running local video relay using its managed restart:
+  MediaMTX PID 8308 and FFmpeg PID 25524. H264 path ready/online, incoming byte
+  count increased, and one relayed frame decoded successfully to null.
+- UI HTTP 200; browser-panel open was requested (app queued it). Existing chassis
+  TimeoutError remains as historical fault evidence, not a current failed link.
+- L2 complete; no L3/L4 test. Commit/push only this operational plan/log section;
+  preserve user settings and unrelated XYZ diagnostic/YZ drawing-review files.

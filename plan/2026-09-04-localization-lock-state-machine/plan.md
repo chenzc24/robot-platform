@@ -1,6 +1,6 @@
 # Add reusable localization-lock state machine
 
-- Status: complete; submission pending
+- Status: complete
 - Responsible: agent implementation and offline validation
 - Highest validation level: L1
 
@@ -124,6 +124,8 @@ physical extrinsics, stop accuracy, arm kinematics or drawing metrology.
   JavaScript syntax, both JSON templates and working-tree diff checks passed.
 - No device connection, service start, deployment, chassis command, arm command
   or physical motion occurred.
+- Implementation commit `4c756d5` was pushed to
+  `target/localization-lock-state-machine`; PR #5 is open against `main`.
 
 ## Outstanding matters
 

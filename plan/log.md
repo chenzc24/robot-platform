@@ -1308,3 +1308,27 @@ entry format:
 - Commit/push only this follow-up plan, tracked config/code/docs/tests and this
   new log section to the existing AprilTag PR branch. Preserve all prior dirty
   user and diagnostic work.
+
+## 2026-09-04 - Run AprilTag live UI L2 observation
+
+- Enabled vision only in ignored local configuration and started the owned
+  MaixCam source, local relay and web console. The RTSP probe received 108
+  1280 x 720 frames in 6.015 seconds at 20.007 fps; first frame took 2.109
+  seconds. No chassis/arm connection or command path was opened.
+- UI inspection confirmed live ID-labelled outlines and confidence/RMSE/status
+  output. Outlines aligned on a stationary board at `ROT 90`; apparent box
+  displacement during motion was the unsynchronized 5 fps inference overlay
+  lagging the independent 20 fps WebRTC view.
+- Logged 270 localization records, 245 with tags and IDs 0-3. The 44 single-tag
+  records scored 0.563-0.858 with RMSE 0.022-1.196 px; there were 201 multi-tag
+  records, no accepted result and no vision failure. Multi-tag rejection is
+  expected because the physical layout differs from the unmeasured default and
+  both calibration inputs remain unverified.
+- The configured 5 fps cap and sampled 56-189 ms processing time explain the
+  low update rate. A clear no-tag sample had 114 rejected candidates, so a
+  future performance goal should add timing/candidate/edge telemetry and
+  benchmark higher rates before changing thresholds or detector parameters.
+- At the user's request, stopped the monitor, console, FFmpeg, MediaMTX and the
+  test-started MaixCam source; ports 8080, 8555 and 8889 were closed. L2 only,
+  no deployment or motion. No runtime source changed. Preserve all prior dirty
+  files and stage only this section plus the live-goal plan.

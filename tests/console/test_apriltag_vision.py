@@ -26,7 +26,6 @@ from vision.apriltag_localizer import AprilTagBoardLocalizer
 from vision.calibration import (
     BoardLayout,
     CameraCalibration,
-    VisionCalibrationError,
     load_board_layout,
     load_camera_calibration,
 )
@@ -64,9 +63,12 @@ class FakeDetector:
 
 
 class CalibrationTests(unittest.TestCase):
-    def test_example_camera_cannot_be_used_as_production_calibration(self):
-        with self.assertRaisesRegex(VisionCalibrationError, "not_marked_production_ready"):
-            load_camera_calibration(ROOT / "config" / "camera-calibration.example.json")
+    def test_gc4653_example_loads_as_an_unready_fov_estimate(self):
+        camera = load_camera_calibration(ROOT / "config" / "camera-calibration.example.json")
+        self.assertFalse(camera.production_ready)
+        self.assertEqual(camera.image_width, 1280)
+        self.assertAlmostEqual(camera.camera_matrix[0][0], 749.343722, places=6)
+        self.assertAlmostEqual(camera.camera_matrix[1][1], 754.755696, places=6)
 
     def test_schema_four_loads_vision_and_schema_three_remains_compatible(self):
         base = json.loads((ROOT / "config" / "console.example.json").read_text(encoding="utf-8"))
@@ -103,7 +105,9 @@ class CalibrationTests(unittest.TestCase):
             loaded_camera = load_camera_calibration(camera_path)
             loaded_board = load_board_layout(board_path)
         self.assertEqual(loaded_camera.camera_matrix[1][1], 901.0)
+        self.assertTrue(loaded_camera.production_ready)
         self.assertEqual(loaded_board.units, "mm")
+        self.assertTrue(loaded_board.production_ready)
         self.assertEqual(loaded_board.tag_corners[9][0], (10.0, 20.0, 0.0))
 
 
@@ -152,6 +156,28 @@ class LocalizerTests(unittest.TestCase):
         self.assertTrue(result["pose_solved"])
         self.assertTrue(result["accepted"])
         self.assertEqual(result["used_ids"], [0])
+
+    def test_unmeasured_gc4653_and_rectangle_solve_only_a_precalibration_pose(self):
+        camera = load_camera_calibration(ROOT / "config" / "camera-calibration.example.json")
+        board = load_board_layout(ROOT / "config" / "apriltag-board.example.json")
+        localizer = AprilTagBoardLocalizer(camera, board, min_confidence=0.0)
+        object_groups = [np.asarray(board.tag_corners[tag_id], dtype=np.float64) for tag_id in sorted(board.tag_corners)]
+        rvec = np.asarray([[0.3], [-0.2], [0.1]], dtype=np.float64)
+        tvec = np.asarray([[-120.0], [-80.0], [800.0]], dtype=np.float64)
+        corners = [
+            cv2.projectPoints(
+                group, rvec, tvec, np.asarray(camera.camera_matrix), np.asarray(camera.distortion_coefficients)
+            )[0].reshape(1, 4, 2)
+            for group in object_groups
+        ]
+        localizer._detector = FakeDetector(corners, sorted(board.tag_corners))
+        result = localizer.process(np.zeros((720, 1280), dtype=np.uint8))
+        self.assertTrue(result["pose_solved"])
+        self.assertFalse(result["accepted"])
+        self.assertEqual(result["status"], "precalibration")
+        self.assertEqual(result["error"], "calibration_inputs_unverified")
+        self.assertFalse(result["camera_calibration_ready"])
+        self.assertFalse(result["board_layout_ready"])
 
 
 class ConsoleVisionStateTests(unittest.TestCase):

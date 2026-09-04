@@ -89,6 +89,8 @@ class RtspAprilTagWorker:
             dictionary="DICT_APRILTAG_36H11",
             layout_id=self.localizer.board.layout_id,
             calibration_id=self.localizer.camera.calibration_id,
+            camera_calibration_ready=self.localizer.camera.production_ready,
+            board_layout_ready=self.localizer.board.production_ready,
             detection_fps=self.detection_fps,
         )
         try:
@@ -139,6 +141,8 @@ class RtspAprilTagWorker:
             frame_sequence=result.get("frame_sequence"),
             status=status,
             accepted=bool(result.get("accepted")),
+            camera_calibration_ready=result.get("camera_calibration_ready"),
+            board_layout_ready=result.get("board_layout_ready"),
             confidence=result.get("confidence"),
             threshold=result.get("confidence_threshold"),
             detected_ids=[item.get("id") for item in result.get("observations", [])],

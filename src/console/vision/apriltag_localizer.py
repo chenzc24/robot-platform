@@ -120,6 +120,8 @@ class AprilTagBoardLocalizer:
             "dictionary": "DICT_APRILTAG_36H11",
             "layout_id": self.board.layout_id,
             "calibration_id": self.camera.calibration_id,
+            "camera_calibration_ready": self.camera.production_ready,
+            "board_layout_ready": self.board.production_ready,
             "detected_count": len(observations),
             "known_count": len(known_observation_indexes),
             "rejected_candidate_count": len(rejected),
@@ -171,13 +173,16 @@ class AprilTagBoardLocalizer:
         finite_pose = bool(np.all(np.isfinite(transform)))
         positive_depth = bool(np.all((rotation @ object_points.T + tvec.reshape(3, 1))[2] > 0))
         reprojection_ok = rmse <= self.max_reprojection_error_px
-        accepted = finite_pose and positive_depth and reprojection_ok and confidence >= self.min_confidence
+        calibration_ready = self.camera.production_ready and self.board.production_ready
+        accepted = calibration_ready and finite_pose and positive_depth and reprojection_ok and confidence >= self.min_confidence
         if accepted:
             status, error = "accepted", "none"
         elif not positive_depth or not finite_pose:
             status, error = "pose_rejected", "pose_geometry_invalid"
         elif not reprojection_ok:
             status, error = "pose_rejected", "reprojection_error_too_high"
+        elif not calibration_ready:
+            status, error = "precalibration", "calibration_inputs_unverified"
         else:
             status, error = "low_confidence", "confidence_below_threshold"
         result.update(

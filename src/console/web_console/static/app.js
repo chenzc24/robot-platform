@@ -89,8 +89,9 @@ function renderVision(vision) {
   summary.classList.add(vision.accepted ? "accepted" : (vision.status === "error" ? "error" : "rejected"));
   summary.firstElementChild.textContent = `APRILTAG ${state} · C ${confidence.toFixed(2)} · RMSE ${rmse}`;
   const translation = vision.tvec_board_origin_in_camera_mm;
+  const readiness = vision.camera_calibration_ready && vision.board_layout_ready ? "" : " · UNVERIFIED DEFAULTS";
   summary.lastElementChild.textContent = Array.isArray(translation)
-    ? `IDs ${ids} · board origin in camera [${translation.map(value => Number(value).toFixed(1)).join(", ")}] mm`
+    ? `IDs ${ids} · board origin in camera [${translation.map(value => Number(value).toFixed(1)).join(", ")}] mm${readiness}`
     : `IDs ${ids} · ${String(vision.error || "waiting")}`;
   $("#vision-foot").textContent = `WEBRTC / TAGS ${vision.known_count || 0} / ${state}`;
   if (!vision.image_width || !vision.image_height || !Array.isArray(vision.observations)) return;

@@ -1285,3 +1285,26 @@ entry format:
 - Preserve user `.vscode/settings.json`, local `app/demo.py` 60% edit, prior XYZ
   log hunk and the three untracked diagnostic directories. Commit/push only the
   AprilTag goal files and this appended log section.
+
+## 2026-09-04 - Add safe GC4653 precalibration defaults
+
+- Used the supplied GC4653 H81/V51-degree fields of view with the actual
+  1280 x 720 stream to estimate fx 749.343722 px, fy 754.755696 px and principal
+  point (640, 360). Kept distortion coefficients at zero because the supplied
+  5% summary cannot be converted into an OpenCV coefficient vector.
+- Named the existing default geometry explicitly: four 40 mm tags at the
+  corners of an unmeasured 300 x 200 mm outer rectangle. Tracked examples and
+  ignored local copies remain `production_ready: false`.
+- Unready camera/board data may now generate boxes and tentative transforms, but
+  runtime forces `status=precalibration`, `accepted=false`, publishes readiness
+  flags, logs them and labels the UI `UNVERIFIED DEFAULTS`. Measured-ready inputs
+  retain the previous confidence/reprojection acceptance logic.
+- Upgraded only the schema and disabled vision section in the ignored local
+  console configuration; existing endpoints/device settings were preserved.
+  Vision remains disabled, so no RTSP stream or device session was opened.
+- L1 passed: 309 Python tests, 14 JavaScript tests, syntax/compile and diff
+  checks. No hardware, deployment, restart or motion. Physical lens calibration,
+  measured tag corners and camera-to-arm-base extrinsics remain required.
+- Commit/push only this follow-up plan, tracked config/code/docs/tests and this
+  new log section to the existing AprilTag PR branch. Preserve all prior dirty
+  user and diagnostic work.

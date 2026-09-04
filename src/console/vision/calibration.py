@@ -17,6 +17,7 @@ class CameraCalibration:
     image_height: int
     camera_matrix: tuple
     distortion_coefficients: tuple
+    production_ready: bool = True
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,7 @@ class BoardLayout:
     units: str
     dictionary: str
     tag_corners: dict
+    production_ready: bool = True
 
 
 def _read_object(path, label):
@@ -59,9 +61,10 @@ def _nonempty_string(value, field):
     return value.strip()
 
 
-def _require_production_ready(raw, label):
-    if raw.get("production_ready") is not True:
-        raise VisionCalibrationError("%s_not_marked_production_ready" % label)
+def _boolean(value, field):
+    if not isinstance(value, bool):
+        raise VisionCalibrationError("%s_must_be_boolean" % field)
+    return value
 
 
 def load_camera_calibration(path):
@@ -72,7 +75,7 @@ def load_camera_calibration(path):
     }
     if set(raw) != expected or raw["schema_version"] != 1:
         raise VisionCalibrationError("camera_calibration_schema_invalid")
-    _require_production_ready(raw, "camera_calibration")
+    production_ready = _boolean(raw["production_ready"], "camera_calibration.production_ready")
     matrix = raw["camera_matrix"]
     if not isinstance(matrix, list) or len(matrix) != 3 or any(not isinstance(row, list) or len(row) != 3 for row in matrix):
         raise VisionCalibrationError("camera_matrix_shape_invalid")
@@ -94,6 +97,7 @@ def load_camera_calibration(path):
         image_height=image_height,
         camera_matrix=camera_matrix,
         distortion_coefficients=tuple(_finite_number(value, "distortion_coefficients") for value in distortion),
+        production_ready=production_ready,
     )
 
 
@@ -105,7 +109,7 @@ def load_board_layout(path):
     }
     if set(raw) != expected or raw["schema_version"] != 1:
         raise VisionCalibrationError("board_layout_schema_invalid")
-    _require_production_ready(raw, "board_layout")
+    production_ready = _boolean(raw["production_ready"], "board_layout.production_ready")
     if raw["dictionary"] != "DICT_APRILTAG_36H11":
         raise VisionCalibrationError("board_dictionary_unsupported")
     if raw["corner_order"] != "top_left_clockwise":
@@ -152,4 +156,5 @@ def load_board_layout(path):
         units="mm",
         dictionary=raw["dictionary"],
         tag_corners=parsed,
+        production_ready=production_ready,
     )

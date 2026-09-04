@@ -1332,3 +1332,15 @@ entry format:
   test-started MaixCam source; ports 8080, 8555 and 8889 were closed. L2 only,
   no deployment or motion. No runtime source changed. Preserve all prior dirty
   files and stage only this section plus the live-goal plan.
+
+## 2026-09-04 - Merge AprilTag localization v1 into main
+
+- The user accepted the current 5 fps inference setting and authorized merging
+  PR #4. Before merge it was `OPEN`, `MERGEABLE` and `CLEAN` against `main`, with
+  three scoped commits and no configured remote status checks.
+- Merged normally without squashing at 2026-09-04 02:41:20 UTC. Merge commit
+  `157905c` contains tested head `427cf4c`; both trees are identical.
+- Advanced local `main` to `origin/main` and confirmed 0/0 divergence. The dirty
+  diff hash for the existing settings, drawing demo and prior log hunk remained
+  unchanged across the branch switch. No device service, connection or motion
+  was used for the merge.

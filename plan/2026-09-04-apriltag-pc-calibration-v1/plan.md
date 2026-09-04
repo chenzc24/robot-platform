@@ -139,3 +139,17 @@ L2 evidence and must not be reported as passed here.
 ```text
 feat(vision): add PC AprilTag board localization
 ```
+
+## Publication outcome
+
+- After the user accepted the observation-only v1 and chose to keep the 5 fps
+  setting, PR #4 was verified `OPEN`, `MERGEABLE` and `CLEAN` against `main`.
+  It had no configured remote status checks; the recorded L1 and attended L2
+  evidence therefore remain the applicable validation.
+- PR #4 was merged without squashing at 2026-09-04 02:41:20 UTC. Merge commit
+  `157905c43d0a514c396b45ea940d2c7cab22fac4` contains tested head
+  `427cf4c49b96b82566c32a000db4d6e27fb9927d`, and the merge tree is identical
+  to that head.
+- Local `main` was advanced to the merge commit and is synchronized 0/0 with
+  `origin/main`. The pre-existing dirty diff hash was identical before and
+  after switching branches; no local user or diagnostic work was staged.

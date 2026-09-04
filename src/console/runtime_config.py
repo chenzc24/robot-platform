@@ -1,7 +1,7 @@
 """Secret-free local configuration shared by console frontends."""
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
@@ -53,11 +53,35 @@ class VideoConfig:
 
 
 @dataclass(frozen=True)
+class VisionConfig:
+    enabled: bool = False
+    board_layout_path: str = ""
+    camera_calibration_path: str = ""
+    dictionary: str = "DICT_APRILTAG_36H11"
+    detection_fps: float = 5.0
+    min_tag_edge_px: float = 24.0
+    max_reprojection_error_px: float = 5.0
+    min_confidence: float = 0.55
+    stale_after_ms: int = 1200
+    log_path: str = ""
+
+    @property
+    def complete(self):
+        return bool(
+            self.enabled
+            and self.board_layout_path
+            and self.camera_calibration_path
+            and self.dictionary == "DICT_APRILTAG_36H11"
+        )
+
+
+@dataclass(frozen=True)
 class RuntimeConfig:
     chassis: ChassisConfig
     manual_chassis: ManualChassisConfig
     arm: ArmConfig
     video: VideoConfig
+    vision: VisionConfig = field(default_factory=VisionConfig)
 
 
 def _mapping(value, field):
@@ -96,6 +120,12 @@ def _boolean(value, field):
     return value
 
 
+def _bounded_number(value, field, low, high):
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not low <= value <= high:
+        raise RuntimeConfigError("%s must be a number in %s..%s" % (field, low, high))
+    return float(value)
+
+
 def load_runtime_config(path):
     """Load an explicit local JSON configuration without logging its contents."""
     source = Path(path)
@@ -105,14 +135,19 @@ def load_runtime_config(path):
         raw = json.loads(source.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise RuntimeConfigError("local configuration cannot be read") from error
-    if set(raw) != {"schema_version", "chassis", "manual_chassis", "arm", "video"}:
+    schema_version = raw.get("schema_version")
+    expected = {"schema_version", "chassis", "manual_chassis", "arm", "video"}
+    if schema_version == 4:
+        expected.add("vision")
+    if set(raw) != expected:
         raise RuntimeConfigError("unexpected configuration fields")
-    if raw["schema_version"] != 3:
+    if schema_version not in {3, 4}:
         raise RuntimeConfigError("unsupported configuration schema")
     chassis = _mapping(raw["chassis"], "chassis")
     manual_chassis = _mapping(raw["manual_chassis"], "manual_chassis")
     arm = _mapping(raw["arm"], "arm")
     video = _mapping(raw["video"], "video")
+    vision = _mapping(raw["vision"], "vision") if schema_version == 4 else None
     if set(chassis) != {"host", "port", "client_id", "credential_env", "connect_timeout_seconds"}:
         raise RuntimeConfigError("unexpected chassis configuration fields")
     if set(manual_chassis) != {"enabled", "health_interval_ms", "velocity_hold_ms", "linear_limit_mm_s", "angular_limit_mrad_s"}:
@@ -121,6 +156,12 @@ def load_runtime_config(path):
         raise RuntimeConfigError("unexpected arm configuration fields")
     if set(video) != {"rtsp_url", "webrtc_url", "connect_timeout_seconds", "snapshot_directory"}:
         raise RuntimeConfigError("unexpected video configuration fields")
+    if vision is not None and set(vision) != {
+        "enabled", "board_layout_path", "camera_calibration_path", "dictionary",
+        "detection_fps", "min_tag_edge_px", "max_reprojection_error_px",
+        "min_confidence", "stale_after_ms", "log_path",
+    }:
+        raise RuntimeConfigError("unexpected vision configuration fields")
     return RuntimeConfig(
         chassis=ChassisConfig(
             host=_string(chassis["host"], "chassis.host", allow_empty=True),
@@ -147,5 +188,21 @@ def load_runtime_config(path):
             webrtc_url=_string(video["webrtc_url"], "video.webrtc_url", allow_empty=True),
             connect_timeout_seconds=_timeout(video["connect_timeout_seconds"], "video.connect_timeout_seconds"),
             snapshot_directory=_string(video["snapshot_directory"], "video.snapshot_directory", allow_empty=True),
+        ),
+        vision=VisionConfig() if vision is None else VisionConfig(
+            enabled=_boolean(vision["enabled"], "vision.enabled"),
+            board_layout_path=_string(vision["board_layout_path"], "vision.board_layout_path", allow_empty=True),
+            camera_calibration_path=_string(
+                vision["camera_calibration_path"], "vision.camera_calibration_path", allow_empty=True
+            ),
+            dictionary=_string(vision["dictionary"], "vision.dictionary"),
+            detection_fps=_bounded_number(vision["detection_fps"], "vision.detection_fps", 0.2, 30.0),
+            min_tag_edge_px=_bounded_number(vision["min_tag_edge_px"], "vision.min_tag_edge_px", 4.0, 1000.0),
+            max_reprojection_error_px=_bounded_number(
+                vision["max_reprojection_error_px"], "vision.max_reprojection_error_px", 0.1, 100.0
+            ),
+            min_confidence=_bounded_number(vision["min_confidence"], "vision.min_confidence", 0.0, 1.0),
+            stale_after_ms=_positive_int(vision["stale_after_ms"], "vision.stale_after_ms", 100, 60_000),
+            log_path=_string(vision["log_path"], "vision.log_path", allow_empty=True),
         ),
     )

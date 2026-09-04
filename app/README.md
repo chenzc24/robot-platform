@@ -5,6 +5,15 @@
 It does not deploy a new controller project or use LAN2 as a runtime route.
 Python 3.10+ and the repository sources are sufficient; no new packages.
 
+## AprilTag localization app
+
+`apriltag_calibration.py` is a separate, observation-only PC entry point. It
+reads an image or RTSP stream, reuses `src/console/vision`, and outputs board
+pose matrices, confidence and reprojection diagnostics as JSON. It never opens
+the arm or chassis command routes. Setup, frame conventions and the live-console
+overlay are documented in
+[PC AprilTag board localization](../docs/console/apriltag-localization.md).
+
 ## Preview (no hardware)
 
 From the repository root:

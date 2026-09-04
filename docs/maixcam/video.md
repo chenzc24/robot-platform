@@ -27,7 +27,7 @@ MaixVision and MaixCode are not part of this path. SSH/SCP manages files and pro
 - Target bitrate: 2 Mbps.
 - Device endpoint: TCP RTSP port 8554, path `/live`.
 - Console endpoint: loopback TCP RTSP port 8555, path `/maixcam`.
-- Display orientation: clockwise 90 degrees. The encoded stream remains unmodified; the console owns display and future vision-coordinate rotation.
+- Display orientation: clockwise 90 degrees. The encoded stream remains unmodified; the console owns display and AprilTag overlay-coordinate rotation.
 
 MaixPy RTSP capture requires `image.Format.FMT_YVU420SP`. Importing MaixPy initializes its default UART listener, so the video service removes that listener before starting the camera. The video service does not read, write, or forward robot-arm commands.
 
@@ -148,7 +148,10 @@ No chassis, CAN, robot-arm, UART, or TCP232 command was sent during this validat
   readiness, direct decoding, and stop/start passed after fixing buffered
   readiness output and post-MaixPy signal registration. See the
   [deployment evidence](../deployment/2026-09-03-esp32-maixcam.md).
-- Add vision inference, calibrated overlay coordinates, exposure controls, and recording/retention policy.
+- The PC AprilTag v1 worker now consumes the local RTSP route and publishes a
+  calibrated observation overlay. Live oblique-angle/metrology acceptance,
+  exact WebRTC frame correlation, exposure controls, and recording/retention
+  policy remain outstanding.
 - Decide whether the video service should start automatically after MaixCam boots.
 
 Video is observability data and never the only safety feedback for robot motion.

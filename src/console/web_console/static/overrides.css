@@ -87,3 +87,66 @@
   touch-action: none;
   user-select: none;
 }
+
+.vision-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform-origin: center;
+}
+
+.viewport.rotated .vision-canvas {
+  transform: rotate(90deg) scale(.72);
+}
+
+.vision-summary {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: calc(100% - 20px);
+  padding: 7px 9px;
+  border: 1px solid #44536a;
+  border-radius: 6px;
+  background: #091019d9;
+  color: #dce8f7;
+  font: 10px/1.3 ui-monospace, SFMono-Regular, Consolas, monospace;
+  letter-spacing: .04em;
+}
+
+.vision-summary strong {
+  color: #9aabc0;
+}
+
+.vision-summary.accepted {
+  border-color: #2d8a68;
+}
+
+.vision-summary.accepted strong {
+  color: #6ee0b5;
+}
+
+.vision-summary.rejected {
+  border-color: #9b7439;
+}
+
+.vision-summary.rejected strong {
+  color: #f0c274;
+}
+
+.vision-summary.error {
+  border-color: #9e3a42;
+}
+
+.vision-summary.error strong {
+  color: #ff8e93;
+}
+
+.vision-summary span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

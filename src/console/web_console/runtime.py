@@ -27,7 +27,10 @@ class WebConsoleRuntime:
 
     INPUT_TIMEOUT_S = 1.0
 
-    def __init__(self, config, chassis_factory=None, arm_factory=None, start_workers=True, clock=None, event_log_path=None):
+    def __init__(
+        self, config, chassis_factory=None, arm_factory=None, start_workers=True,
+        clock=None, event_log_path=None, vision_factory=None, vision_worker=None,
+    ):
         self.config = config
         self._chassis_factory = chassis_factory or default_chassis_factory
         self._arm_factory = arm_factory or default_arm_factory
@@ -50,6 +53,9 @@ class WebConsoleRuntime:
         self._last_chassis_health = None
         self._last_arm_health = None
         self._last_arm_sample_received = None
+        self._last_vision_received = None
+        self._vision_factory = vision_factory
+        self._vision_worker = vision_worker
         self._stop_event = threading.Event()
         self._threads = []
         self._state = {
@@ -57,6 +63,17 @@ class WebConsoleRuntime:
                 "configured": bool(config.video.webrtc_url),
                 "webrtc_url": config.video.webrtc_url,
                 "rotation_degrees": 90,
+            },
+            "vision": {
+                "configured": bool(config.vision.enabled),
+                "status": "disabled" if not config.vision.enabled else "starting",
+                "error": "none",
+                "observations": [],
+                "pose_solved": False,
+                "accepted": False,
+                "confidence": 0.0,
+                "confidence_kind": "quality_score_not_probability",
+                "confidence_threshold": config.vision.min_confidence,
             },
             "chassis": {
                 "link": "offline",
@@ -104,6 +121,43 @@ class WebConsoleRuntime:
             thread = threading.Thread(target=target, name=name, daemon=True)
             thread.start()
             self._threads.append(thread)
+        if self.config.vision.enabled:
+            self._start_vision_worker()
+
+    def _start_vision_worker(self):
+        try:
+            if self._vision_worker is None:
+                factory = self._vision_factory
+                if factory is None:
+                    from vision.worker import create_vision_worker
+
+                    factory = create_vision_worker
+                self._vision_worker = factory(self.config, self._on_vision_update)
+            self._vision_worker.start()
+            self._event("Vision", "apriltag.start", "RUNNING", "observation_only")
+        except Exception as error:
+            code = self._error_code(error)
+            with self._lock:
+                self._state["vision"].update(
+                    status="error",
+                    error=code,
+                    pose_solved=False,
+                    accepted=False,
+                )
+                self._touch()
+            self._event("Vision", "apriltag.start", "FAULT", code)
+
+    def _on_vision_update(self, result):
+        if not isinstance(result, dict):
+            return
+        with self._lock:
+            configured = self._state["vision"]["configured"]
+            threshold = self._state["vision"]["confidence_threshold"]
+            self._state["vision"] = deepcopy(result)
+            self._state["vision"]["configured"] = configured
+            self._state["vision"].setdefault("confidence_threshold", threshold)
+            self._last_vision_received = self._clock()
+            self._touch()
 
     def _touch(self):
         self._revision += 1
@@ -160,10 +214,18 @@ class WebConsoleRuntime:
             state["chassis"]["motion"]["input_remaining_ms"] = None if self._input_deadline is None else max(0, int((self._input_deadline - now) * 1000))
             state["arm"]["health_age_ms"] = None if self._last_arm_health is None else max(0, int((now - self._last_arm_health) * 1000))
             state["arm"]["measurement"]["age_ms"] = None if self._last_arm_sample_received is None else max(0, int((now - self._last_arm_sample_received) * 1000))
+            vision_age_ms = None if self._last_vision_received is None else max(0, int((now - self._last_vision_received) * 1000))
+            state["vision"]["age_ms"] = vision_age_ms
+            if (state["vision"].get("accepted") and vision_age_ms is not None
+                    and vision_age_ms > self.config.vision.stale_after_ms):
+                state["vision"]["accepted"] = False
+                state["vision"]["status"] = "stale"
+                state["vision"]["error"] = "vision_result_stale"
             return {
                 "revision": self._revision,
                 "log_error": self._log_error,
                 "video": state["video"],
+                "vision": state["vision"],
                 "chassis": state["chassis"],
                 "arm": state["arm"],
                 "faults": list(self._faults.values()),
@@ -681,6 +743,11 @@ class WebConsoleRuntime:
 
     def close(self):
         self._stop_event.set()
+        if self._vision_worker is not None:
+            try:
+                self._vision_worker.stop()
+            except Exception:
+                pass
         try:
             self.disconnect_chassis()
         except Exception:

@@ -1259,3 +1259,76 @@ entry format:
 - Post-merge protected-file hashes and the prior unstaged XYZ log hunk are
   unchanged. Draft PR #2 remains open and excluded; its worktree is clean.
   Commit/push this documentation-only outcome record on main, then recheck sync.
+
+## 2026-09-04 - Add PC AprilTag board localization v1
+
+- Added an observation-only PC AprilTag 36h11 pipeline under `src/console/vision`
+  plus `app/apriltag_calibration.py`. It reads an image or the existing local
+  RTSP route and has no chassis/arm command path or device-side change.
+- Added strict camera-intrinsic and measured board-corner JSON models. Tracked
+  examples are deliberately `production_ready: false`; device-specific local
+  files are ignored. The output includes `T_camera_from_board`, its inverse,
+  rotation/translation, used IDs, reprojection RMSE, score components,
+  `pose_solved`, adjustable-threshold `accepted`, and a quality confidence that
+  is explicitly not represented as a calibrated probability.
+- The web console publishes the latest result and draws known/unknown tag boxes,
+  ID labels and concise confidence/translation status over its existing WebRTC
+  viewport, including letterbox and 90-degree display transforms. WebRTC and
+  inference remain separate, non-frame-synchronized receivers in v1.
+- L1 passed: 308 Python tests, 14 JavaScript tests, JavaScript syntax, CLI help,
+  Python compilation and diff checks. Synthetic evidence includes generated
+  tag decoding, oblique four-tag pose recovery and a valid one-tag solution.
+- No camera/RTSP/device connection, deployment, service restart, chassis or arm
+  motion occurred. Live detection range, overlay latency, threshold tuning and
+  metric accuracy remain unverified. Camera-to-arm-base extrinsics and motion
+  integration remain separate future goals.
+- Preserve user `.vscode/settings.json`, local `app/demo.py` 60% edit, prior XYZ
+  log hunk and the three untracked diagnostic directories. Commit/push only the
+  AprilTag goal files and this appended log section.
+
+## 2026-09-04 - Add safe GC4653 precalibration defaults
+
+- Used the supplied GC4653 H81/V51-degree fields of view with the actual
+  1280 x 720 stream to estimate fx 749.343722 px, fy 754.755696 px and principal
+  point (640, 360). Kept distortion coefficients at zero because the supplied
+  5% summary cannot be converted into an OpenCV coefficient vector.
+- Named the existing default geometry explicitly: four 40 mm tags at the
+  corners of an unmeasured 300 x 200 mm outer rectangle. Tracked examples and
+  ignored local copies remain `production_ready: false`.
+- Unready camera/board data may now generate boxes and tentative transforms, but
+  runtime forces `status=precalibration`, `accepted=false`, publishes readiness
+  flags, logs them and labels the UI `UNVERIFIED DEFAULTS`. Measured-ready inputs
+  retain the previous confidence/reprojection acceptance logic.
+- Upgraded only the schema and disabled vision section in the ignored local
+  console configuration; existing endpoints/device settings were preserved.
+  Vision remains disabled, so no RTSP stream or device session was opened.
+- L1 passed: 309 Python tests, 14 JavaScript tests, syntax/compile and diff
+  checks. No hardware, deployment, restart or motion. Physical lens calibration,
+  measured tag corners and camera-to-arm-base extrinsics remain required.
+- Commit/push only this follow-up plan, tracked config/code/docs/tests and this
+  new log section to the existing AprilTag PR branch. Preserve all prior dirty
+  user and diagnostic work.
+
+## 2026-09-04 - Run AprilTag live UI L2 observation
+
+- Enabled vision only in ignored local configuration and started the owned
+  MaixCam source, local relay and web console. The RTSP probe received 108
+  1280 x 720 frames in 6.015 seconds at 20.007 fps; first frame took 2.109
+  seconds. No chassis/arm connection or command path was opened.
+- UI inspection confirmed live ID-labelled outlines and confidence/RMSE/status
+  output. Outlines aligned on a stationary board at `ROT 90`; apparent box
+  displacement during motion was the unsynchronized 5 fps inference overlay
+  lagging the independent 20 fps WebRTC view.
+- Logged 270 localization records, 245 with tags and IDs 0-3. The 44 single-tag
+  records scored 0.563-0.858 with RMSE 0.022-1.196 px; there were 201 multi-tag
+  records, no accepted result and no vision failure. Multi-tag rejection is
+  expected because the physical layout differs from the unmeasured default and
+  both calibration inputs remain unverified.
+- The configured 5 fps cap and sampled 56-189 ms processing time explain the
+  low update rate. A clear no-tag sample had 114 rejected candidates, so a
+  future performance goal should add timing/candidate/edge telemetry and
+  benchmark higher rates before changing thresholds or detector parameters.
+- At the user's request, stopped the monitor, console, FFmpeg, MediaMTX and the
+  test-started MaixCam source; ports 8080, 8555 and 8889 were closed. L2 only,
+  no deployment or motion. No runtime source changed. Preserve all prior dirty
+  files and stage only this section plus the live-goal plan.

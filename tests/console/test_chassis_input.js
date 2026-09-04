@@ -3,8 +3,15 @@
 // Real production input bindings; no browser, socket or moving device is used.
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {ChassisInput, bindChassisInput} = require("../../src/console/web_console/static/app.js");
+const {ChassisInput, bindChassisInput, mapVideoPoint} = require("../../src/console/web_console/static/app.js");
 const flush = () => new Promise(resolve => setImmediate(resolve));
+
+test("vision points preserve aspect ratio and letterbox offset", () => {
+  const point = mapVideoPoint([640, 360], {width: 1280, height: 720}, {width: 800, height: 800});
+  assert.deepEqual(point, {x: 400, y: 400});
+  const corner = mapVideoPoint([0, 0], {width: 1280, height: 720}, {width: 800, height: 800});
+  assert.deepEqual(corner, {x: 0, y: 175});
+});
 
 function deferred() {
   let resolve, reject;

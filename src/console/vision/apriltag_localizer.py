@@ -119,6 +119,7 @@ class AprilTagBoardLocalizer:
             "image_height": height,
             "dictionary": "DICT_APRILTAG_36H11",
             "layout_id": self.board.layout_id,
+            "board_frame": self.board.frame,
             "calibration_id": self.camera.calibration_id,
             "camera_calibration_ready": self.camera.production_ready,
             "board_layout_ready": self.board.production_ready,

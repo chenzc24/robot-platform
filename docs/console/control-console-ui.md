@@ -175,6 +175,14 @@ separate receivers and are not frame-synchronized in v1; overlays may lag while
 the camera moves. Vision output is observation-only and never starts a device
 session or issues motion. See [AprilTag localization](apriltag-localization.md).
 
+When schema 5 localization is enabled, the backend invalidates the old board
+transform before any nonzero PC chassis-motion request, waits after the ESP32
+again reports `enabled_stopped`, and locks a new generation from a bounded
+window of stable accepted poses. `GET /api/state` exposes the result under
+`localization`. This is an orchestration interface for a future coordinate task,
+not an added gate on the independent manual arm controls. See the
+[localization lock state machine](localization-state-machine.md).
+
 ## Launch
 
 Copy the template to the ignored local configuration once and fill approved
@@ -228,6 +236,8 @@ POST /api/chassis/motion/keepalive
 
 POST /api/arm/connect           POST /api/arm/disconnect
 POST /api/arm/status            POST /api/arm/command
+
+POST /api/localization/relocalize
 
 POST /api/faults/ack
 ```

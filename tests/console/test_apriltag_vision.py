@@ -17,11 +17,13 @@ from runtime_config import (
     ArmConfig,
     ChassisConfig,
     ManualChassisConfig,
+    LocalizationConfig,
     RuntimeConfig,
     VideoConfig,
     VisionConfig,
     load_runtime_config,
 )
+from localization import create_localization_state_machine
 from vision.apriltag_localizer import AprilTagBoardLocalizer
 from vision.calibration import (
     BoardLayout,
@@ -70,7 +72,7 @@ class CalibrationTests(unittest.TestCase):
         self.assertAlmostEqual(camera.camera_matrix[0][0], 749.343722, places=6)
         self.assertAlmostEqual(camera.camera_matrix[1][1], 754.755696, places=6)
 
-    def test_schema_four_loads_vision_and_schema_three_remains_compatible(self):
+    def test_schema_five_loads_localization_and_older_schemas_remain_compatible(self):
         base = json.loads((ROOT / "config" / "console.example.json").read_text(encoding="utf-8"))
         with tempfile.TemporaryDirectory() as directory:
             path = pathlib.Path(directory) / "console.json"
@@ -78,11 +80,32 @@ class CalibrationTests(unittest.TestCase):
             current = load_runtime_config(path)
             self.assertFalse(current.vision.enabled)
             self.assertEqual(current.vision.dictionary, "DICT_APRILTAG_36H11")
+            self.assertFalse(current.localization.enabled)
+            self.assertEqual(current.localization.settle_time_ms, 2000)
+            version_four = dict(base)
+            version_four["schema_version"] = 4
+            del version_four["localization"]
+            path.write_text(json.dumps(version_four), encoding="utf-8")
+            self.assertFalse(load_runtime_config(path).localization.enabled)
             legacy = dict(base)
             legacy["schema_version"] = 3
             del legacy["vision"]
+            del legacy["localization"]
             path.write_text(json.dumps(legacy), encoding="utf-8")
             self.assertFalse(load_runtime_config(path).vision.enabled)
+
+    def test_localization_requires_enabled_complete_vision(self):
+        runtime = RuntimeConfig(
+            chassis=ChassisConfig("host", 4242, 1.0, "console", "CREDENTIAL"),
+            manual_chassis=ManualChassisConfig(False, 500, 300, 600, 800),
+            arm=ArmConfig("host", 4343, 1.0, "console"),
+            video=VideoConfig("", "", 1.0, ""),
+            vision=VisionConfig(),
+            localization=LocalizationConfig(enabled=True, geometry_path="geometry.json"),
+        )
+        snapshot = create_localization_state_machine(runtime).snapshot()
+        self.assertEqual(snapshot["state"], "blocked")
+        self.assertEqual(snapshot["reason"], "localization_requires_vision")
 
     def test_measured_json_loaders_preserve_frame_units_and_corner_order(self):
         camera = {

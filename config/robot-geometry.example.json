@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "production_ready": false,
+  "geometry_id": "unmeasured-camera-base-and-pen-offset",
+  "units": "mm",
+  "frames": {
+    "base": "robot_base_user0",
+    "camera": "gc4653_camera",
+    "tool0": "robot_tool0",
+    "pen": "pen_tip"
+  },
+  "T_base_from_camera": [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]],
+  "T_tool0_from_pen": [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+}

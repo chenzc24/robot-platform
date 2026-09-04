@@ -1344,3 +1344,24 @@ entry format:
   diff hash for the existing settings, drawing demo and prior log hunk remained
   unchanged across the branch switch. No device service, connection or motion
   was used for the merge.
+
+## 2026-09-04 - Add reusable localization-lock state machine
+
+- Added a PC-only fail-closed state machine for chassis motion invalidation,
+  logical-stop settling, bounded unique AprilTag frame collection and a stable
+  versioned `T_base_from_board` lock. Permanent missing/unready configuration
+  stays blocked through runtime events.
+- Added strict measured `T_base_from_camera` and `T_tool0_from_pen` geometry,
+  schema-5 disabled defaults, backward-compatible schema 3/4 loading, sanitized
+  transition events and a safe relocalize endpoint. Identity examples remain
+  `production_ready: false`; the measured local geometry path is ignored.
+- Exposed immutable generation-checked context plus begin/finish lifecycle for
+  a future coordinated task executor. Existing YOLO/manual arm commands remain
+  independent, and no generic task-execution HTTP route was introduced.
+- L1 passed 324 Python tests across all repository suites, 14 JavaScript tests,
+  Python compilation, JavaScript syntax, JSON parsing and diff checks. No device
+  connection, service start, deployment or motion occurred.
+- Physical camera/base and Tool0/pen calibration, measured chassis standstill,
+  arm orientation/workspace checks and L4 task execution remain unverified.
+  Commit/push only the scoped state-machine goal and this appended section on
+  `target/localization-lock-state-machine`; preserve all prior dirty work.

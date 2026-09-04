@@ -22,15 +22,17 @@ was found; `accepted` additionally means it passed the configured confidence,
 reprojection, finite-value and positive-depth checks and both calibration files
 are explicitly marked `production_ready: true`.
 
-This output is not yet the arm-base transform. After the fixed camera-to-base
-extrinsic is measured, compose it as:
+The console localization lock composes this observation with the fixed
+camera-to-base extrinsic as:
 
 ```text
 T_base_from_board = T_base_from_camera * T_camera_from_board
 ```
 
-Do not connect either matrix to motion until the physical corner convention,
-camera intrinsics, camera-to-base extrinsic, TCP and workspace checks have been
+The resulting versioned task context is described in the
+[localization state machine](localization-state-machine.md). Do not connect
+either matrix to motion until the physical corner convention, camera
+intrinsics, camera-to-base extrinsic, TCP and workspace checks have been
 validated separately.
 
 ## Calibration files
@@ -76,10 +78,11 @@ a print specification. Version 1 requires all stored tag corners to be coplanar.
 
 ## Console configuration
 
-Use schema version 4 in ignored `config/console.local.json`, copy the `vision`
+Use schema version 5 in ignored `config/console.local.json`, copy the `vision`
 section from `config/console.example.json`, then set `enabled` to `true` after
-copying the local files. Unready defaults produce only `precalibration` output;
-measured files may be marked ready later. Important tunables are:
+copying the local files. Schema 3 and 4 files remain loadable but cannot enable
+the new localization lock. Unready defaults produce only `precalibration`
+output; measured files may be marked ready later. Important tunables are:
 
 - `detection_fps`: PC inference rate; it does not change the WebRTC frame rate.
 - `min_tag_edge_px`: projected-size quality reference for oblique or distant tags.
@@ -116,7 +119,8 @@ The overlay and WebRTC player consume the same underlying RTSP source through
 separate receive paths. Their frames are not timestamp-synchronized in v1, so a
 moving camera can show a small box/video offset. Board localization must be
 frozen only after the chassis is stopped and several stable observations have
-been checked. Exact frame correlation is follow-up work.
+been checked. The state machine now performs that stopped/settled/stable-window
+lock, but exact frame correlation remains follow-up work.
 
 ## Standalone app
 

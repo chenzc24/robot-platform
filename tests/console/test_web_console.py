@@ -13,6 +13,8 @@ import urllib.request
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src" / "console"))
 
+from localization.geometry import RobotGeometry
+from localization.state_machine import LocalizationLockStateMachine
 from runtime_config import ArmConfig, ChassisConfig, ManualChassisConfig, RuntimeConfig, VideoConfig
 from web_console.runtime import WebConsoleError, WebConsoleRuntime
 from web_console.server import create_server
@@ -25,6 +27,48 @@ def config(manual=True):
         arm=ArmConfig("maixcam.invalid", 4343, 1.0, "console"),
         video=VideoConfig("", "http://127.0.0.1:8889/maixcam/", 1.0, ""),
     )
+
+
+def ready_geometry():
+    identity = (
+        (1.0, 0.0, 0.0, 0.0),
+        (0.0, 1.0, 0.0, 0.0),
+        (0.0, 0.0, 1.0, 0.0),
+        (0.0, 0.0, 0.0, 1.0),
+    )
+    return RobotGeometry(
+        geometry_id="test-geometry",
+        production_ready=True,
+        base_frame="robot_base_user0",
+        camera_frame="gc4653_camera",
+        tool_frame="robot_tool0",
+        pen_frame="pen_tip",
+        T_base_from_camera=identity,
+        T_tool0_from_pen=identity,
+    )
+
+
+def localization_vision_result(sequence):
+    return {
+        "accepted": True,
+        "pose_solved": True,
+        "camera_calibration_ready": True,
+        "board_layout_ready": True,
+        "calibration_id": "calibration-a",
+        "layout_id": "layout-a",
+        "board_frame": "apriltag_board",
+        "frame_sequence": sequence,
+        "captured_at_ms": sequence * 10,
+        "used_ids": [0, 1, 2, 3],
+        "confidence": 0.95,
+        "reprojection_rmse_px": 0.2,
+        "T_camera_from_board": [
+            [1.0, 0.0, 0.0, 10.0],
+            [0.0, 1.0, 0.0, 20.0],
+            [0.0, 0.0, 1.0, 30.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ],
+    }
 
 
 class Connection:
@@ -297,6 +341,53 @@ class WebRuntimeTests(unittest.TestCase):
         self.assertNotIn("TEST_CREDENTIAL", content)
         self.assertNotIn("esp32.invalid", content)
 
+    def test_localization_locks_exposes_task_context_and_invalidates_on_motion(self):
+        clock = [10.0]
+        machine = LocalizationLockStateMachine(
+            enabled=True,
+            geometry=ready_geometry(),
+            settle_time_ms=100,
+            sample_window_ms=1000,
+            min_valid_samples=2,
+            min_visible_tags=2,
+            clock=lambda: clock[0],
+        )
+        runtime = WebConsoleRuntime(
+            config(), lambda _config: self.chassis, lambda _config: self.arm,
+            start_workers=False, clock=lambda: clock[0], localization_machine=machine,
+        )
+        try:
+            runtime.connect_chassis()
+            runtime.enable_chassis()
+            self.assertEqual(runtime.snapshot()["localization"]["state"], "settling")
+            clock[0] += 0.11
+            runtime._on_vision_update(localization_vision_result(1))
+            runtime._on_vision_update(localization_vision_result(2))
+            locked = runtime.snapshot()["localization"]
+            self.assertEqual(locked["state"], "locked")
+            self.assertTrue(locked["valid"])
+            lock_events = [event for event in runtime.snapshot()["events"] if event["target"] == "Localization"]
+            self.assertTrue(any(event["lifecycle"] == "DONE" and "state=locked" in event["result"] for event in lock_events))
+            context = runtime.begin_localized_task("draw-1", locked["generation"])
+            self.assertEqual(context["T_base_from_board"][0][3], 10.0)
+            runtime.finish_localized_task("draw-1", "DONE", "complete")
+
+            epoch = runtime.snapshot()["chassis"]["motion"]["epoch"]
+            runtime.start_chassis_motion({
+                "vx_mm_s": 1,
+                "vy_mm_s": 0,
+                "omega_mrad_s": 0,
+                "input_mode": "momentary",
+                "motion_epoch": epoch,
+            })
+            invalidated = runtime.snapshot()["localization"]
+            self.assertEqual(invalidated["state"], "moving")
+            self.assertFalse(invalidated["valid"])
+            with self.assertRaisesRegex(WebConsoleError, "localization_not_locked"):
+                runtime.localized_task_context(locked["generation"])
+        finally:
+            runtime.close()
+
 
 class WebServerTests(unittest.TestCase):
     def setUp(self):
@@ -341,6 +432,13 @@ class WebServerTests(unittest.TestCase):
         response = json.load(self._request("/api/chassis/stop", {}, self.base))
         self.assertTrue(response["ok"])
         self.assertEqual(response["state"]["chassis"]["link"], "offline")
+
+    def test_relocalize_route_fails_closed_when_localization_is_disabled(self):
+        with self.assertRaises(urllib.error.HTTPError) as rejected:
+            self._request("/api/localization/relocalize", {}, self.base)
+        self.assertEqual(rejected.exception.code, 409)
+        body = json.load(rejected.exception)
+        self.assertEqual(body["error"], "localization_disabled")
 
     def test_server_refuses_non_loopback_binding(self):
         with self.assertRaisesRegex(ValueError, "loopback"):

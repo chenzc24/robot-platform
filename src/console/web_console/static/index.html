@@ -24,9 +24,12 @@
       <div class="viewport rotated" id="viewport">
         <iframe id="video-frame" title="MaixCam live video"></iframe>
         <div class="no-video" id="no-video"><span>NO VIDEO</span><small>MediaMTX player is not configured</small></div>
-        <div class="vision-overlay" id="vision-overlay" aria-hidden="true"></div>
+        <div class="vision-overlay" id="vision-overlay" aria-hidden="true">
+          <canvas class="vision-canvas" id="vision-canvas"></canvas>
+          <div class="vision-summary" id="vision-summary"><strong>APRILTAG OFF</strong><span>Observation only</span></div>
+        </div>
       </div>
-      <footer class="camera-foot"><span>WEBRTC / MEDIAMTX</span><span id="video-rotation">ROT 90°</span></footer>
+      <footer class="camera-foot"><span id="vision-foot">WEBRTC / APRILTAG OFF</span><span id="video-rotation">ROT 90°</span></footer>
     </section>
 
     <section class="device-panel">

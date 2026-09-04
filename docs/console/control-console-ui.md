@@ -34,7 +34,7 @@ to the browser journal.
 |                                             | Chassis | Robot Arm     |
 | Camera                                      +-------------------------+
 | complete letterboxed WebRTC viewport        | status and connection   |
-| future vision overlay layer                 | complete precise panel  |
+| PC AprilTag observation overlay             | complete precise panel  |
 +---------------------------------------------+-------------------------+
 | collapsed Diagnostics: active faults + recent command events          |
 +-----------------------------------------------------------------------+
@@ -156,19 +156,24 @@ arm query therefore does not block chassis PING/STATUS. Arm polling waits
 accumulating polls. This is request-driven feedback, not high-frequency or
 in-motion telemetry. ESP32 heartbeat-stop and velocity-hold limits are unchanged.
 
-## Camera and future vision
+## Camera and AprilTag vision
 
 The page embeds the local MediaMTX WebRTC player from `video.webrtc_url` and
-does not proxy or transcode video through the control server. The video and an
-empty future overlay layer fill the same viewport. Future computer vision can
-publish frame-correlated overlays without changing either command route.
+does not proxy or transcode video through the control server. When explicitly
+enabled, the PC opens the local RTSP route independently, detects known AprilTag
+36h11 corners, estimates the board pose, and publishes the latest observation
+through the existing state API. A transparent canvas draws ID-labelled boxes
+with the same letterbox and 90-degree display transform as the preview.
 
 The blue Video indicator means that a browser route is configured; it is not a
 claim that frames are currently arriving. MediaMTX's player owns live stream
 and decode feedback until a separate frame-health API is added.
 
-The RTSP URL remains configured for future Python inference and the legacy
-PySide6 decoder. The browser preview does not replace that inference input.
+The RTSP URL is shared by the AprilTag worker and legacy PySide6 decoder. The
+browser preview does not replace that inference input. WebRTC and inference are
+separate receivers and are not frame-synchronized in v1; overlays may lag while
+the camera moves. Vision output is observation-only and never starts a device
+session or issues motion. See [AprilTag localization](apriltag-localization.md).
 
 ## Launch
 

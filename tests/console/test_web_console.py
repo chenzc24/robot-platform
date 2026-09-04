@@ -323,8 +323,10 @@ class WebServerTests(unittest.TestCase):
         self.assertIn("EXACT VECTOR", html)
         self.assertIn("ROBOT ARM", html)
         self.assertIn("Measured robot arm position", html)
+        self.assertIn('id="vision-canvas"', html)
         response = json.load(self._request("/api/state"))
         self.assertTrue(response["ok"])
+        self.assertEqual(response["state"]["vision"]["status"], "disabled")
         self.assertNotIn("credential", json.dumps(response))
 
     def test_rejects_non_loopback_origin_and_unknown_paths(self):

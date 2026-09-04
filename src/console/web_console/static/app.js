@@ -53,6 +53,69 @@ function renderMeasurement(root, labels, values) {
   });
 }
 
+function mapVideoPoint(point, frame, viewport) {
+  if (!Array.isArray(point) || frame.width <= 0 || frame.height <= 0 || viewport.width <= 0 || viewport.height <= 0) return null;
+  const scale = Math.min(viewport.width / frame.width, viewport.height / frame.height);
+  return {
+    x: (viewport.width - frame.width * scale) / 2 + point[0] * scale,
+    y: (viewport.height - frame.height * scale) / 2 + point[1] * scale,
+  };
+}
+
+function renderVision(vision) {
+  const canvas = $("#vision-canvas");
+  const summary = $("#vision-summary");
+  const viewport = $("#viewport");
+  const context = canvas.getContext("2d");
+  const width = viewport.clientWidth, height = viewport.clientHeight;
+  const ratio = window.devicePixelRatio || 1;
+  if (canvas.width !== Math.round(width * ratio) || canvas.height !== Math.round(height * ratio)) {
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(height * ratio);
+  }
+  context.setTransform(ratio, 0, 0, ratio, 0, 0);
+  context.clearRect(0, 0, width, height);
+  summary.className = "vision-summary";
+  if (!vision?.configured) {
+    summary.firstElementChild.textContent = "APRILTAG OFF";
+    summary.lastElementChild.textContent = "Observation only";
+    $("#vision-foot").textContent = "WEBRTC / APRILTAG OFF";
+    return;
+  }
+  const confidence = Number(vision.confidence || 0);
+  const rmse = Number.isFinite(vision.reprojection_rmse_px) ? `${Number(vision.reprojection_rmse_px).toFixed(2)} px` : "—";
+  const ids = Array.isArray(vision.used_ids) && vision.used_ids.length ? vision.used_ids.join(",") : "—";
+  const state = String(vision.status || "starting").toUpperCase();
+  summary.classList.add(vision.accepted ? "accepted" : (vision.status === "error" ? "error" : "rejected"));
+  summary.firstElementChild.textContent = `APRILTAG ${state} · C ${confidence.toFixed(2)} · RMSE ${rmse}`;
+  const translation = vision.tvec_board_origin_in_camera_mm;
+  summary.lastElementChild.textContent = Array.isArray(translation)
+    ? `IDs ${ids} · board origin in camera [${translation.map(value => Number(value).toFixed(1)).join(", ")}] mm`
+    : `IDs ${ids} · ${String(vision.error || "waiting")}`;
+  $("#vision-foot").textContent = `WEBRTC / TAGS ${vision.known_count || 0} / ${state}`;
+  if (!vision.image_width || !vision.image_height || !Array.isArray(vision.observations)) return;
+  const frame = {width: vision.image_width, height: vision.image_height};
+  vision.observations.forEach(observation => {
+    if (!Array.isArray(observation.corners_px) || observation.corners_px.length !== 4) return;
+    const points = observation.corners_px.map(point => mapVideoPoint(point, frame, {width, height}));
+    if (points.some(point => point == null)) return;
+    const color = observation.known ? (vision.accepted ? "#37c990" : "#f0b654") : "#8b98aa";
+    context.strokeStyle = color;
+    context.fillStyle = color;
+    context.lineWidth = 2;
+    context.beginPath();
+    context.moveTo(points[0].x, points[0].y);
+    points.slice(1).forEach(point => context.lineTo(point.x, point.y));
+    context.closePath();
+    context.stroke();
+    context.beginPath();
+    context.arc(points[0].x, points[0].y, 4, 0, Math.PI * 2);
+    context.fill();
+    context.font = "bold 12px ui-monospace, Consolas, monospace";
+    context.fillText(`ID ${observation.id}`, points[0].x + 6, points[0].y - 6);
+  });
+}
+
 function render(state) {
   if (currentState && state.revision < currentState.revision) return;
   currentState = state;
@@ -78,6 +141,7 @@ function render(state) {
     : String(measurement.error || "no sample").toUpperCase();
   renderMeasurement($("#current-joints"), ["J1","J2","J3","J4","J5","J6"], measurement.joint_deg);
   renderMeasurement($("#current-pose"), ["X","Y","Z","RX","RY","RZ"], measurement.pose);
+  renderVision(state.vision);
   $("#requested-vector").textContent = c.motion
     ? `${c.velocity.vx_mm_s} / ${c.velocity.vy_mm_s} / ${c.velocity.omega_mrad_s} · ${c.motion.mode.toUpperCase()}`
     : "Restart backend to load updated controls";
@@ -278,14 +342,14 @@ function bind() {
   $("#move-linear").onclick=()=>armCommand("move_linear",{pose:$$(".pose-target").map(x=>Number(x.value))});
   $("#set-gripper").onclick=()=>armCommand("gripper",{width_mm:Number($("#gripper-width").value)});
   $("#gripper-width").oninput=()=>$("#gripper-output").textContent=`${$("#gripper-width").value} mm`;
-  $("#rotate-video").onclick=()=>{const rotated=$("#viewport").classList.toggle("rotated");$("#video-rotation").textContent=rotated?"ROT 90°":"ROT 0°"};
+  $("#rotate-video").onclick=()=>{const rotated=$("#viewport").classList.toggle("rotated");$("#video-rotation").textContent=rotated?"ROT 90°":"ROT 0°";if(currentState)renderVision(currentState.vision)};
   $("#open-video").onclick=()=>{if(currentState?.video.webrtc_url)window.open(currentState.video.webrtc_url,"_blank","noopener")};
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = {ChassisInput, bindChassisInput};
+  module.exports = {ChassisInput, bindChassisInput, mapVideoPoint};
 } else {
   chassisInput = new ChassisInput(api, () => currentState, message => toast(message, true));
-  bind(); poll(); setInterval(poll,500); setInterval(()=>chassisInput.pulse(),200);
+  bind(); poll(); window.addEventListener("resize",()=>{if(currentState)renderVision(currentState.vision)}); setInterval(poll,500); setInterval(()=>chassisInput.pulse(),200);
   setInterval(()=>$("#clock").textContent=new Date().toLocaleTimeString("en-GB"),1000);
 }

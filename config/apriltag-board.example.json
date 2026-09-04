@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "production_ready": false,
+  "layout_id": "REPLACE_WITH_MEASURED_BOARD_LAYOUT",
+  "frame": "drawing_board",
+  "units": "mm",
+  "dictionary": "DICT_APRILTAG_36H11",
+  "corner_order": "top_left_clockwise",
+  "tags": {
+    "0": {"corners": [[0, 0, 0], [40, 0, 0], [40, 40, 0], [0, 40, 0]]},
+    "1": {"corners": [[260, 0, 0], [300, 0, 0], [300, 40, 0], [260, 40, 0]]},
+    "2": {"corners": [[260, 160, 0], [300, 160, 0], [300, 200, 0], [260, 200, 0]]},
+    "3": {"corners": [[0, 160, 0], [40, 160, 0], [40, 200, 0], [0, 200, 0]]}
+  }
+}

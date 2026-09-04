@@ -1259,3 +1259,29 @@ entry format:
 - Post-merge protected-file hashes and the prior unstaged XYZ log hunk are
   unchanged. Draft PR #2 remains open and excluded; its worktree is clean.
   Commit/push this documentation-only outcome record on main, then recheck sync.
+
+## 2026-09-04 - Add PC AprilTag board localization v1
+
+- Added an observation-only PC AprilTag 36h11 pipeline under `src/console/vision`
+  plus `app/apriltag_calibration.py`. It reads an image or the existing local
+  RTSP route and has no chassis/arm command path or device-side change.
+- Added strict camera-intrinsic and measured board-corner JSON models. Tracked
+  examples are deliberately `production_ready: false`; device-specific local
+  files are ignored. The output includes `T_camera_from_board`, its inverse,
+  rotation/translation, used IDs, reprojection RMSE, score components,
+  `pose_solved`, adjustable-threshold `accepted`, and a quality confidence that
+  is explicitly not represented as a calibrated probability.
+- The web console publishes the latest result and draws known/unknown tag boxes,
+  ID labels and concise confidence/translation status over its existing WebRTC
+  viewport, including letterbox and 90-degree display transforms. WebRTC and
+  inference remain separate, non-frame-synchronized receivers in v1.
+- L1 passed: 308 Python tests, 14 JavaScript tests, JavaScript syntax, CLI help,
+  Python compilation and diff checks. Synthetic evidence includes generated
+  tag decoding, oblique four-tag pose recovery and a valid one-tag solution.
+- No camera/RTSP/device connection, deployment, service restart, chassis or arm
+  motion occurred. Live detection range, overlay latency, threshold tuning and
+  metric accuracy remain unverified. Camera-to-arm-base extrinsics and motion
+  integration remain separate future goals.
+- Preserve user `.vscode/settings.json`, local `app/demo.py` 60% edit, prior XYZ
+  log hunk and the three untracked diagnostic directories. Commit/push only the
+  AprilTag goal files and this appended log section.

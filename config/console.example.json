@@ -1,5 +1,5 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "chassis": {
     "host": "",
     "port": 0,
@@ -25,5 +25,17 @@
     "webrtc_url": "",
     "connect_timeout_seconds": 3.0,
     "snapshot_directory": ""
+  },
+  "vision": {
+    "enabled": false,
+    "board_layout_path": "config/apriltag-board.local.json",
+    "camera_calibration_path": "config/camera-calibration.local.json",
+    "dictionary": "DICT_APRILTAG_36H11",
+    "detection_fps": 5.0,
+    "min_tag_edge_px": 24.0,
+    "max_reprojection_error_px": 5.0,
+    "min_confidence": 0.55,
+    "stale_after_ms": 1200,
+    "log_path": "logs/vision/apriltag.log"
   }
 }

@@ -10,6 +10,10 @@ record publication, readback and feedback evidence. Later
 is separate from deployment. Git consolidation does not upload files, restart
 services or replace the operator's controller project.
 
+The [2026-09-08 Baseline candidate](2026-09-08-baseline-candidate.md) freezes
+the latest merged source and generated arm-project hashes for the next staged
+deployment. It is preparation evidence only, not a device deployment record.
+
 ## 1. Deployment Topology
 
 The maintenance plane allows the computer to reach each target independently:

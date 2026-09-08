@@ -1449,3 +1449,54 @@ entry format:
   migration worktree and local migration/cleanup refs. Local main cannot be
   fast-forwarded safely while another worker has an overlapping uncommitted
   `plan/log.md`; its files remain untouched.
+
+## 2026-09-08 — Offline grouped Dobot drawing importer and planner
+
+- Audited `E:\Downloads\机械臂代码——1代.zip` as read-only input and implemented a
+  literal-only `var.py` importer, strict grouped/flat drawing loaders, explicit
+  local geometry and pen mapping, and a deterministic preview/checkpoint
+  planner. The CLI has no execute, host or port option and imports no device
+  client.
+- Converted the supplied 5-group, 439-stroke, 3,903-point drawing into ignored
+  `dataset/dobot-generation-1.json`. The importer rejects executable Python,
+  ambiguous ZIP contents and accidental output overwrite. No dataset or archive
+  is included in Git.
+- The planner applies the configured normalized-to-User-Y/Z mapping plus a
+  scalar JSON-axis offset, prechecks endpoints, and emits an explicit safe-home
+  reposition barrier with a resumable checkpoint. Pen selection remains an
+  abstract slot operation; it is not a rack-motion implementation.
+- L1 passed 307 applicable Python tests and the repository source checker for 7
+  changed Python files. Two existing PySide6 GUI test modules were not run
+  because PySide6 is absent in this worktree; root discovery found zero tests
+  due to the repository layout and was not counted. JSON and source-boundary
+  checks passed.
+- No hardware, service, network endpoint, deployment, device write or motion was
+  used. Physical pen mappings/poses, User/Tool geometry, reachability, DI wait,
+  buffered motion and the 210 mm metadata versus 150 mm runtime discrepancy
+  remain blocked for later reviewed goals and L3/L4 validation.
+- Submit only the declared files on `target/drawing-job-planner`; preserve the
+  primary worktree's existing dirty files and leave its uncommitted master
+  migration plan for user review.
+- Implementation commit `3aa32f8` was pushed and PR #9 was opened against
+  `main`: https://github.com/chenzc24/robot-platform/pull/9. No merge was
+  performed.
+
+## 2026-09-08 — Preserve four-slot pen rack planning
+
+- Extended PR #9's offline planner with exactly four configured P1-P4 slots,
+  using the joint vectors from the supplied controller `point.json`. The five
+  drawing groups explicitly map to four pens; pink and black share P3, matching
+  the delivered program's effective behavior without inventing a fifth slot.
+- Preserved normal pickup/change depth 60 mm, final return depth 30 mm, gripper
+  open 60 and closed 1 as configuration. Pen select/return steps now carry the
+  future joint, relative-Z and gripper recipe; adjacent groups sharing one slot
+  skip redundant exchange motion.
+- The real 5-group preview completed with 439 strokes, 3,903 points, 5,220
+  drawing-arm commands, 4 selections and no barrier. It remained preview-only
+  and production-not-ready.
+- L1 passed 126 applicable tests (22 app, 101 console, 3 importer), the 7-file
+  Python source check, example JSON parse and diff check. Two existing PySide6
+  GUI suites remain excluded because PySide6 is absent.
+- No hardware, service, endpoint, deployment, device write or motion occurred.
+  Physical rack geometry and guarded runtime execution remain unverified.
+- Commit `0511a72` was pushed to the open PR #9 branch. No merge was performed.

@@ -1,0 +1,47 @@
+{
+  "production_ready": false,
+  "flat_group_name": "default",
+  "group_pen_slots": {
+    "黄色": "P1",
+    "紫色": "P2",
+    "粉色": "P3",
+    "黑色": "P3",
+    "绿色": "P4"
+  },
+  "pen_rack": {
+    "change_depth_mm": 60.0,
+    "final_return_depth_mm": 30.0,
+    "gripper_open_mm": 60.0,
+    "gripper_closed_mm": 1.0,
+    "slots": {
+      "P1": {
+        "joint_deg": [-131.60878, 33.679958, 51.551182, 0.71456, -91.924995, 48.044312]
+      },
+      "P2": {
+        "joint_deg": [-114.92453, 19.150589, 73.246681, -5.729368, -93.007286, 64.709206]
+      },
+      "P3": {
+        "joint_deg": [-102.863098, 20.7243, 69.4067, -0.9928, -89.962502, 72.255302]
+      },
+      "P4": {
+        "joint_deg": [-82.6343, 29.2831, 56.549599, 3.3458, -90.262802, 92.482002]
+      }
+    }
+  },
+  "geometry": {
+    "canvas_width_mm": 150.0,
+    "canvas_height_mm": 150.0,
+    "user_y_offset_mm": -75.0,
+    "user_z_offset_mm": -100.0,
+    "home_pose_user_y_mm": 0.0,
+    "reachable_user_y_min_mm": -200.0,
+    "reachable_user_y_max_mm": 180.0,
+    "pen_travel_x_mm": 51.0,
+    "home_joints_deg": [-120.0, 0.0, -90.0, -90.0, -30.0, 90.0],
+    "user": 0,
+    "tool": 0,
+    "draw_speed_pct": 12,
+    "travel_speed_pct": 5,
+    "accel_pct": 5
+  }
+}

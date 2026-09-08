@@ -20,3 +20,5 @@ Local migration changes are recorded in Git. Original archive remains unchanged.
 All 95 upstream manifest entries were verified against the ZIP before adaptation. The four weight files also match the bundled weight manifest and are preserved locally at `model-service/models/`, excluded from Git.
 
 Adaptations: root launcher/docs, generated/runtime/weight exclusions, frozen dependency installation, and a configurable frontend proxy wired to the selected backend port. No image algorithm or robot runtime code was changed.
+
+Whitespace-only cleanup removes inherited trailing whitespace/extra EOF blank lines reported by Git in seven imported files.

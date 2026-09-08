@@ -73,8 +73,8 @@ def config_document(**geometry_overrides):
         "tool": 0,
         "draw_speed_pct": 12,
         "draw_blend_pct": 100,
-        "travel_speed_pct": None,
-        "accel_pct": None,
+        "travel_speed_pct": 50,
+        "accel_pct": 20,
     }
     geometry.update(geometry_overrides)
     return {
@@ -213,9 +213,10 @@ class DrawingPlannerTests(unittest.TestCase):
         ]
         self.assertEqual(draw_moves[0].payload["speed_pct"], 12)
         self.assertEqual(draw_moves[0].payload["blend_pct"], 100)
-        self.assertNotIn("accel_pct", draw_moves[0].payload)
-        self.assertNotIn("speed_pct", moves[0].payload)
-        self.assertNotIn("accel_pct", moves[0].payload)
+        self.assertEqual(draw_moves[0].payload["accel_pct"], 20)
+        self.assertEqual(moves[0].payload["speed_pct"], 50)
+        self.assertEqual(moves[0].payload["accel_pct"], 20)
+        self.assertNotIn("blend_pct", moves[0].payload)
         pen_steps = [step for step in plan.steps if step.kind.startswith("pen.")]
         self.assertEqual(
             [step.kind for step in pen_steps],

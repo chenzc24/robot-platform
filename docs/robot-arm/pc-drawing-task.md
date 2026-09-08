@@ -88,13 +88,12 @@ axis offset is supplied per localization generation; it changes each stroke's
 anchor but cancels from within-stroke deltas.
 
 The shared motion profile also follows the delivered controller source. Stroke
-segments explicitly carry `speed_pct=12` and `blend_pct=100`. Home, anchor,
-pen-down/up and rack movements had no `v` or acceleration option in that source,
-so their configuration values are `null` and the abstract plan omits those
-options instead of inventing 5%. Baseline and Advanced consume this same plan;
-only their chassis relocation strategy differs. The current primitive arm
-gateway cannot yet execute the omitted/default options or nonzero blending, so
-this is source-faithful planning rather than a claim of runtime parity.
+segments explicitly carry `speed_pct=12` and `blend_pct=100`. Per the project
+owner's clarified defaults, Home, anchor, pen-down/up and rack movements carry
+`speed_pct=50`, and every arm motion carries `accel_pct=20`. Baseline and
+Advanced consume this same plan; only their chassis relocation strategy
+differs. The current primitive arm gateway cannot yet execute nonzero blending,
+so `cp=100` is source-faithful planning rather than a claim of runtime parity.
 
 ## Preview
 

@@ -19,13 +19,12 @@ python app/drawing_task.py dataset/dobot-generation-1.json `
 sends no motion. The formal configuration preserves the coworker project's
 150 mm canvas, User-Y/Z mapping, 51 mm pen travel, home joints, P1-P4 rack
 poses, 60/30 mm rack depths, 60/1 mm gripper widths, drawing `v=12`, and
-`cp=100`. Motions for which the coworker project omitted options retain JSON
-`null`, meaning controller defaults rather than an invented percentage.
+`cp=100`. Motions without a source-explicit speed use the project owner's
+clarified 50% default, and every arm motion uses 20% acceleration.
 
-The current MaixCam/RPA2 primitive route still requires explicit speed and
-acceleration and forces blending to zero. Therefore the preview records the
-delivered profile, but exact execution of omitted options and `cp=100` remains
-a separately reviewed cross-device executor/protocol change.
+The current MaixCam/RPA2 primitive route still forces blending to zero.
+Therefore the preview records the requested `cp=100`, but exact execution of
+that blend remains a separately reviewed cross-device executor/protocol change.
 
 ## AprilTag localization
 

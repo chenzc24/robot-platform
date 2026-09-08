@@ -78,8 +78,8 @@ class DrawingTaskCliTests(unittest.TestCase):
                         "tool": 0,
                         "draw_speed_pct": 12,
                         "draw_blend_pct": 100,
-                        "travel_speed_pct": None,
-                        "accel_pct": None,
+                        "travel_speed_pct": 50,
+                        "accel_pct": 20,
                     },
                 }
             ),

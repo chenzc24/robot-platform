@@ -1610,3 +1610,21 @@ entry format:
   configuration write or motion occurred.
 - Implementation commit `2e6a388` was merged through PR #12 into `main` as
   `8028f4e`.
+
+## 2026-09-08 — Apply clarified coworker motion defaults
+
+- Applied the project owner's clarified values to the one motion profile shared
+  by Baseline and Advanced: stroke speed 12%, stroke blend 100%, otherwise speed
+  50%, and acceleration 20% for every arm motion.
+- Returned travel speed and acceleration to strict required integers; the brief
+  intermediate `null` representation is no longer accepted. Updated the ignored
+  deployment-worktree local drawing configuration while keeping its production
+  gate false.
+- Real-data planning verified 3,464 draw segments at 12/100/20 and 1,342 other
+  arm motions at 50/20 without a non-stroke blend field. L1 passed 23 focused
+  tests, all 114 applicable app/console regressions, the 4-file source check,
+  JSON parsing and diff check.
+- No hardware connection, deployment, service action, controller import,
+  device configuration write or motion occurred. The current primitive gateway
+  still blocks `cp=100`; this configuration change does not claim runtime blend
+  parity.

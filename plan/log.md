@@ -1731,3 +1731,26 @@ entry format:
   console tests, and `git diff --check`.
 - No hardware connection, deployment, service action, device configuration write
   or motion occurred. Commit status was pending at log-entry time on `main`.
+
+## 2026-09-08 - Rehearse Localized Baseline with independent physical errors
+
+- Replaced the simulator's exact-target relocation assumption with separate
+  planner request, commanded open-loop rail move, true rail response, logical
+  STOP, AprilTag measurement and measured-reference offset stages.
+- The current configuration completed the real 439-stroke / 3,903-point dataset
+  in one window and required no chassis move. A separately labelled fixed stress
+  scenario completed in three windows with two relocations: commanded absolute
+  travel `167.550502` mm, true model travel `163.84848192` mm, final true rail
+  `32.33097792` mm, measured rail `31.73097792` mm and offset `-31.33097792` mm.
+  It reversed rail direction once.
+- Added terminal failure coverage for zero physical progress and rail-bound
+  violations. The simulator no longer substitutes a planner target for a
+  localization result.
+- L1 passed 8 focused simulator/CLI tests and all 383 tests then present across
+  app, console, dev, ESP32, MaixCam, protocol and robot-arm suites, plus Python
+  compilation, generated and inline JavaScript checks, visualization rendering
+  and `git diff --check`.
+- No device connection, configuration write, deployment, service action or
+  motion occurred. Concurrent unified-runner working-tree changes were preserved
+  and excluded. Commit intent: push only the bounded physical-simulator goal on
+  the sole `main` branch.

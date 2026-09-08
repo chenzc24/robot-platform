@@ -124,7 +124,7 @@
     <div class="panel-head"><h2>窗口检查点</h2><span class="muted">点击任一行查看该窗口</span></div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>窗口</th><th>generation</th><th>r (mm)</th><th>offset (mm)</th><th>计划点</th><th>结束检查点</th><th>下一动作</th></tr></thead>
+        <thead><tr><th>窗口</th><th>generation</th><th>真实 r</th><th>测量 r</th><th>offset</th><th>命令/真实移动</th><th>计划点</th><th>结束检查点</th><th>下一动作</th></tr></thead>
         <tbody id="trace"></tbody>
       </table>
     </div>
@@ -132,7 +132,7 @@
 
   <section class="panel warning">
     <h2>边界</h2>
-    <p>这是理想一维坐标演练：不模拟相机噪声、Tag 丢失、轮滑、停车距离、偏航、碰撞或机械臂运动学。</p>
+    <p>这是一维物理误差演练：开环运动增益、停车过冲和预设 AprilTag 测量误差独立于绘图规划。仍不模拟 Tag 丢失、延迟、偏航、碰撞或机械臂运动学。</p>
     <p><code>enabled_stopped</code> 在这里仍只是逻辑状态，不代表物理静止。此结果不能替代明天上机前的标定和 L3/L4 人工安全门。</p>
     <p id="scenario-warning"></p>
   </section>
@@ -239,19 +239,25 @@ function drawRail() {
   const height = 110, left = 42, right = 24;
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
   svg.replaceChildren();
-  const values = windows.map(w => w.rail_position_mm).concat([sim.calibration.rail_reference_mm]);
+  const values = windows.flatMap(w => [w.true_rail_position_mm, w.measured_rail_position_mm]).concat([
+    sim.calibration.true_rail_reference_mm, sim.calibration.measured_rail_reference_mm
+  ]);
   const spread = Math.max(40, Math.max(...values) - Math.min(...values));
   const min = Math.min(...values) - spread*.12, max = Math.max(...values) + spread*.12;
   const x = value => left + (value-min)/(max-min)*(width-left-right);
   svg.appendChild(svgNode("line", {x1:left, x2:width-right, y1:55, y2:55, stroke:css("--line"), "stroke-width":2}));
   windows.forEach((window, index) => {
-    const circle = svgNode("circle", {cx:x(window.rail_position_mm), cy:55, r:index===selected?7:4, fill:index===selected?css("--accent"):css("--done")});
+    const circle = svgNode("circle", {cx:x(window.true_rail_position_mm), cy:47, r:index===selected?7:4, fill:index===selected?css("--accent"):css("--done")});
     svg.appendChild(circle);
-    const text = svgNode("text", {x:x(window.rail_position_mm), y:index%2?91:25, fill:css("--ink"), "font-size":12, "text-anchor":"middle"});
-    text.textContent = `W${window.index}: ${window.rail_position_mm.toFixed(1)}`; svg.appendChild(text);
+    const measured = svgNode("rect", {x:x(window.measured_rail_position_mm)-3, y:64, width:6, height:6, fill:index===selected?css("--danger"):css("--muted")});
+    svg.appendChild(measured);
+    const text = svgNode("text", {x:x(window.true_rail_position_mm), y:index%2?103:22, fill:css("--ink"), "font-size":12, "text-anchor":"middle"});
+    text.textContent = `W${window.index} 真${window.true_rail_position_mm.toFixed(1)} / 测${window.measured_rail_position_mm.toFixed(1)}`; svg.appendChild(text);
   });
-  const ref = x(sim.calibration.rail_reference_mm);
-  svg.appendChild(svgNode("line", {x1:ref, x2:ref, y1:38, y2:72, stroke:css("--danger"), "stroke-width":1.5}));
+  const trueRef = x(sim.calibration.true_rail_reference_mm);
+  const measuredRef = x(sim.calibration.measured_rail_reference_mm);
+  svg.appendChild(svgNode("line", {x1:trueRef, x2:trueRef, y1:34, y2:76, stroke:css("--safe"), "stroke-width":1.5}));
+  svg.appendChild(svgNode("line", {x1:measuredRef, x2:measuredRef, y1:34, y2:76, stroke:css("--danger"), "stroke-width":1.5}));
 }
 
 function updateProbe() {
@@ -273,8 +279,10 @@ function renderTrace() {
     const row = document.createElement("tr");
     row.dataset.window = index;
     if (index === selected) row.className = "selected";
-    row.innerHTML = `<td>W${window.index}</td><td>${window.generation}</td><td>${window.rail_position_mm.toFixed(2)}</td>` +
-      `<td>${window.json_axis_offset_mm.toFixed(2)}</td><td>${window.statistics.planned_points}</td>` +
+    const relocation = window.relocation;
+    const move = relocation ? `${relocation.commanded_open_loop_rail_move_mm.toFixed(2)} / ${relocation.actual_true_rail_move_mm.toFixed(2)}` : "—";
+    row.innerHTML = `<td>W${window.index}</td><td>${window.generation}</td><td>${window.true_rail_position_mm.toFixed(2)}</td>` +
+      `<td>${window.measured_rail_position_mm.toFixed(2)}</td><td>${window.json_axis_offset_mm.toFixed(2)}</td><td>${move}</td><td>${window.statistics.planned_points}</td>` +
       `<td>${checkpoint(window.checkpoint_end)}</td><td>${window.complete ? "完成" : "安全重定位"}</td>`;
     row.addEventListener("click", () => { selected = index; update(); });
     body.appendChild(row);
@@ -289,7 +297,9 @@ function update() {
   document.getElementById("metric-window").textContent = `${window.index} / ${windows.length}`;
   document.getElementById("metric-generation").textContent = window.generation;
   document.getElementById("metric-offset").textContent = mm(window.json_axis_offset_mm);
-  document.getElementById("rail-label").textContent = `r0=${mm(sim.calibration.rail_reference_mm)} · scale=${sim.calibration.json_mm_per_rail_mm}`;
+  document.getElementById("rail-label").textContent =
+    `r0 真=${mm(sim.calibration.true_rail_reference_mm)} / 测=${mm(sim.calibration.measured_rail_reference_mm)} · ` +
+    `gain=${sim.physical_model.motion_gain} · stop=${mm(sim.physical_model.stop_overshoot_mm)} · scale=${sim.calibration.json_mm_per_rail_mm}`;
   const phase = document.getElementById("phase");
   const sequence = window.relocation ? window.relocation.sequence : ["drawing_complete", "stop", "disable"];
   phase.innerHTML = sequence.map((name, index) => `<span>${name}</span>${index < sequence.length-1 ? "<b>→</b>" : ""}`).join("");
@@ -300,8 +310,8 @@ document.getElementById("subtitle").textContent =
   `${sim.summary.groups} 组 · ${sim.summary.strokes} 笔 · ${sim.summary.points} 点 · ${sim.summary.windows} 个窗口 · ` +
   (sim.source_config_reach_overridden ? "使用显式模拟可达范围" : "使用绘图配置可达范围");
 document.getElementById("scenario-warning").textContent = sim.summary.rail_direction_changes
-  ? `本次场景出现 ${sim.summary.rail_direction_changes} 次轨道方向反转，总绝对移动 ${sim.summary.total_absolute_rail_travel_mm.toFixed(2)} mm；上机前应审查颜色/笔画顺序和实际可达窗口。`
-  : `本次场景没有轨道方向反转，总绝对移动 ${sim.summary.total_absolute_rail_travel_mm.toFixed(2)} mm。`;
+  ? `本次场景出现 ${sim.summary.rail_direction_changes} 次轨道方向反转；开环命令总行程 ${sim.summary.total_absolute_commanded_rail_travel_mm.toFixed(2)} mm，真实模型总行程 ${sim.summary.total_absolute_rail_travel_mm.toFixed(2)} mm。`
+  : `本次场景没有轨道方向反转；开环命令总行程 ${sim.summary.total_absolute_commanded_rail_travel_mm.toFixed(2)} mm，真实模型总行程 ${sim.summary.total_absolute_rail_travel_mm.toFixed(2)} mm。`;
 const slider = document.getElementById("window");
 slider.max = windows.length;
 slider.addEventListener("input", event => { selected = Number(event.target.value)-1; update(); });

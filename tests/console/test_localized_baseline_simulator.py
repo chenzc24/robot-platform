@@ -73,7 +73,7 @@ def drawing_job():
 
 
 class LocalizedBaselineSimulatorTests(unittest.TestCase):
-    def test_rehearses_two_windows_with_exact_offset_and_generation(self):
+    def test_perfect_physical_model_matches_coordinate_only_result(self):
         result = simulate_localized_baseline(
             drawing_job(),
             drawing_config(),
@@ -92,10 +92,12 @@ class LocalizedBaselineSimulatorTests(unittest.TestCase):
             "group_index": 0, "stroke_index": 0, "next_point_index": 2,
         })
         self.assertEqual(first["relocation"]["requested_json_axis_offset_delta_mm"], -35)
-        self.assertEqual(first["relocation"]["simulated_direct_rail_move_mm"], 35)
+        self.assertEqual(first["relocation"]["commanded_open_loop_rail_move_mm"], 35)
+        self.assertEqual(first["relocation"]["actual_true_rail_move_mm"], 35)
         self.assertEqual(first["relocation"]["logical_stop_state"], "enabled_stopped")
         self.assertEqual(second["generation"], 2)
-        self.assertEqual(second["rail_position_mm"], 35)
+        self.assertEqual(second["true_rail_position_mm"], 35)
+        self.assertEqual(second["measured_rail_position_mm"], 35)
         self.assertEqual(second["json_axis_offset_mm"], -35)
         self.assertTrue(second["complete"])
         self.assertEqual(second["point_rank_start"], 2)
@@ -106,9 +108,41 @@ class LocalizedBaselineSimulatorTests(unittest.TestCase):
             drawing_job(), drawing_config(), rail_reference_mm=20,
             initial_rail_position_mm=30, json_mm_per_rail_mm=-1,
         )
-        self.assertEqual(result["windows"][0]["rail_delta_from_reference_mm"], 10)
+        self.assertEqual(result["windows"][0]["measured_rail_delta_from_reference_mm"], 10)
         self.assertEqual(result["windows"][0]["json_axis_offset_mm"], -10)
         self.assertEqual(result["summary"]["windows"], 1)
+
+    def test_motion_and_localization_errors_are_independent_of_planner_target(self):
+        result = simulate_localized_baseline(
+            drawing_job(), drawing_config(), json_mm_per_rail_mm=-1,
+            reachable_min_mm=-60, reachable_max_mm=40,
+            motion_gain=0.9, stop_overshoot_mm=1,
+            localization_errors_mm=(0.5, 0.2, -0.4, 0.1, -0.2),
+            rail_min_mm=-100, rail_max_mm=100,
+        )
+        first = result["windows"][0]["relocation"]
+        expected_actual = round(
+            first["commanded_open_loop_rail_move_mm"] * 0.9 + 1, 9
+        )
+        self.assertEqual(first["actual_true_rail_move_mm"], expected_actual)
+        self.assertNotEqual(
+            first["requested_json_axis_offset_delta_mm"],
+            first["measured_json_axis_offset_after_mm"],
+        )
+        self.assertIn("open_loop_motion_error_enabled", result["summary"]["scenario_warnings"])
+        self.assertIn("varying_localization_error_enabled", result["summary"]["scenario_warnings"])
+
+    def test_physical_non_progress_and_rail_bounds_stop_the_rehearsal(self):
+        with self.assertRaisesRegex(DrawingError, "no checkpoint or offset progress"):
+            simulate_localized_baseline(
+                drawing_job(), drawing_config(), reachable_min_mm=-60,
+                reachable_max_mm=40, motion_gain=0,
+            )
+        with self.assertRaisesRegex(DrawingError, "exceeds physical bounds"):
+            simulate_localized_baseline(
+                drawing_job(), drawing_config(), reachable_min_mm=-60,
+                reachable_max_mm=40, rail_min_mm=-10, rail_max_mm=10,
+            )
 
     def test_rejects_zero_scale_invalid_reach_and_window_limit(self):
         with self.assertRaisesRegex(DrawingError, "must not be zero"):

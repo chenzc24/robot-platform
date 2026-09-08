@@ -20,6 +20,18 @@ from drawing import (
 )
 
 
+def _comma_floats(value):
+    try:
+        result = tuple(float(item.strip()) for item in value.split(","))
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(
+            "expected comma-separated finite numbers"
+        ) from error
+    if not result:
+        raise argparse.ArgumentTypeError("at least one localization error is required")
+    return result
+
+
 def argument_parser():
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument(
@@ -43,6 +55,13 @@ def argument_parser():
     result.add_argument("--json-mm-per-rail-mm", type=float, default=-1.0)
     result.add_argument("--simulated-reachable-min-mm", type=float)
     result.add_argument("--simulated-reachable-max-mm", type=float)
+    result.add_argument("--motion-gain", type=float, default=1.0)
+    result.add_argument("--stop-overshoot-mm", type=float, default=0.0)
+    result.add_argument(
+        "--localization-errors-mm", type=_comma_floats, default=(0.0,)
+    )
+    result.add_argument("--rail-min-mm", type=float)
+    result.add_argument("--rail-max-mm", type=float)
     result.add_argument("--max-windows", type=int, default=100)
     result.add_argument("--open", action="store_true", dest="open_report")
     result.add_argument("--force", action="store_true")
@@ -62,6 +81,11 @@ def build_rehearsal(args):
         json_mm_per_rail_mm=args.json_mm_per_rail_mm,
         reachable_min_mm=args.simulated_reachable_min_mm,
         reachable_max_mm=args.simulated_reachable_max_mm,
+        motion_gain=args.motion_gain,
+        stop_overshoot_mm=args.stop_overshoot_mm,
+        localization_errors_mm=args.localization_errors_mm,
+        rail_min_mm=args.rail_min_mm,
+        rail_max_mm=args.rail_max_mm,
         max_windows=args.max_windows,
     )
 

@@ -72,8 +72,9 @@ def config_document(**geometry_overrides):
         "user": 0,
         "tool": 0,
         "draw_speed_pct": 12,
-        "travel_speed_pct": 5,
-        "accel_pct": 5,
+        "draw_blend_pct": 100,
+        "travel_speed_pct": None,
+        "accel_pct": None,
     }
     geometry.update(geometry_overrides)
     return {
@@ -147,7 +148,15 @@ class DrawingConfigTests(unittest.TestCase):
         config = parse_drawing_config(config_document())
         self.assertEqual(config.pen_slot("red").name, "P1")
         self.assertFalse(config.production_ready)
-        for mutation in ("missing", "blank", "range", "speed"):
+        for mutation in (
+            "missing",
+            "blank",
+            "range",
+            "speed",
+            "blend",
+            "travel",
+            "accel",
+        ):
             document = config_document()
             if mutation == "missing":
                 del document["geometry"]["home_pose_user_y_mm"]
@@ -155,8 +164,14 @@ class DrawingConfigTests(unittest.TestCase):
                 document["group_pen_slots"]["red"] = ""
             elif mutation == "range":
                 document["geometry"]["reachable_user_y_min_mm"] = 60
-            else:
+            elif mutation == "speed":
                 document["geometry"]["draw_speed_pct"] = 101
+            elif mutation == "blend":
+                document["geometry"]["draw_blend_pct"] = 101
+            elif mutation == "travel":
+                document["geometry"]["travel_speed_pct"] = 0
+            else:
+                document["geometry"]["accel_pct"] = "default"
             with self.subTest(mutation=mutation), self.assertRaises(DrawingError):
                 parse_drawing_config(document)
 
@@ -193,6 +208,14 @@ class DrawingPlannerTests(unittest.TestCase):
         self.assertEqual(moves[2].payload["translation_mm"], [0.0, 50.0, -20.0])
         self.assertEqual(moves[3].payload["translation_mm"], [0.0, 50.0, -20.0])
         self.assertEqual(moves[4].payload["translation_mm"], [20.0, 0.0, 0.0])
+        draw_moves = [
+            step for step in moves if step.payload.get("purpose") == "draw_segment"
+        ]
+        self.assertEqual(draw_moves[0].payload["speed_pct"], 12)
+        self.assertEqual(draw_moves[0].payload["blend_pct"], 100)
+        self.assertNotIn("accel_pct", draw_moves[0].payload)
+        self.assertNotIn("speed_pct", moves[0].payload)
+        self.assertNotIn("accel_pct", moves[0].payload)
         pen_steps = [step for step in plan.steps if step.kind.startswith("pen.")]
         self.assertEqual(
             [step.kind for step in pen_steps],

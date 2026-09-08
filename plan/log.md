@@ -1584,3 +1584,27 @@ entry format:
 - No device connection, upload, controller import, reset, service operation,
   configuration write or movement occurred. Deployment must begin with backups
   and L2 checks; any later movement needs a fresh current-test safety gate.
+
+## 2026-09-08 — Unify drawing modes on the coworker profile
+
+- Removed the obsolete standalone `app/demo.py` and its dedicated test suite.
+  Baseline and Advanced now share the grouped drawing loader, planner, pen
+  workflow and one drawing configuration; only chassis relocation differs.
+- Rechecked `E:\Downloads\机械臂代码——1代.zip` read-only. Its hash matched the
+  recorded source. The code explicitly specifies `v=12, cp=100` only for
+  in-stroke relative linear moves; home, anchor, pen and rack moves omit motion
+  options and therefore use controller defaults.
+- Updated the formal profile to draw speed 12 and blend 100. Travel speed and
+  acceleration are now `null`; the planner omits them rather than inventing 5%.
+  A real-data preview produced 439 strokes, 3,903 points and 5,220 arm commands;
+  all 3,464 draw segments carried 12/100 and 1,342 other motion steps carried no
+  speed, acceleration or blend option.
+- L1 passed 23 focused and 189 applicable regression tests, the 9-path source
+  check, example/local JSON parsing and diff check. Ignored local drawing and
+  Baseline control configs were prepared with production gates false.
+- The current MaixCam/RPA2 primitive path still requires explicit speed and
+  acceleration and rejects nonzero blending. This change preserves the source
+  semantics in the PC plan but does not claim exact runtime execution until that
+  cross-device boundary is implemented and reviewed.
+- No hardware connection, deployment, controller import, reset, service action,
+  configuration write or motion occurred.

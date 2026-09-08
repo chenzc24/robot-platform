@@ -37,6 +37,7 @@ _GEOMETRY_FIELDS = {
     "user",
     "tool",
     "draw_speed_pct",
+    "draw_blend_pct",
     "travel_speed_pct",
     "accel_pct",
 }
@@ -71,8 +72,9 @@ class DrawingGeometry:
     user: int
     tool: int
     draw_speed_pct: int
-    travel_speed_pct: int
-    accel_pct: int
+    draw_blend_pct: int
+    travel_speed_pct: object
+    accel_pct: object
 
 
 @dataclass(frozen=True)
@@ -153,6 +155,12 @@ def _parse_pen_rack(document):
     return PenRack(slots=tuple(slots), **values)
 
 
+def _optional_integer(value, label, low, high):
+    if value is None:
+        return None
+    return _integer(value, label, low, high)
+
+
 def parse_drawing_config(document):
     if not isinstance(document, dict) or set(document) != _TOP_FIELDS:
         raise DrawingError("drawing config has unexpected or missing fields")
@@ -211,8 +219,13 @@ def parse_drawing_config(document):
         user=_integer(raw["user"], "geometry.user", 0, 9),
         tool=_integer(raw["tool"], "geometry.tool", 0, 9),
         draw_speed_pct=_integer(raw["draw_speed_pct"], "geometry.draw_speed_pct", 1, 100),
-        travel_speed_pct=_integer(raw["travel_speed_pct"], "geometry.travel_speed_pct", 1, 100),
-        accel_pct=_integer(raw["accel_pct"], "geometry.accel_pct", 1, 100),
+        draw_blend_pct=_integer(raw["draw_blend_pct"], "geometry.draw_blend_pct", 0, 100),
+        travel_speed_pct=_optional_integer(
+            raw["travel_speed_pct"], "geometry.travel_speed_pct", 1, 100
+        ),
+        accel_pct=_optional_integer(
+            raw["accel_pct"], "geometry.accel_pct", 1, 100
+        ),
     )
     canonical = json.dumps(
         document, ensure_ascii=False, sort_keys=True, separators=(",", ":")

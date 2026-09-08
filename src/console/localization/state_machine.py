@@ -1,12 +1,10 @@
-"""Fail-closed localization locking with a reusable task context."""
+"""Fail-closed one-dimensional rail localization with reusable task context."""
 
 import math
 import threading
 import time
 from collections import deque
 from copy import deepcopy
-
-from .geometry import GeometryError, average_transforms, compose, inverse, rigid_transform, transform_list
 
 
 class LocalizationStateError(RuntimeError):
@@ -15,34 +13,58 @@ class LocalizationStateError(RuntimeError):
         self.code = code
 
 
-class LocalizationLockStateMachine:
-    """Fuse stable stopped-camera poses and freeze one transform generation."""
+def _finite(value, code):
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise LocalizationStateError(code)
+    return float(value)
+
+
+def _pose_matrix(value):
+    """Validate enough of a homogeneous pose to safely read its translation."""
+    if not isinstance(value, (list, tuple)) or len(value) != 4:
+        raise LocalizationStateError("vision_transform_invalid")
+    if any(not isinstance(row, (list, tuple)) or len(row) != 4 for row in value):
+        raise LocalizationStateError("vision_transform_invalid")
+    matrix = tuple(tuple(_finite(axis, "vision_transform_invalid") for axis in row) for row in value)
+    if any(abs(matrix[3][index]) > 1e-9 for index in range(3)) or abs(matrix[3][3] - 1.0) > 1e-9:
+        raise LocalizationStateError("vision_transform_invalid")
+    return matrix
+
+
+class RailLocalizationStateMachine:
+    """Lock the camera's scalar rail position after stopped, stable vision."""
 
     TERMINAL_TASK_STATES = {"DONE", "FAULT", "REJECTED", "UNKNOWN"}
+    RAIL_AXES = {"x": 0, "y": 1, "z": 2}
+    JSON_AXES = {"x", "y"}
 
     def __init__(
         self,
         *,
         enabled,
-        geometry=None,
+        rail_axis="x",
+        json_axis="x",
+        json_origin_rail_position_mm=0.0,
+        json_mm_per_rail_mm=-1.0,
         configuration_error=None,
         settle_time_ms=2000,
         sample_window_ms=3000,
         min_valid_samples=8,
         min_visible_tags=2,
-        max_translation_spread_mm=2.0,
-        max_rotation_spread_deg=1.0,
+        max_position_spread_mm=2.0,
         clock=None,
     ):
         self.enabled = enabled is True
-        self.geometry = geometry
-        self.configuration_error = configuration_error
+        self.rail_axis = rail_axis
+        self.json_axis = json_axis
+        self.json_origin_rail_position_mm = float(json_origin_rail_position_mm)
+        self.json_mm_per_rail_mm = float(json_mm_per_rail_mm)
+        self.configuration_error = configuration_error or self._configuration_error()
         self.settle_time_ms = int(settle_time_ms)
         self.sample_window_ms = int(sample_window_ms)
         self.min_valid_samples = int(min_valid_samples)
         self.min_visible_tags = int(min_visible_tags)
-        self.max_translation_spread_mm = float(max_translation_spread_mm)
-        self.max_rotation_spread_deg = float(max_rotation_spread_deg)
+        self.max_position_spread_mm = float(max_position_spread_mm)
         self._clock = clock or time.monotonic
         self._lock = threading.RLock()
         self._samples = deque()
@@ -56,20 +78,25 @@ class LocalizationLockStateMachine:
         self._last_observation_error = "none"
         if not self.enabled:
             self._state, self._reason = "disabled", "localization_disabled"
-        elif configuration_error:
-            self._state, self._reason = "blocked", str(configuration_error)
-        elif geometry is None:
-            self._state, self._reason = "blocked", "robot_geometry_unavailable"
-        elif not geometry.production_ready:
-            self._state, self._reason = "blocked", "robot_geometry_unverified"
+        elif self.configuration_error:
+            self._state, self._reason = "blocked", str(self.configuration_error)
         else:
             self._state, self._reason = "invalid", "startup"
 
+    def _configuration_error(self):
+        if self.rail_axis not in self.RAIL_AXES:
+            return "invalid_rail_axis"
+        if self.json_axis not in self.JSON_AXES:
+            return "invalid_json_axis"
+        if not math.isfinite(self.json_origin_rail_position_mm):
+            return "invalid_json_origin_rail_position"
+        if not math.isfinite(self.json_mm_per_rail_mm) or self.json_mm_per_rail_mm == 0:
+            return "invalid_json_rail_scale"
+        return None
+
     def _now(self, now=None):
         value = self._clock() if now is None else now
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
-            raise LocalizationStateError("invalid_localization_time")
-        return float(value)
+        return _finite(value, "invalid_localization_time")
 
     def _touch(self):
         self._revision += 1
@@ -77,11 +104,7 @@ class LocalizationLockStateMachine:
     def _mark_active_task_unknown(self, reason):
         if self._active_task is None:
             return
-        self._last_task = {
-            **self._active_task,
-            "state": "UNKNOWN",
-            "result": reason,
-        }
+        self._last_task = {**self._active_task, "state": "UNKNOWN", "result": reason}
         self._active_task = None
 
     def _invalidate(self, reason, state="invalid"):
@@ -132,7 +155,7 @@ class LocalizationLockStateMachine:
             elif state == "enabled_stopped":
                 if previous != "enabled_stopped" or self._state in {"invalid", "moving"}:
                     self._begin_settling(now, "chassis_logically_stopped")
-            elif state not in {"enabled_stopped"}:
+            else:
                 self._invalidate("chassis_not_confirmed_stopped")
 
     def request_relocalization(self, now=None):
@@ -180,7 +203,10 @@ class LocalizationLockStateMachine:
             if self._state != "collecting":
                 return
             if not isinstance(result, dict) or not result.get("accepted") or not result.get("pose_solved"):
-                self._last_observation_error = str(result.get("error", "vision_result_not_accepted")) if isinstance(result, dict) else "vision_result_invalid"
+                self._last_observation_error = (
+                    str(result.get("error", "vision_result_not_accepted"))
+                    if isinstance(result, dict) else "vision_result_invalid"
+                )
                 self._touch()
                 return
             if result.get("camera_calibration_ready") is not True or result.get("board_layout_ready") is not True:
@@ -188,8 +214,8 @@ class LocalizationLockStateMachine:
                 self._touch()
                 return
             raw_ids = result.get("used_ids")
-            if (not isinstance(raw_ids, list) or any(
-                    isinstance(item, bool) or not isinstance(item, int) or item < 0 for item in raw_ids)):
+            if not isinstance(raw_ids, list) or any(
+                    isinstance(item, bool) or not isinstance(item, int) or item < 0 for item in raw_ids):
                 self._last_observation_error = "vision_used_ids_invalid"
                 self._touch()
                 return
@@ -199,9 +225,9 @@ class LocalizationLockStateMachine:
                 self._touch()
                 return
             try:
-                transform = rigid_transform(result.get("T_camera_from_board"), "vision_transform_invalid")
-            except GeometryError as error:
-                self._last_observation_error = str(error)
+                transform = _pose_matrix(result.get("T_board_from_camera"))
+            except LocalizationStateError as error:
+                self._last_observation_error = error.code
                 self._touch()
                 return
             source_values = tuple(result.get(key) for key in ("calibration_id", "layout_id", "board_frame"))
@@ -230,9 +256,10 @@ class LocalizationLockStateMachine:
                 self._last_observation_error = "vision_quality_invalid"
                 self._touch()
                 return
+            position = transform[self.RAIL_AXES[self.rail_axis]][3]
             self._samples.append({
                 "received_at": now,
-                "transform": transform,
+                "position_mm": position,
                 "source_key": source_key,
                 "frame_sequence": frame_sequence,
                 "captured_at_ms": captured_at_ms,
@@ -245,37 +272,27 @@ class LocalizationLockStateMachine:
             if len(self._samples) < self.min_valid_samples:
                 self._touch()
                 return
-            try:
-                mean, translation_spread, rotation_spread = average_transforms(
-                    [item["transform"] for item in self._samples]
-                )
-            except GeometryError as error:
-                self._reason = "vision_pose_unstable"
-                self._last_observation_error = str(error)
+            rail_position = sum(item["position_mm"] for item in self._samples) / len(self._samples)
+            position_spread = max(abs(item["position_mm"] - rail_position) for item in self._samples)
+            if position_spread > self.max_position_spread_mm:
+                self._reason = "rail_position_unstable"
                 self._touch()
                 return
-            if translation_spread > self.max_translation_spread_mm or rotation_spread > self.max_rotation_spread_deg:
-                self._reason = "vision_pose_unstable"
-                self._touch()
-                return
-            T_base_from_board = compose(self.geometry.T_base_from_camera, mean)
-            self._generation += 1
+            rail_delta = rail_position - self.json_origin_rail_position_mm
+            json_offset = self.json_mm_per_rail_mm * rail_delta
             all_ids = sorted({tag_id for item in self._samples for tag_id in item["used_ids"]})
+            self._generation += 1
             self._locked_context = {
                 "generation": self._generation,
-                "geometry_id": self.geometry.geometry_id,
-                "frames": {
-                    "base": self.geometry.base_frame,
-                    "camera": self.geometry.camera_frame,
-                    "board": self._samples[-1]["source_key"][2],
-                    "tool0": self.geometry.tool_frame,
-                    "pen": self.geometry.pen_frame,
-                },
-                "T_camera_from_board": transform_list(mean),
-                "T_base_from_board": transform_list(T_base_from_board),
-                "T_board_from_base": transform_list(inverse(T_base_from_board)),
-                "T_tool0_from_pen": transform_list(self.geometry.T_tool0_from_pen),
-                "T_pen_from_tool0": transform_list(inverse(self.geometry.T_tool0_from_pen)),
+                "mode": "rail_1d",
+                "board_frame": self._samples[-1]["source_key"][2],
+                "rail_axis": self.rail_axis,
+                "json_axis": self.json_axis,
+                "rail_position_mm": round(rail_position, 6),
+                "json_origin_rail_position_mm": round(self.json_origin_rail_position_mm, 6),
+                "rail_delta_from_json_origin_mm": round(rail_delta, 6),
+                "json_mm_per_rail_mm": round(self.json_mm_per_rail_mm, 9),
+                "json_axis_offset_mm": round(json_offset, 6),
                 "source": {
                     "calibration_id": self._samples[-1]["source_key"][0],
                     "layout_id": self._samples[-1]["source_key"][1],
@@ -287,11 +304,10 @@ class LocalizationLockStateMachine:
                     "used_ids": all_ids,
                     "min_confidence": round(min(item["confidence"] for item in self._samples), 6),
                     "max_reprojection_rmse_px": round(max(item["rmse"] for item in self._samples), 6),
-                    "translation_spread_mm": round(translation_spread, 6),
-                    "rotation_spread_deg": round(rotation_spread, 6),
+                    "position_spread_mm": round(position_spread, 6),
                 },
             }
-            self._state, self._reason = "locked", "stable_transform_locked"
+            self._state, self._reason = "locked", "stable_rail_position_locked"
             self._samples.clear()
             self._touch()
 
@@ -319,7 +335,12 @@ class LocalizationLockStateMachine:
             context = self.task_context(expected_generation)
             if self._active_task is not None:
                 raise LocalizationStateError("localized_task_running")
-            self._active_task = {"task_id": task_id, "generation": self._generation, "state": "RUNNING", "result": "none"}
+            self._active_task = {
+                "task_id": task_id,
+                "generation": self._generation,
+                "state": "RUNNING",
+                "result": "none",
+            }
             self._touch()
             return context
 
@@ -347,6 +368,11 @@ class LocalizationLockStateMachine:
                 "valid": self._state == "locked" and self._locked_context is not None,
                 "generation": self._generation,
                 "chassis_state": self._chassis_state,
+                "rail_axis": self.rail_axis,
+                "json_axis": self.json_axis,
+                "json_origin_rail_position_mm": self.json_origin_rail_position_mm,
+                "json_mm_per_rail_mm": self.json_mm_per_rail_mm,
+                "max_position_spread_mm": self.max_position_spread_mm,
                 "settling_remaining_ms": remaining,
                 "sample_count": len(self._samples),
                 "min_valid_samples": self.min_valid_samples,

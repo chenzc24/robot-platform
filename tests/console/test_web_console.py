@@ -13,8 +13,7 @@ import urllib.request
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src" / "console"))
 
-from localization.geometry import RobotGeometry
-from localization.state_machine import LocalizationLockStateMachine
+from localization.state_machine import RailLocalizationStateMachine
 from runtime_config import ArmConfig, ChassisConfig, ManualChassisConfig, RuntimeConfig, VideoConfig
 from web_console.runtime import WebConsoleError, WebConsoleRuntime
 from web_console.server import create_server
@@ -26,25 +25,6 @@ def config(manual=True):
         manual_chassis=ManualChassisConfig(manual, 500, 300, 600, 800),
         arm=ArmConfig("maixcam.invalid", 4343, 1.0, "console"),
         video=VideoConfig("", "http://127.0.0.1:8889/maixcam/", 1.0, ""),
-    )
-
-
-def ready_geometry():
-    identity = (
-        (1.0, 0.0, 0.0, 0.0),
-        (0.0, 1.0, 0.0, 0.0),
-        (0.0, 0.0, 1.0, 0.0),
-        (0.0, 0.0, 0.0, 1.0),
-    )
-    return RobotGeometry(
-        geometry_id="test-geometry",
-        production_ready=True,
-        base_frame="robot_base_user0",
-        camera_frame="gc4653_camera",
-        tool_frame="robot_tool0",
-        pen_frame="pen_tip",
-        T_base_from_camera=identity,
-        T_tool0_from_pen=identity,
     )
 
 
@@ -62,7 +42,7 @@ def localization_vision_result(sequence):
         "used_ids": [0, 1, 2, 3],
         "confidence": 0.95,
         "reprojection_rmse_px": 0.2,
-        "T_camera_from_board": [
+        "T_board_from_camera": [
             [1.0, 0.0, 0.0, 10.0],
             [0.0, 1.0, 0.0, 20.0],
             [0.0, 0.0, 1.0, 30.0],
@@ -343,9 +323,12 @@ class WebRuntimeTests(unittest.TestCase):
 
     def test_localization_locks_exposes_task_context_and_invalidates_on_motion(self):
         clock = [10.0]
-        machine = LocalizationLockStateMachine(
+        machine = RailLocalizationStateMachine(
             enabled=True,
-            geometry=ready_geometry(),
+            rail_axis="x",
+            json_axis="x",
+            json_origin_rail_position_mm=5.0,
+            json_mm_per_rail_mm=-1.0,
             settle_time_ms=100,
             sample_window_ms=1000,
             min_valid_samples=2,
@@ -368,8 +351,10 @@ class WebRuntimeTests(unittest.TestCase):
             self.assertTrue(locked["valid"])
             lock_events = [event for event in runtime.snapshot()["events"] if event["target"] == "Localization"]
             self.assertTrue(any(event["lifecycle"] == "DONE" and "state=locked" in event["result"] for event in lock_events))
+            self.assertTrue(any("json_axis_offset_mm=-5.0" in event["result"] for event in lock_events))
             context = runtime.begin_localized_task("draw-1", locked["generation"])
-            self.assertEqual(context["T_base_from_board"][0][3], 10.0)
+            self.assertEqual(context["rail_position_mm"], 10.0)
+            self.assertEqual(context["json_axis_offset_mm"], -5.0)
             runtime.finish_localized_task("draw-1", "DONE", "complete")
 
             epoch = runtime.snapshot()["chassis"]["motion"]["epoch"]

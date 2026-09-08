@@ -184,9 +184,18 @@ class WebConsoleRuntime:
             "blocked": "REJECTED",
             "invalid": "UNKNOWN",
         }.get(state["state"], "RUNNING")
+        result = "state=%s reason=%s generation=%d" % signature
+        if state["state"] == "locked" and state["context"] is not None:
+            context = state["context"]
+            source = context["source"]
+            result += " rail_position_mm=%s json_axis_offset_mm=%s samples=%s min_confidence=%s" % (
+                context["rail_position_mm"],
+                context["json_axis_offset_mm"],
+                source["sample_count"],
+                source["min_confidence"],
+            )
         self._event(
-            "Localization", command, lifecycle,
-            "state=%s reason=%s generation=%d" % signature,
+            "Localization", command, lifecycle, result,
         )
 
     def _touch(self):

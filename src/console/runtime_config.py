@@ -78,17 +78,19 @@ class VisionConfig:
 @dataclass(frozen=True)
 class LocalizationConfig:
     enabled: bool = False
-    geometry_path: str = ""
+    rail_axis: str = "x"
+    json_axis: str = "x"
+    json_origin_rail_position_mm: float = 0.0
+    json_mm_per_rail_mm: float = -1.0
     settle_time_ms: int = 2000
     sample_window_ms: int = 3000
     min_valid_samples: int = 8
     min_visible_tags: int = 2
-    max_translation_spread_mm: float = 2.0
-    max_rotation_spread_deg: float = 1.0
+    max_position_spread_mm: float = 2.0
 
     @property
     def complete(self):
-        return bool(self.enabled and self.geometry_path)
+        return self.enabled
 
 
 @dataclass(frozen=True)
@@ -143,6 +145,20 @@ def _bounded_number(value, field, low, high):
     return float(value)
 
 
+def _nonzero_bounded_number(value, field, low, high):
+    parsed = _bounded_number(value, field, low, high)
+    if parsed == 0:
+        raise RuntimeConfigError("%s must be nonzero" % field)
+    return parsed
+
+
+def _choice(value, field, choices):
+    parsed = _string(value, field)
+    if parsed not in choices:
+        raise RuntimeConfigError("%s must be one of %s" % (field, ", ".join(sorted(choices))))
+    return parsed
+
+
 def load_runtime_config(path):
     """Load an explicit local JSON configuration without logging its contents."""
     source = Path(path)
@@ -183,9 +199,9 @@ def load_runtime_config(path):
     }:
         raise RuntimeConfigError("unexpected vision configuration fields")
     if localization is not None and set(localization) != {
-        "enabled", "geometry_path", "settle_time_ms", "sample_window_ms",
-        "min_valid_samples", "min_visible_tags", "max_translation_spread_mm",
-        "max_rotation_spread_deg",
+        "enabled", "rail_axis", "json_axis", "json_origin_rail_position_mm",
+        "json_mm_per_rail_mm", "settle_time_ms", "sample_window_ms",
+        "min_valid_samples", "min_visible_tags", "max_position_spread_mm",
     }:
         raise RuntimeConfigError("unexpected localization configuration fields")
     return RuntimeConfig(
@@ -233,16 +249,22 @@ def load_runtime_config(path):
         ),
         localization=LocalizationConfig() if localization is None else LocalizationConfig(
             enabled=_boolean(localization["enabled"], "localization.enabled"),
-            geometry_path=_string(localization["geometry_path"], "localization.geometry_path", allow_empty=True),
+            rail_axis=_choice(localization["rail_axis"], "localization.rail_axis", {"x", "y", "z"}),
+            json_axis=_choice(localization["json_axis"], "localization.json_axis", {"x", "y"}),
+            json_origin_rail_position_mm=_bounded_number(
+                localization["json_origin_rail_position_mm"],
+                "localization.json_origin_rail_position_mm", -1_000_000.0, 1_000_000.0,
+            ),
+            json_mm_per_rail_mm=_nonzero_bounded_number(
+                localization["json_mm_per_rail_mm"],
+                "localization.json_mm_per_rail_mm", -10.0, 10.0,
+            ),
             settle_time_ms=_positive_int(localization["settle_time_ms"], "localization.settle_time_ms", 0, 60_000),
             sample_window_ms=_positive_int(localization["sample_window_ms"], "localization.sample_window_ms", 100, 60_000),
             min_valid_samples=_positive_int(localization["min_valid_samples"], "localization.min_valid_samples", 1, 100),
             min_visible_tags=_positive_int(localization["min_visible_tags"], "localization.min_visible_tags", 1, 100),
-            max_translation_spread_mm=_bounded_number(
-                localization["max_translation_spread_mm"], "localization.max_translation_spread_mm", 0.001, 100.0
-            ),
-            max_rotation_spread_deg=_bounded_number(
-                localization["max_rotation_spread_deg"], "localization.max_rotation_spread_deg", 0.001, 45.0
+            max_position_spread_mm=_bounded_number(
+                localization["max_position_spread_mm"], "localization.max_position_spread_mm", 0.001, 100.0
             ),
         ),
     )

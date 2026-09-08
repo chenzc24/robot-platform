@@ -22,18 +22,18 @@ was found; `accepted` additionally means it passed the configured confidence,
 reprojection, finite-value and positive-depth checks and both calibration files
 are explicitly marked `production_ready: true`.
 
-The console localization lock composes this observation with the fixed
-camera-to-base extrinsic as:
+The constrained rail localization reads the camera origin back in the board
+frame and keeps only the configured translation axis:
 
 ```text
-T_base_from_board = T_base_from_camera * T_camera_from_board
+rail_position_mm = T_board_from_camera[rail_axis][3]
 ```
 
 The resulting versioned task context is described in the
-[localization state machine](localization-state-machine.md). Do not connect
-either matrix to motion until the physical corner convention, camera
-intrinsics, camera-to-base extrinsic, TCP and workspace checks have been
-validated separately.
+[localization state machine](localization-state-machine.md). The relocation
+delta needs no camera-to-base or Tool0-to-pen matrix. Do not connect it to
+motion until the physical corner convention, camera intrinsics, rail axis,
+JSON-origin position, TCP and workspace checks have been validated separately.
 
 ## Calibration files
 
@@ -75,6 +75,9 @@ corner happens to appear at the top-left of a tilted image. The default example
 uses four 40 mm tags with the same printed orientation at the corners of a
 300 x 200 mm outer rectangle. These dimensions are unmeasured placeholders, not
 a print specification. Version 1 requires all stored tag corners to be coplanar.
+The same layout schema may instead contain eight or more unique tags distributed
+along a longer rail. They share one board frame and need not all be visible in
+the same image; overlapping adjacent tag groups are preferred.
 
 ## Console configuration
 

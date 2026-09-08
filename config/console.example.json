@@ -40,12 +40,14 @@
   },
   "localization": {
     "enabled": false,
-    "geometry_path": "config/robot-geometry.local.json",
+    "rail_axis": "x",
+    "json_axis": "x",
+    "json_origin_rail_position_mm": 0.0,
+    "json_mm_per_rail_mm": -1.0,
     "settle_time_ms": 2000,
     "sample_window_ms": 3000,
     "min_valid_samples": 8,
     "min_visible_tags": 2,
-    "max_translation_spread_mm": 2.0,
-    "max_rotation_spread_deg": 1.0
+    "max_position_spread_mm": 2.0
   }
 }

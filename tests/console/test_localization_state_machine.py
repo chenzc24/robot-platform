@@ -1,51 +1,26 @@
-"""Deterministic L1 checks for localization locking and task handoff."""
+"""Deterministic L1 checks for one-dimensional rail localization."""
 
-import json
 import pathlib
 import sys
-import tempfile
 import unittest
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src" / "console"))
 
-from localization.geometry import (
-    GeometryError,
-    RobotGeometry,
-    average_transforms,
-    compose,
-    inverse,
-    load_robot_geometry,
-)
-from localization.state_machine import LocalizationLockStateMachine, LocalizationStateError
+from localization.state_machine import RailLocalizationStateMachine, LocalizationStateError
 
 
-IDENTITY = (
-    (1.0, 0.0, 0.0, 0.0),
-    (0.0, 1.0, 0.0, 0.0),
-    (0.0, 0.0, 1.0, 0.0),
-    (0.0, 0.0, 0.0, 1.0),
-)
+def pose(x=0.0, y=0.0, z=0.0):
+    return [
+        [1.0, 0.0, 0.0, float(x)],
+        [0.0, 1.0, 0.0, float(y)],
+        [0.0, 0.0, 1.0, float(z)],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
 
 
-def translated(x=0.0, y=0.0, z=0.0):
-    return (
-        (1.0, 0.0, 0.0, float(x)),
-        (0.0, 1.0, 0.0, float(y)),
-        (0.0, 0.0, 1.0, float(z)),
-        (0.0, 0.0, 0.0, 1.0),
-    )
-
-
-def geometry(ready=True):
-    return RobotGeometry(
-        "geometry-1", "base", "camera", "tool0", "pen",
-        translated(100, 0, 0), translated(0, 0, 25), ready,
-    )
-
-
-def vision(sequence, x=10.0, *, accepted=True, ids=(0, 1), calibration="camera-1", layout="board-1"):
+def vision(sequence, position=130.0, *, accepted=True, ids=(0, 1), calibration="camera-1", layout="rail-1"):
     return {
         "accepted": accepted,
         "pose_solved": accepted,
@@ -54,61 +29,30 @@ def vision(sequence, x=10.0, *, accepted=True, ids=(0, 1), calibration="camera-1
         "board_layout_ready": True,
         "calibration_id": calibration,
         "layout_id": layout,
-        "board_frame": "drawing_board",
+        "board_frame": "rail_landmarks",
         "frame_sequence": sequence,
         "captured_at_ms": 1000 + sequence,
         "used_ids": list(ids),
         "confidence": 0.9,
         "reprojection_rmse_px": 0.5,
-        "T_camera_from_board": [list(row) for row in translated(x, 20, 30)],
+        "T_board_from_camera": pose(x=position, y=25.0, z=500.0),
     }
 
 
-class GeometryTests(unittest.TestCase):
-    def test_example_is_explicitly_unready_and_matrices_are_rigid(self):
-        loaded = load_robot_geometry(ROOT / "config" / "robot-geometry.example.json")
-        self.assertFalse(loaded.production_ready)
-        self.assertEqual(loaded.base_frame, "robot_base_user0")
-        self.assertEqual(compose(loaded.T_base_from_camera, IDENTITY), IDENTITY)
-
-    def test_loader_rejects_non_rigid_and_duplicate_frames(self):
-        raw = json.loads((ROOT / "config" / "robot-geometry.example.json").read_text(encoding="utf-8"))
-        with tempfile.TemporaryDirectory() as directory:
-            path = pathlib.Path(directory) / "geometry.json"
-            raw["T_base_from_camera"][0][0] = 2
-            path.write_text(json.dumps(raw), encoding="utf-8")
-            with self.assertRaisesRegex(GeometryError, "T_base_from_camera_invalid"):
-                load_robot_geometry(path)
-            raw = json.loads((ROOT / "config" / "robot-geometry.example.json").read_text(encoding="utf-8"))
-            raw["frames"]["camera"] = raw["frames"]["base"]
-            path.write_text(json.dumps(raw), encoding="utf-8")
-            with self.assertRaisesRegex(GeometryError, "frames_must_be_distinct"):
-                load_robot_geometry(path)
-
-    def test_compose_inverse_and_pose_average(self):
-        combined = compose(translated(100, 0, 0), translated(10, 20, 30))
-        self.assertEqual(combined, translated(110, 20, 30))
-        self.assertEqual(compose(combined, inverse(combined)), IDENTITY)
-        mean, translation_spread, rotation_spread = average_transforms([
-            translated(9.9, 20, 30), translated(10, 20, 30), translated(10.1, 20, 30),
-        ])
-        self.assertAlmostEqual(mean[0][3], 10.0)
-        self.assertAlmostEqual(translation_spread, 0.1)
-        self.assertAlmostEqual(rotation_spread, 0.0)
-
-
-class StateMachineTests(unittest.TestCase):
+class RailLocalizationTests(unittest.TestCase):
     def setUp(self):
         self.clock = [10.0]
-        self.machine = LocalizationLockStateMachine(
+        self.machine = RailLocalizationStateMachine(
             enabled=True,
-            geometry=geometry(),
+            rail_axis="x",
+            json_axis="x",
+            json_origin_rail_position_mm=100.0,
+            json_mm_per_rail_mm=-1.0,
             settle_time_ms=1000,
             sample_window_ms=3000,
             min_valid_samples=3,
             min_visible_tags=2,
-            max_translation_spread_mm=0.25,
-            max_rotation_spread_deg=0.5,
+            max_position_spread_mm=0.25,
             clock=lambda: self.clock[0],
         )
 
@@ -120,71 +64,90 @@ class StateMachineTests(unittest.TestCase):
 
     def lock(self):
         self.settle()
-        for sequence, x in enumerate((9.9, 10.0, 10.1), 1):
-            self.machine.observe_vision(vision(sequence, x))
+        for sequence, position in enumerate((129.9, 130.0, 130.1), 1):
+            self.machine.observe_vision(vision(sequence, position))
             self.clock[0] += 0.1
         return self.machine.snapshot()
 
-    def test_stopped_stable_samples_lock_composed_context(self):
+    def test_stable_samples_lock_scalar_json_offset(self):
         snapshot = self.lock()
         self.assertTrue(snapshot["valid"])
         self.assertEqual(snapshot["state"], "locked")
         self.assertEqual(snapshot["generation"], 1)
         context = snapshot["context"]
-        self.assertAlmostEqual(context["T_base_from_board"][0][3], 110.0)
-        self.assertEqual(context["T_tool0_from_pen"][2][3], 25.0)
-        self.assertEqual(context["frames"]["board"], "drawing_board")
+        self.assertEqual(context["mode"], "rail_1d")
+        self.assertAlmostEqual(context["rail_position_mm"], 130.0)
+        self.assertAlmostEqual(context["rail_delta_from_json_origin_mm"], 30.0)
+        self.assertAlmostEqual(context["json_axis_offset_mm"], -30.0)
         self.assertEqual(context["source"]["sample_count"], 3)
 
-    def test_invalid_frames_do_not_erase_recent_valid_window(self):
-        self.settle()
-        self.machine.observe_vision(vision(1, 10.0))
-        self.machine.observe_vision(vision(2, accepted=False))
-        self.machine.observe_vision(vision(3, 10.1))
-        self.machine.observe_vision(vision(4, 9.9))
-        self.assertEqual(self.machine.snapshot()["state"], "locked")
+    def test_configured_y_axis_and_positive_scale_are_used(self):
+        machine = RailLocalizationStateMachine(
+            enabled=True,
+            rail_axis="y",
+            json_axis="y",
+            json_origin_rail_position_mm=20.0,
+            json_mm_per_rail_mm=2.0,
+            settle_time_ms=0,
+            min_valid_samples=1,
+            min_visible_tags=1,
+            clock=lambda: self.clock[0],
+        )
+        machine.on_chassis_status("enabled_stopped")
+        result = vision(1, ids=(7,))
+        result["T_board_from_camera"] = pose(x=999.0, y=25.0, z=500.0)
+        machine.observe_vision(result)
+        context = machine.task_context()
+        self.assertEqual(context["rail_position_mm"], 25.0)
+        self.assertEqual(context["json_axis_offset_mm"], 10.0)
 
-    def test_duplicate_frame_cannot_satisfy_multi_frame_lock(self):
+    def test_changing_visible_tag_ids_does_not_reset_global_layout_window(self):
         self.settle()
-        repeated = vision(1, 10.0)
+        self.machine.observe_vision(vision(1, 130.0, ids=(0, 1)))
+        self.machine.observe_vision(vision(2, 130.1, ids=(1, 2)))
+        self.machine.observe_vision(vision(3, 129.9, ids=(2, 3)))
+        context = self.machine.task_context()
+        self.assertEqual(context["source"]["used_ids"], [0, 1, 2, 3])
+
+    def test_invalid_and_duplicate_frames_cannot_fill_window(self):
+        self.settle()
+        repeated = vision(1, 130.0)
         self.machine.observe_vision(repeated)
-        self.machine.observe_vision(repeated)
+        self.machine.observe_vision(vision(2, accepted=False))
         self.machine.observe_vision(repeated)
         snapshot = self.machine.snapshot()
         self.assertEqual(snapshot["state"], "collecting")
         self.assertEqual(snapshot["sample_count"], 1)
         self.assertEqual(snapshot["last_observation_error"], "vision_frame_not_new")
 
-    def test_source_change_restarts_sample_window(self):
+    def test_layout_change_restarts_sample_window(self):
         self.settle()
-        self.machine.observe_vision(vision(1, 10.0))
-        self.machine.observe_vision(vision(2, 10.0))
-        self.machine.observe_vision(vision(3, 10.0, calibration="camera-2"))
+        self.machine.observe_vision(vision(1, 130.0))
+        self.machine.observe_vision(vision(2, 130.0))
+        self.machine.observe_vision(vision(3, 130.0, layout="rail-2"))
         snapshot = self.machine.snapshot()
         self.assertEqual(snapshot["state"], "collecting")
         self.assertEqual(snapshot["sample_count"], 1)
 
-    def test_unstable_samples_stay_collecting(self):
+    def test_unstable_position_stays_collecting(self):
         self.settle()
-        for sequence, x in enumerate((0.0, 2.0, 4.0), 1):
-            self.machine.observe_vision(vision(sequence, x))
+        for sequence, position in enumerate((125.0, 130.0, 135.0), 1):
+            self.machine.observe_vision(vision(sequence, position))
         snapshot = self.machine.snapshot()
         self.assertEqual(snapshot["state"], "collecting")
-        self.assertEqual(snapshot["reason"], "vision_pose_unstable")
+        self.assertEqual(snapshot["reason"], "rail_position_unstable")
 
     def test_sample_window_expires_without_a_new_frame(self):
         self.settle()
-        self.machine.observe_vision(vision(1, 10.0))
-        self.assertEqual(self.machine.snapshot()["sample_count"], 1)
+        self.machine.observe_vision(vision(1, 130.0))
         self.clock[0] += 3.01
         self.assertEqual(self.machine.snapshot()["sample_count"], 0)
 
     def test_task_context_is_versioned_and_motion_invalidates_active_task(self):
-        snapshot = self.lock()
-        generation = snapshot["generation"]
+        generation = self.lock()["generation"]
         context = self.machine.begin_task("draw-1", generation)
-        context["T_base_from_board"][0][3] = -999
-        self.assertAlmostEqual(self.machine.task_context(generation)["T_base_from_board"][0][3], 110.0)
+        context["json_axis_offset_mm"] = -999
+        self.assertAlmostEqual(self.machine.task_context(generation)["json_axis_offset_mm"], -30.0)
         self.machine.on_motion_intent()
         invalid = self.machine.snapshot()
         self.assertFalse(invalid["valid"])
@@ -193,30 +156,25 @@ class StateMachineTests(unittest.TestCase):
         with self.assertRaisesRegex(LocalizationStateError, "localization_not_locked"):
             self.machine.task_context(generation)
 
-    def test_task_completion_preserves_locked_transform(self):
+    def test_task_completion_preserves_lock_and_generation(self):
         generation = self.lock()["generation"]
         self.machine.begin_task("draw-1", generation)
-        self.machine.finish_task("draw-1", "DONE", "four_strokes")
-        snapshot = self.machine.snapshot()
-        self.assertTrue(snapshot["valid"])
-        self.assertIsNone(snapshot["task"]["active"])
-        self.assertEqual(snapshot["task"]["last"]["state"], "DONE")
+        self.machine.finish_task("draw-1", "DONE", "complete")
+        self.assertTrue(self.machine.snapshot()["valid"])
         with self.assertRaisesRegex(LocalizationStateError, "stale_localization_generation"):
             self.machine.begin_task("draw-2", generation + 1)
         with self.assertRaisesRegex(LocalizationStateError, "invalid_localization_generation"):
             self.machine.task_context(True)
 
-    def test_disabled_and_unready_geometry_fail_closed(self):
-        disabled = LocalizationLockStateMachine(enabled=False)
+    def test_disabled_and_bad_configuration_fail_closed(self):
+        disabled = RailLocalizationStateMachine(enabled=False)
         self.assertEqual(disabled.snapshot()["state"], "disabled")
-        blocked = LocalizationLockStateMachine(enabled=True, geometry=geometry(False))
+        blocked = RailLocalizationStateMachine(enabled=True, rail_axis="roll")
         blocked.on_motion_intent()
-        self.assertEqual(blocked.snapshot()["state"], "blocked")
         blocked.on_chassis_unavailable()
-        self.assertEqual(blocked.snapshot()["state"], "blocked")
         blocked.on_chassis_status("enabled_stopped")
         self.assertEqual(blocked.snapshot()["state"], "blocked")
-        with self.assertRaisesRegex(LocalizationStateError, "robot_geometry_unverified"):
+        with self.assertRaisesRegex(LocalizationStateError, "invalid_rail_axis"):
             blocked.request_relocalization()
 
 

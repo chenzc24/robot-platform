@@ -1,126 +1,137 @@
-# Localization lock state machine
+# One-dimensional rail localization state machine
 
-## Purpose and boundary
+## Actual system model
 
-The PC runtime now owns a fail-closed localization lock between chassis motion
-and future coordinate-based tasks. It does not move either device. Its job is to
-invalidate stale geometry, wait after a logical chassis stop, collect several
-accepted AprilTag board poses, freeze one transform generation, and lend that
-immutable generation to a later task executor.
-
-The existing YOLO/manual arm route remains independent. Only a future
-coordinate-based executor should call the localized-task interface.
-
-## Frame convention
-
-`T_A_from_B` maps coordinates expressed in frame B into frame A. The locked
-board-to-base result is:
+The chassis and robot-arm base are treated as one rigid assembly that translates
+only along one fixed rail axis. The drawing JSON is already correct at a known
+rail origin. Relocalization therefore does not solve or consume a camera-to-base
+or Tool0-to-pen transform. It computes one additive JSON-axis correction:
 
 ```text
-T_base_from_board = T_base_from_camera * T_camera_from_board
-p_base            = T_base_from_board * p_board
+rail_delta_mm = rail_position_mm - json_origin_rail_position_mm
+json_axis_offset_mm = json_mm_per_rail_mm * rail_delta_mm
+adjusted_axis_mm = original_axis_mm + json_axis_offset_mm
 ```
 
-`T_base_from_camera` is a measured rigid extrinsic because the GC4653 and arm
-base are fixed to the same chassis. `T_camera_from_board` comes from the stable
-AprilTag observations after each chassis move. `T_tool0_from_pen` is the fixed
-Tool0-to-pen geometry used later with the arm's returned `GetPose(0,0)` sample.
-Arm feedback is deliberately not sampled while the board transform is being
-locked: a task executor must obtain a fresh Tool0 pose when it actually needs
-the current pen pose.
+Normally `json_mm_per_rail_mm` is `-1`: moving the arm base +100 mm means the
+same fixed drawing target is commanded 100 mm in the opposite local direction.
+The sign and scale are explicit configuration because the drawing JSON axes and
+the AprilTag board axes may use different conventions.
 
-All translations are millimetres and rotations are right-handed 3 x 3 matrices.
-The tracked [geometry example](../../config/robot-geometry.example.json) contains
-identity placeholders and `production_ready: false`; it cannot produce a lock.
-Copy it to ignored `config/robot-geometry.local.json`, replace both matrices with
-measured values, and mark it ready only after physical verification.
+The unknown fixed camera-to-arm-base displacement cancels between the JSON-origin
+observation and the current observation. The fixed pen/TCP offset also cancels
+for relocation as long as the pen mounting, tool selection, drawing plane and
+initial taught JSON-to-arm mapping remain unchanged. Those items still matter to
+initial drawing accuracy, but they are not inputs to this state machine.
 
-## States
+## AprilTag rail position
+
+The AprilTag layout defines one metric `board_frame`. It may contain four,
+eight, or more uniquely identified tags distributed along the rail. Every tag's
+measured four corners belong to that same frame. The PC pose solver already
+publishes `T_board_from_camera`; localization reads only one translation value:
 
 ```text
-disabled / blocked
-        |
-     invalid <-- disconnect, disabled chassis, fault or unknown state
-        |
-      moving <-- any nonzero PC motion intent invalidates the old generation
-        |
-     settling <-- ESP32 reports enabled_stopped; timer is still running
-        |
-    collecting <-- accepted, ready AprilTag poses enter a bounded window
-        |
-      locked <-- enough samples are mutually stable; generation increments
+rail_position_mm = T_board_from_camera[rail_axis][3]
 ```
 
-The controller report `enabled_stopped` is logical state, not measured wheel or
-IMU velocity. The settling interval reduces risk from residual vibration but is
-not proof of physical standstill. A motion-producing system still needs the
-planned physical stop/interlock acceptance.
+All tags need not be visible together. Adjacent regions should overlap so two
+or more tags are normally visible during handoff. Changing visible IDs does not
+reset a sample window; changing the layout ID, camera-calibration ID or board
+frame does. A single tag can be allowed by setting `min_visible_tags` to 1, but
+two or more provide stronger cross-checking.
 
-Rejected or intermittent vision frames do not erase good samples already in
-the current bounded window. A changed camera calibration ID, board layout ID or
-board frame clears that window. A lock requires at least `min_valid_samples`, at
-least `min_visible_tags` in every accepted sample, and translation/rotation
-spread within the configured limits. Losing sight of the tags after a lock does
-not invalidate it because the fixed chassis/base/camera assembly has not moved.
-Any possible chassis motion does invalidate it.
+Camera intrinsics, tag sizes and measured tag corners remain necessary for the
+AprilTag solver to produce a metric camera position. No depth camera or full
+camera-to-arm extrinsic is required for the one-dimensional relocation delta.
 
-## Configuration and observable state
+## States and command chain
 
-Console schema 5 adds `localization`:
+```text
+JSON referenced to known origin
+        ↓
+initial AprilTag rail lock
+        ↓
+execute reachable task section
+        ↓
+arm returns to a separately defined safe pose
+        ↓
+coarse chassis move ──→ old lock invalid immediately
+        ↓
+ESP32 reports enabled_stopped
+        ↓
+settling → collecting unique accepted frames → locked generation N+1
+        ↓
+apply json_axis_offset_mm to the remaining JSON points
+```
+
+Localization states are `disabled`, `blocked`, `invalid`, `moving`, `settling`,
+`collecting`, and `locked`. A lock requires a bounded window of unique frames,
+the configured visible-tag count, ready camera/layout data, and scalar position
+spread within `max_position_spread_mm`.
+
+Any possible chassis motion or lost chassis state invalidates the lock. Arm
+motion does not, because it does not move the chassis-mounted camera or arm base.
+The ESP32 `enabled_stopped` report is logical controller state, not measured
+wheel or IMU velocity; the settling timer is not proof of physical standstill.
+
+## Configuration
+
+Console schema 5 contains:
 
 ```json
 {
   "enabled": false,
-  "geometry_path": "config/robot-geometry.local.json",
+  "rail_axis": "x",
+  "json_axis": "x",
+  "json_origin_rail_position_mm": 0.0,
+  "json_mm_per_rail_mm": -1.0,
   "settle_time_ms": 2000,
   "sample_window_ms": 3000,
   "min_valid_samples": 8,
   "min_visible_tags": 2,
-  "max_translation_spread_mm": 2.0,
-  "max_rotation_spread_deg": 1.0
+  "max_position_spread_mm": 2.0
 }
 ```
 
-Localization also requires enabled, complete AprilTag vision. Missing or
-unready geometry produces `blocked`, not a best-effort transform. `GET
-/api/state` publishes `localization.state`, reason, sample count, validity,
-generation, frozen context, quality summary, and active/last task lifecycle.
-`POST /api/localization/relocalize` restarts settling only while the chassis is
-confirmed `enabled_stopped` and no localized task is active.
+`json_origin_rail_position_mm` is the camera's AprilTag-derived rail position
+when the original JSON is known to draw correctly. It absorbs the unknown fixed
+camera/base offset. Apply `json_axis_offset_mm` only after the selected JSON
+coordinate has been converted to millimetres.
 
-Automatic state changes write concise `Localization` events to the existing
-sanitized console journal and text log. They record state, reason and generation,
-not matrices or device addresses; accepted frames do not generate per-frame log
-noise.
+Localization also requires enabled, production-ready AprilTag vision. `GET
+/api/state` publishes state, reason, generation, sample count and the locked
+scalar context. `POST /api/localization/relocalize` restarts settling only when
+the chassis is confirmed stopped and no localized task is active. Automatic
+state changes write concise sanitized events without per-frame log noise.
 
 ## Future task interface
 
-`WebConsoleRuntime` exposes three intentionally transport-neutral calls:
+The transport-neutral runtime API remains:
 
 ```python
 context = runtime.begin_localized_task("draw-42", expected_generation=7)
+offset_mm = context["json_axis_offset_mm"]
 runtime.finish_localized_task("draw-42", "DONE", "complete")
 
-# Read-only use without reserving a task:
+# Read without reserving the task slot:
 context = runtime.localized_task_context(expected_generation=7)
 ```
 
-The returned context is a deep copy containing the generation, frame names,
-geometry ID, forward/inverse board transforms, Tool0/pen transforms and source
-quality evidence. Supplying the observed generation prevents a queued task from
-silently switching to a newer coordinate solution. Only one localized task may
-be active. Chassis motion or lost chassis state marks an active task `UNKNOWN`
-and removes its context; callers must stop issuing later task commands.
+The context is a deep copy containing the scalar position/offset, axes,
+direction/scale, generation and source quality evidence. A generation check
+prevents queued work from using a newer location silently. Only one localized
+task may be active. Chassis motion marks it `UNKNOWN`; the executor must stop
+sending later commands.
 
-There is intentionally no generic HTTP “execute task” endpoint yet. The later
-executor must own command sequencing, fresh arm feedback, workspace checks,
-terminal-result handling and the chassis-stopped/arm-safe interlocks rather than
-smuggling those responsibilities into localization.
+There is intentionally no generic HTTP task-execution route. The future drawing
+executor must own stroke splitting, arm-safe-pose confirmation, coarse chassis
+movement, fresh rail lock, offset application, workspace checks and terminal
+arm-command handling.
 
 ## Validation boundary
 
-L1 tests cover transform validation and composition, stable-window fusion,
-source changes, generation checks, task lifecycle, runtime integration and
-motion-intent invalidation. They do not validate the two physical extrinsics,
-camera intrinsics, AprilTag print dimensions, actual chassis standstill, arm
-orientation conventions, Tool0 feedback or drawing accuracy.
+L1 covers scalar projection, axis/sign configuration, unique-frame fusion,
+changing visible tag sets, generation/task handling and motion invalidation. It
+does not validate the real eight-tag layout, the JSON-origin scalar, rail
+straightness, physical standstill, initial TCP/drawing calibration or L4 motion.

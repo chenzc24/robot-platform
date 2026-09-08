@@ -18,7 +18,6 @@
 config/console.local.json
 config/apriltag-board.local.json
 config/camera-calibration.local.json
-config/robot-geometry.local.json
 secrets.*
 !/src/esp32/app/secrets.example.py
 /src/esp32/app/secrets.py

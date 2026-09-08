@@ -19,11 +19,13 @@ from runtime_config import (
     ManualChassisConfig,
     LocalizationConfig,
     RuntimeConfig,
+    RuntimeConfigError,
     VideoConfig,
     VisionConfig,
     load_runtime_config,
 )
 from localization import create_localization_state_machine
+from localization.state_machine import RailLocalizationStateMachine
 from vision.apriltag_localizer import AprilTagBoardLocalizer
 from vision.calibration import (
     BoardLayout,
@@ -82,6 +84,8 @@ class CalibrationTests(unittest.TestCase):
             self.assertEqual(current.vision.dictionary, "DICT_APRILTAG_36H11")
             self.assertFalse(current.localization.enabled)
             self.assertEqual(current.localization.settle_time_ms, 2000)
+            self.assertEqual(current.localization.rail_axis, "x")
+            self.assertEqual(current.localization.json_mm_per_rail_mm, -1.0)
             version_four = dict(base)
             version_four["schema_version"] = 4
             del version_four["localization"]
@@ -94,6 +98,12 @@ class CalibrationTests(unittest.TestCase):
             path.write_text(json.dumps(legacy), encoding="utf-8")
             self.assertFalse(load_runtime_config(path).vision.enabled)
 
+            invalid = json.loads(json.dumps(base))
+            invalid["localization"]["json_mm_per_rail_mm"] = 0
+            path.write_text(json.dumps(invalid), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeConfigError, "must be nonzero"):
+                load_runtime_config(path)
+
     def test_localization_requires_enabled_complete_vision(self):
         runtime = RuntimeConfig(
             chassis=ChassisConfig("host", 4242, 1.0, "console", "CREDENTIAL"),
@@ -101,7 +111,7 @@ class CalibrationTests(unittest.TestCase):
             arm=ArmConfig("host", 4343, 1.0, "console"),
             video=VideoConfig("", "", 1.0, ""),
             vision=VisionConfig(),
-            localization=LocalizationConfig(enabled=True, geometry_path="geometry.json"),
+            localization=LocalizationConfig(enabled=True),
         )
         snapshot = create_localization_state_machine(runtime).snapshot()
         self.assertEqual(snapshot["state"], "blocked")
@@ -132,6 +142,29 @@ class CalibrationTests(unittest.TestCase):
         self.assertEqual(loaded_board.units, "mm")
         self.assertTrue(loaded_board.production_ready)
         self.assertEqual(loaded_board.tag_corners[9][0], (10.0, 20.0, 0.0))
+
+    def test_board_layout_accepts_eight_unique_rail_landmarks(self):
+        tags = {}
+        for tag_id in range(8):
+            x = tag_id * 400
+            tags[str(tag_id)] = {"corners": [
+                [x, 0, 0], [x + 40, 0, 0], [x + 40, 40, 0], [x, 40, 0],
+            ]}
+        board = {
+            "schema_version": 1,
+            "production_ready": True,
+            "layout_id": "eight-rail-landmarks",
+            "frame": "rail_landmarks",
+            "units": "mm",
+            "dictionary": "DICT_APRILTAG_36H11",
+            "corner_order": "top_left_clockwise",
+            "tags": tags,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "rail.json"
+            path.write_text(json.dumps(board), encoding="utf-8")
+            loaded = load_board_layout(path)
+        self.assertEqual(sorted(loaded.tag_corners), list(range(8)))
 
 
 class LocalizerTests(unittest.TestCase):
@@ -165,6 +198,16 @@ class LocalizerTests(unittest.TestCase):
         np.testing.assert_allclose(transform @ inverse, np.eye(4), atol=1e-3)
         np.testing.assert_allclose(transform[:3, 3], expected_tvec.reshape(3), atol=1e-3)
         self.assertEqual(result["confidence_kind"], "quality_score_not_probability")
+        machine = RailLocalizationStateMachine(
+            enabled=True,
+            rail_axis="x",
+            settle_time_ms=0,
+            min_valid_samples=1,
+            min_visible_tags=2,
+        )
+        machine.on_chassis_status("enabled_stopped")
+        machine.observe_vision(result)
+        self.assertAlmostEqual(machine.task_context()["rail_position_mm"], inverse[0, 3], places=6)
 
     def test_one_known_tag_can_solve_without_a_tag_count_gate(self):
         localizer = AprilTagBoardLocalizer(CAMERA, BOARD, min_confidence=0.4)

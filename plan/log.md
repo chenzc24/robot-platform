@@ -1688,3 +1688,18 @@ entry format:
   motion occurred.
 - Commit intent: commit and push only this cleanup plan and factual log entry
   directly on `main`.
+
+## 2026-09-08 - Define provisional GC4653 native intrinsics
+
+- Expressed the supplied GC4653 H81/V51 field-of-view estimate at native
+  2560x1440 as `fx=1498.687444`, `fy=1509.511392`, `cx=1280`, `cy=720`.
+  Runtime scaling to 1280x720 remains numerically identical to the previous
+  matrix, so this is a traceability correction rather than an inference change.
+- Updated the ignored local copy consistently and kept both calibration files
+  `production_ready=false`. The nominal 5% lens-distortion scalar lacks sign,
+  reference radius, radial model and tangential terms, so the OpenCV vector
+  remains an explicit zero placeholder pending checkerboard/ChArUco calibration.
+- L1 passed JSON parsing, 10 focused AprilTag tests, all 160 discovered app and
+  console tests, and `git diff --check`.
+- No hardware connection, deployment, service action, device configuration write
+  or motion occurred. Commit status was pending at log-entry time on `main`.

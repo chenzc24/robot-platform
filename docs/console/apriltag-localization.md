@@ -49,17 +49,28 @@ used for preliminary boxes and a tentative transform, but the result is forced
 to `status: precalibration` and `accepted: false`. Measure and replace every
 assumed value before changing either flag to `true`.
 
-The camera example is an initial GC4653 pinhole estimate for the actual 1280 x
-720 stream. It uses the supplied H81-degree and V51-degree fields of view:
+The camera example is an initial GC4653 pinhole estimate referenced to the
+sensor's supplied native 2560 x 1440 mode. It uses the supplied H81-degree and
+V51-degree fields of view:
 
 ```text
-fx = (1280 / 2) / tan(81 degrees / 2) = 749.343722 px
-fy = ( 720 / 2) / tan(51 degrees / 2) = 754.755696 px
-cx = 640 px, cy = 360 px
+fx = (2560 / 2) / tan(81 degrees / 2) = 1498.687444 px
+fy = (1440 / 2) / tan(51 degrees / 2) = 1509.511392 px
+cx = 1280 px, cy = 720 px
 ```
 
-The supplied 5% lens-distortion specification is not an OpenCV distortion
-coefficient, so the example uses zero placeholders. This estimate does not
+For the current aspect-preserving 1280 x 720 runtime stream, the localizer
+scales this to `fx=749.343722`, `fy=754.755696`, `cx=640`, `cy=360`; the runtime
+numerics therefore remain identical to the earlier stream-sized estimate.
+The independent `3.05 mm / 2.0 um = 1525 px` focal-length estimate is close but
+not identical because the published focal length, field of view, pixel pitch
+and active image area are rounded specifications. The file uses the effective
+horizontal/vertical FOV pair and remains explicitly provisional.
+
+The supplied 5% lens-distortion specification is not an OpenCV Brown distortion
+vector: it does not state sign, reference radius, radial model or tangential
+terms. The example therefore retains `[0,0,0,0,0]` placeholders and names the
+distortion as unknown instead of treating zero as measured. This estimate does not
 capture the real lens, focus, assembly tolerance, ISP crop or distortion and
 must not be treated as metric camera calibration.
 

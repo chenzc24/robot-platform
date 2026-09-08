@@ -67,12 +67,17 @@ class FakeDetector:
 
 
 class CalibrationTests(unittest.TestCase):
-    def test_gc4653_example_loads_as_an_unready_fov_estimate(self):
+    def test_gc4653_example_loads_as_an_unready_native_fov_estimate(self):
         camera = load_camera_calibration(ROOT / "config" / "camera-calibration.example.json")
         self.assertFalse(camera.production_ready)
-        self.assertEqual(camera.image_width, 1280)
-        self.assertAlmostEqual(camera.camera_matrix[0][0], 749.343722, places=6)
-        self.assertAlmostEqual(camera.camera_matrix[1][1], 754.755696, places=6)
+        self.assertEqual((camera.image_width, camera.image_height), (2560, 1440))
+        self.assertAlmostEqual(camera.camera_matrix[0][0], 1498.687444, places=6)
+        self.assertAlmostEqual(camera.camera_matrix[1][1], 1509.511392, places=6)
+        localizer = AprilTagBoardLocalizer(camera, BOARD)
+        scaled = localizer._scaled_camera_matrix(1280, 720)
+        self.assertAlmostEqual(scaled[0, 0], 749.343722, places=6)
+        self.assertAlmostEqual(scaled[1, 1], 754.755696, places=6)
+        self.assertEqual(list(camera.distortion_coefficients), [0.0] * 5)
 
     def test_schema_five_loads_localization_and_older_schemas_remain_compatible(self):
         base = json.loads((ROOT / "config" / "console.example.json").read_text(encoding="utf-8"))
@@ -230,9 +235,11 @@ class LocalizerTests(unittest.TestCase):
         object_groups = [np.asarray(board.tag_corners[tag_id], dtype=np.float64) for tag_id in sorted(board.tag_corners)]
         rvec = np.asarray([[0.3], [-0.2], [0.1]], dtype=np.float64)
         tvec = np.asarray([[-120.0], [-80.0], [800.0]], dtype=np.float64)
+        runtime_matrix = localizer._scaled_camera_matrix(1280, 720)
         corners = [
             cv2.projectPoints(
-                group, rvec, tvec, np.asarray(camera.camera_matrix), np.asarray(camera.distortion_coefficients)
+                group, rvec, tvec, runtime_matrix,
+                np.asarray(camera.distortion_coefficients)
             )[0].reshape(1, 4, 2)
             for group in object_groups
         ]

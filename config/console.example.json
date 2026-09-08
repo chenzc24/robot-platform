@@ -1,5 +1,5 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "chassis": {
     "host": "",
     "port": 0,
@@ -37,5 +37,17 @@
     "min_confidence": 0.55,
     "stale_after_ms": 1200,
     "log_path": "logs/vision/apriltag.log"
+  },
+  "localization": {
+    "enabled": false,
+    "rail_axis": "x",
+    "json_axis": "x",
+    "json_origin_rail_position_mm": 0.0,
+    "json_mm_per_rail_mm": -1.0,
+    "settle_time_ms": 2000,
+    "sample_window_ms": 3000,
+    "min_valid_samples": 8,
+    "min_visible_tags": 2,
+    "max_position_spread_mm": 2.0
   }
 }

@@ -9,6 +9,7 @@ from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 
+from localization import LocalizationStateError, create_localization_state_machine
 from runtime_core import MOTION_ARM_COMMANDS, close_client, default_arm_factory, default_chassis_factory, dispatch_arm, dispatch_chassis
 from status_mapping import StatusMappingError, parse_arm_status, parse_chassis_status
 
@@ -30,6 +31,7 @@ class WebConsoleRuntime:
     def __init__(
         self, config, chassis_factory=None, arm_factory=None, start_workers=True,
         clock=None, event_log_path=None, vision_factory=None, vision_worker=None,
+        localization_machine=None,
     ):
         self.config = config
         self._chassis_factory = chassis_factory or default_chassis_factory
@@ -56,6 +58,12 @@ class WebConsoleRuntime:
         self._last_vision_received = None
         self._vision_factory = vision_factory
         self._vision_worker = vision_worker
+        self._localization = localization_machine or create_localization_state_machine(config, clock=self._clock)
+        initial_localization = self._localization.snapshot()
+        self._localization_reported_revision = initial_localization["revision"]
+        self._localization_reported = (
+            initial_localization["state"], initial_localization["reason"], initial_localization["generation"]
+        )
         self._stop_event = threading.Event()
         self._threads = []
         self._state = {
@@ -158,6 +166,37 @@ class WebConsoleRuntime:
             self._state["vision"].setdefault("confidence_threshold", threshold)
             self._last_vision_received = self._clock()
             self._touch()
+        self._localization.observe_vision(result)
+        self._report_localization_state("vision")
+
+    def _report_localization_state(self, command):
+        state = self._localization.snapshot()
+        signature = (state["state"], state["reason"], state["generation"])
+        with self._lock:
+            if state["revision"] <= self._localization_reported_revision:
+                return
+            self._localization_reported_revision = state["revision"]
+            if signature == self._localization_reported:
+                return
+            self._localization_reported = signature
+        lifecycle = {
+            "locked": "DONE",
+            "blocked": "REJECTED",
+            "invalid": "UNKNOWN",
+        }.get(state["state"], "RUNNING")
+        result = "state=%s reason=%s generation=%d" % signature
+        if state["state"] == "locked" and state["context"] is not None:
+            context = state["context"]
+            source = context["source"]
+            result += " rail_position_mm=%s json_axis_offset_mm=%s samples=%s min_confidence=%s" % (
+                context["rail_position_mm"],
+                context["json_axis_offset_mm"],
+                source["sample_count"],
+                source["min_confidence"],
+            )
+        self._event(
+            "Localization", command, lifecycle, result,
+        )
 
     def _touch(self):
         self._revision += 1
@@ -221,7 +260,7 @@ class WebConsoleRuntime:
                 state["vision"]["accepted"] = False
                 state["vision"]["status"] = "stale"
                 state["vision"]["error"] = "vision_result_stale"
-            return {
+            snapshot = {
                 "revision": self._revision,
                 "log_error": self._log_error,
                 "video": state["video"],
@@ -231,6 +270,8 @@ class WebConsoleRuntime:
                 "faults": list(self._faults.values()),
                 "events": list(self._events),
             }
+        snapshot["localization"] = self._localization.snapshot(now)
+        return snapshot
 
     def _require_chassis(self):
         with self._lock:
@@ -281,6 +322,8 @@ class WebConsoleRuntime:
             )
             self._touch()
         close_client(client)
+        self._localization.on_chassis_unavailable("chassis_disconnected")
+        self._report_localization_state("chassis")
 
     def disconnect_chassis(self):
         self._cancel_motion("disconnect", stopping=True)
@@ -350,6 +393,8 @@ class WebConsoleRuntime:
             if not status.motion_enabled and self._held_velocity is not None:
                 self._cancel_motion("device_disabled")
             self._touch()
+        self._localization.on_chassis_status(status.chassis_state)
+        self._report_localization_state("chassis")
         self._clear_fault("chassis_status_invalid")
         return self.snapshot()
 
@@ -429,6 +474,9 @@ class WebConsoleRuntime:
                 epoch = self._cancel_motion("replaced")
                 chassis["motion"].update(mode=mode, reason="starting")
                 self._input_deadline = deadline
+            if any(command[field] != 0 for field in ("vx_mm_s", "vy_mm_s", "omega_mrad_s")):
+                self._localization.on_motion_intent()
+                self._report_localization_state("chassis")
             try:
                 self._chassis_request("velocity", command)
             except WebConsoleError:
@@ -729,6 +777,41 @@ class WebConsoleRuntime:
             with self._lock:
                 self._state["arm"]["task"] = "idle"
                 self._touch()
+        return self.snapshot()
+
+    def request_relocalization(self):
+        try:
+            self._localization.request_relocalization()
+        except LocalizationStateError as error:
+            self._event("Localization", "relocalize", "REJECTED", error.code)
+            raise WebConsoleError(error.code) from error
+        self._report_localization_state("relocalize")
+        return self.snapshot()
+
+    def localized_task_context(self, expected_generation=None):
+        """Return an immutable transform context without changing task state."""
+        try:
+            return self._localization.task_context(expected_generation)
+        except LocalizationStateError as error:
+            raise WebConsoleError(error.code) from error
+
+    def begin_localized_task(self, task_id, expected_generation=None):
+        """Reserve the locked transform for a future coordinated executor."""
+        try:
+            context = self._localization.begin_task(task_id, expected_generation)
+        except LocalizationStateError as error:
+            self._event("Localization", "task.begin", "REJECTED", error.code)
+            raise WebConsoleError(error.code) from error
+        self._event("Localization", "task.begin", "RUNNING", task_id)
+        return context
+
+    def finish_localized_task(self, task_id, outcome, result="none"):
+        try:
+            self._localization.finish_task(task_id, outcome, result)
+        except LocalizationStateError as error:
+            self._event("Localization", "task.finish", "REJECTED", error.code)
+            raise WebConsoleError(error.code) from error
+        self._event("Localization", "task.finish", outcome, result)
         return self.snapshot()
 
     def acknowledge_fault(self, code):

@@ -1344,3 +1344,46 @@ entry format:
   diff hash for the existing settings, drawing demo and prior log hunk remained
   unchanged across the branch switch. No device service, connection or motion
   was used for the merge.
+
+## 2026-09-04 - Add reusable localization-lock state machine
+
+- Added a PC-only fail-closed state machine for chassis motion invalidation,
+  logical-stop settling, bounded unique AprilTag frame collection and a stable
+  versioned `T_base_from_board` lock. Permanent missing/unready configuration
+  stays blocked through runtime events.
+- Added strict measured `T_base_from_camera` and `T_tool0_from_pen` geometry,
+  schema-5 disabled defaults, backward-compatible schema 3/4 loading, sanitized
+  transition events and a safe relocalize endpoint. Identity examples remain
+  `production_ready: false`; the measured local geometry path is ignored.
+- Exposed immutable generation-checked context plus begin/finish lifecycle for
+  a future coordinated task executor. Existing YOLO/manual arm commands remain
+  independent, and no generic task-execution HTTP route was introduced.
+- L1 passed 324 Python tests across all repository suites, 14 JavaScript tests,
+  Python compilation, JavaScript syntax, JSON parsing and diff checks. No device
+  connection, service start, deployment or motion occurred.
+- Physical camera/base and Tool0/pen calibration, measured chassis standstill,
+  arm orientation/workspace checks and L4 task execution remain unverified.
+  Commit/push only the scoped state-machine goal and this appended section on
+  `target/localization-lock-state-machine`; preserve all prior dirty work.
+
+## 2026-09-04 - Simplify localization to one-dimensional rail offsets
+
+- Replaced the open PR's general camera/base/tool SE(3) localization with the
+  actual constrained model: read one configured axis from
+  `T_board_from_camera`, fuse unique accepted frames, and lock a scalar rail
+  position plus additive JSON-axis offset relative to the known JSON origin.
+- Removed the robot-geometry file and all camera-to-base/Tool0-to-pen inputs.
+  Their fixed offsets cancel in the relocation delta as long as the chassis is
+  pure one-axis translation and the initial pen/JSON setup remains unchanged.
+- Preserved motion invalidation, stopped settling, generation-checked task
+  context/lifecycle, the relocalize API and independent manual arm controls.
+  Lock events report rail position, JSON offset, sample count and confidence.
+- Confirmed an AprilTag layout may contain eight unique rail landmarks and that
+  adjacent visible-ID sets can change without resetting one global-layout
+  sampling window. Not every tag must be visible at once.
+- L1 passed 324 Python tests, including 122 console tests, plus 14 JavaScript
+  tests, compilation/syntax, JSON and diff checks. No hardware, deployment,
+  service start or motion was used. Real tag coordinates, rail axis/sign,
+  JSON-origin position and physical L4 behavior remain unverified.
+- Submit only this simplification and appended log section to the existing
+  `target/localization-lock-state-machine` PR; preserve all unrelated dirty work.

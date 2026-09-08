@@ -120,6 +120,9 @@ control-loop tuning, station geometry, CAN execution, or physical stopping.
   no tests; it was rerun successfully with the primary workspace environment.
 - No device connection, GPIO/CAN access, deployment, service start, or physical
   motion occurred.
+- Implementation commit `e382767` was pushed to
+  `origin/target/line-following-core`; PR #8 targets `main` and was not merged
+  or deployed by this goal.
 
 ## Outstanding matters
 

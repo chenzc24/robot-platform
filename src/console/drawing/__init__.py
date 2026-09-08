@@ -5,6 +5,7 @@ from .control_modes import (
     AdvancedRelocator,
     BaselineRelocator,
     DrawingControlConfig,
+    LocalizedBaselineRelocator,
     RelocationAdmission,
     RelocationResult,
     create_relocator,
@@ -13,11 +14,14 @@ from .control_modes import (
     relocate_reposition_plan,
 )
 from .loader import load_drawing_job, parse_drawing_document
+from .coordinator import execute_localized_drawing
 from .executor import (
     DrawingExecutionAdmission,
     DrawingExecutionError,
     execute_drawing_plan,
+    execute_drawing_window,
     flatten_plan_steps,
+    flatten_plan_window,
     require_ready_arm,
 )
 from .models import DrawingError, DrawingJob, DrawingPlan, PlanCheckpoint
@@ -34,13 +38,17 @@ __all__ = (
     "DrawingGeometry",
     "DrawingJob",
     "DrawingPlan",
+    "LocalizedBaselineRelocator",
     "PlanCheckpoint",
     "RelocationAdmission",
     "RelocationResult",
     "build_drawing_plan",
     "create_relocator",
     "execute_drawing_plan",
+    "execute_drawing_window",
+    "execute_localized_drawing",
     "flatten_plan_steps",
+    "flatten_plan_window",
     "load_drawing_config",
     "load_drawing_control_config",
     "load_drawing_job",

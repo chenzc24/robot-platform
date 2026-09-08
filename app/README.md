@@ -1,8 +1,9 @@
 # PC drawing tools
 
-The standalone four-stroke `demo.py` has been removed. Baseline and Advanced
-now share the grouped drawing loader, planner, pen workflow and coworker motion
-profile. They differ only in the chassis relocation strategy.
+The standalone four-stroke `demo.py` has been removed. Baseline, Localized
+Baseline and Advanced now share the grouped drawing loader, planner, pen
+workflow and coworker motion profile. They differ only in the chassis
+relocation strategy.
 
 ## Grouped drawing preview
 
@@ -31,6 +32,13 @@ opens no chassis session. Every command must return `DONE`; fault, rejection,
 unknown outcome or disconnect stops all later commands without retry or
 automatic resume.
 
+`localized_baseline_run.py` adds the intermediate multi-window entry point:
+direct chassis motion without line following, followed by a mandatory fresh
+AprilTag lock. It returns the pen and reaches the configured safe home at every
+planner barrier, replaces the open-loop travel estimate with the measured
+one-axis offset, and resumes the exact checkpoint. It uses the same deployed
+ESP32, MaixCam and arm services as the other modes; only PC orchestration differs.
+
 The upgraded MaixCam/RPA2 route carries drawing `blend_pct=100` to the
 controller's `RelMovLUser` `cp` option. Deploy the compatible controller project
 before MaixCam. Do not use the real execution entry point with an older endpoint.
@@ -46,6 +54,20 @@ After a reviewed local config has `production_ready=true`, a real run additional
 requires `--execute`, the exact dry-run `job_sha256`, a new `--log` path, and all
 four `--confirm-*` safety flags shown by `--help`. Never reuse an existing log or
 resume automatically after an unknown outcome.
+
+Localized Baseline dry-run also requires the schema-2 drawing-control file, but
+does not load runtime configuration or connect to a device:
+
+```powershell
+python app/localized_baseline_run.py dataset/dobot-generation-1.json `
+  --drawing-config config/drawing.local.json `
+  --control-config config/drawing-control.local.json
+```
+
+For real execution, review `--help`. In addition to the Baseline gates it needs
+the ignored schema-5 console configuration with production-ready AprilTag files,
+`selected_mode: localized_baseline`, and explicit chassis-profile confirmation.
+Do not connect the UI manual chassis/arm sessions concurrently with the script.
 
 ## AprilTag localization
 

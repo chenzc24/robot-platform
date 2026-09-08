@@ -18,9 +18,9 @@ from drawing.control_modes import (
 from drawing.models import DrawingError
 
 
-def config_document(mode="baseline", ready=True):
-    return {
-        "version": 1,
+def config_document(mode="baseline", ready=True, version=1):
+    document = {
+        "version": version,
         "production_ready": ready,
         "selected_mode": mode,
         "json_mm_per_rail_mm": -1.0,
@@ -37,6 +37,12 @@ def config_document(mode="baseline", ready=True):
             "localization_timeout_ms": 1000,
         },
     }
+    if version == 2:
+        document["localized_baseline"] = {
+            "poll_ms": 100,
+            "localization_timeout_ms": 1000,
+        }
+    return document
 
 
 class FakeClock:
@@ -64,6 +70,17 @@ class FakeChassis:
     def ping(self):
         self.calls.append(("ping", ()))
 
+    def status(self):
+        self.calls.append(("status", ()))
+        return {
+            "version": 3, "sequence": 10, "type": "STATE", "ttl_ms": 0,
+            "payload": {
+                "service_state": "ready", "chassis_state": "enabled_stopped",
+                "motion_permitted": True, "authenticated": True,
+                "hold_remaining_ms": 0, "last_error": "none",
+            },
+        }
+
     def line_follow_start(self, direction):
         self.calls.append(("line_follow_start", (direction,)))
 
@@ -83,7 +100,13 @@ class FakeLocalization:
 
     def snapshot(self):
         if not self.requested:
-            return {"state": "locked", "generation": 2, "context": {}}
+            return {
+                "state": "locked", "generation": 2,
+                "context": {
+                    "json_axis_offset_mm": 0.0,
+                    "json_mm_per_rail_mm": -1.0,
+                },
+            }
         self.after += 1
         if self.after == 1:
             return {"state": "collecting", "generation": 2, "context": None}
@@ -101,6 +124,12 @@ class FakeLocalization:
 
     def request_relocalization(self):
         self.requested = True
+
+    def on_motion_intent(self, reason):
+        self.motion_reason = reason
+
+    def on_chassis_status(self, state):
+        self.chassis_state = state
 
 
 def admission(**overrides):
@@ -130,6 +159,15 @@ class DrawingControlConfigTests(unittest.TestCase):
                 document["unexpected"] = True
             with self.subTest(mutation=mutation), self.assertRaises(DrawingError):
                 parse_drawing_control_config(document)
+
+    def test_version_two_adds_only_explicit_localized_baseline(self):
+        config = parse_drawing_control_config(
+            config_document("localized_baseline", version=2)
+        )
+        self.assertEqual(config.selected_mode, "localized_baseline")
+        self.assertEqual(config.localized_baseline.poll_ms, 100)
+        with self.assertRaisesRegex(DrawingError, "not available"):
+            parse_drawing_control_config(config_document("localized_baseline"))
 
 
 class BaselineRelocatorTests(unittest.TestCase):
@@ -252,6 +290,49 @@ class AdvancedRelocatorTests(unittest.TestCase):
                 0, -50, admission()
             )
         self.assertEqual(chassis.calls, [])
+
+
+class LocalizedBaselineRelocatorTests(unittest.TestCase):
+    def test_direct_motion_then_stop_status_and_fresh_apriltag_offset(self):
+        clock = FakeClock()
+        chassis = FakeChassis()
+        localization = FakeLocalization()
+        config = parse_drawing_control_config(
+            config_document("localized_baseline", version=2)
+        )
+        result = create_relocator(
+            config, chassis, localization, clock=clock, sleep=clock.sleep
+        ).relocate(0, -10, admission())
+        self.assertEqual(result.mode, "localized_baseline")
+        self.assertEqual(result.offset_source, "apriltag_locked")
+        self.assertEqual(result.commanded_rail_distance_mm, 10)
+        self.assertEqual(result.json_axis_offset_mm, -42.5)
+        self.assertEqual(result.localization_generation, 3)
+        names = [name for name, _ in chassis.calls]
+        self.assertIn("velocity", names)
+        self.assertLess(names.index("stop"), names.index("status"))
+        self.assertNotIn("line_follow_start", names)
+        self.assertEqual(localization.motion_reason, "localized_baseline_motion")
+        self.assertEqual(localization.chassis_state, "enabled_stopped")
+
+    def test_unconfirmed_stop_blocks_localization_and_resume(self):
+        class MovingAfterStop(FakeChassis):
+            def status(self):
+                response = super().status()
+                response["payload"]["chassis_state"] = "moving"
+                return response
+
+        clock = FakeClock()
+        chassis = MovingAfterStop()
+        localization = FakeLocalization()
+        config = parse_drawing_control_config(
+            config_document("localized_baseline", version=2)
+        )
+        with self.assertRaisesRegex(DrawingError, "not_stopped"):
+            create_relocator(
+                config, chassis, localization, clock=clock, sleep=clock.sleep
+            ).relocate(0, -10, admission())
+        self.assertFalse(localization.requested)
 
 
 if __name__ == "__main__":

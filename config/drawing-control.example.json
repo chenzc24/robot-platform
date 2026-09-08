@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "production_ready": false,
   "selected_mode": "baseline",
   "json_mm_per_rail_mm": -1.0,
@@ -9,6 +9,10 @@
     "hold_ms": 250,
     "max_distance_mm": 300.0,
     "settle_ms": 2000
+  },
+  "localized_baseline": {
+    "poll_ms": 100,
+    "localization_timeout_ms": 10000
   },
   "advanced": {
     "poll_ms": 100,

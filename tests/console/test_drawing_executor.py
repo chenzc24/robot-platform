@@ -11,7 +11,9 @@ from drawing.executor import (
     DrawingExecutionAdmission,
     DrawingExecutionError,
     execute_drawing_plan,
+    execute_drawing_window,
     flatten_plan_steps,
+    flatten_plan_window,
 )
 from drawing.models import DrawingPlan, PlanStep
 
@@ -107,6 +109,32 @@ class DrawingExecutorTests(unittest.TestCase):
         incomplete = DrawingPlan("job", "config", 0, (), False, object(), {})
         with self.assertRaisesRegex(ValueError, "complete_drawing_plan_required"):
             flatten_plan_steps(incomplete)
+
+    def test_window_executes_only_verified_safe_prefix_before_barrier(self):
+        checkpoint = SimpleNamespace(to_dict=lambda: {
+            "group_index": 0, "stroke_index": 0, "next_point_index": 1,
+        })
+        incomplete = DrawingPlan("job", "config", 0, (
+            PlanStep("arm.home", "safe", {
+                "joint_deg": [1] * 6, "accel_pct": 20, "speed_pct": 50,
+                "purpose": "reposition_safe_pose",
+            }),
+            PlanStep("reposition.required", "barrier", {}),
+        ), False, checkpoint, {})
+        client = FakeClient()
+        result = execute_drawing_window(
+            client, incomplete, config(), ADMISSION, sleep_func=lambda _: None
+        )
+        self.assertFalse(result["complete"])
+        self.assertEqual(result["checkpoint"]["next_point_index"], 1)
+        self.assertEqual([call[0] for call in client.calls], ["move_joint"])
+
+        unsafe = DrawingPlan("job", "config", 0, (
+            PlanStep("arm.relative", "still drawing", {}),
+            PlanStep("reposition.required", "barrier", {}),
+        ), False, checkpoint, {})
+        with self.assertRaisesRegex(ValueError, "does_not_end_arm_safe"):
+            flatten_plan_window(unsafe)
 
 
 if __name__ == "__main__":

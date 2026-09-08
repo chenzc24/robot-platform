@@ -111,10 +111,12 @@ chassis arrives → confirmed stop → vision detection → target validation
 Drawing relocation uses one PC-selected strategy with the same ownership
 boundary. `baseline` commands a bounded direct chassis displacement and treats
 the commanded distance as an open-loop estimate; it does not use line sensors
-or AprilTag. `advanced` asks ESP32 to perform its local sensor-rate line-follow
-loop to a station, then the computer accepts only a fresh AprilTag localization
-generation. ESP32 owns both strategies' motor watchdog and stop behavior. A
-failed advanced run stops and does not silently fall back to baseline.
+or AprilTag. `localized_baseline` uses the same direct displacement but replaces
+the estimate with a fresh AprilTag localization after confirmed logical stop.
+`advanced` asks ESP32 to perform its local sensor-rate line-follow loop to a
+station, then the computer likewise accepts only a fresh AprilTag localization
+generation. ESP32 owns all strategies' motor watchdog and stop behavior. A
+failed run stops and does not silently fall back to another strategy.
 
 ## 6. Shared Message Contract
 

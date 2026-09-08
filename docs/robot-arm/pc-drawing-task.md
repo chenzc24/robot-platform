@@ -90,9 +90,10 @@ anchor but cancels from within-stroke deltas.
 The shared motion profile also follows the delivered controller source. Stroke
 segments explicitly carry `speed_pct=12` and `blend_pct=100`. Per the project
 owner's clarified defaults, Home, anchor, pen-down/up and rack movements carry
-`speed_pct=50`, and every arm motion carries `accel_pct=20`. Baseline and
-Advanced consume this same plan; only their chassis relocation strategy
-differs. The upgraded primitive route carries `blend_pct=100` through MaixCam
+`speed_pct=50`, and every arm motion carries `accel_pct=20`. Baseline,
+Localized Baseline and Advanced consume this same plan; only their chassis
+relocation strategy differs. The upgraded primitive route carries
+`blend_pct=100` through MaixCam
 and RPA2 to the controller's `RelMovLUser` `cp` option.
 
 ## Preview
@@ -121,7 +122,8 @@ return/pick cycle.
 Every point endpoint is checked before its motion step is emitted. If the first
 point is outside the configured User-Y range, the plan contains only a
 reposition barrier. If a later segment would leave the range, the partial plan
-first lifts the pen and returns to the configured home pose, then emits:
+first lifts the pen, returns it to the configured rack slot, and finishes at the
+configured home pose, then emits:
 
 - the exact group, stroke and next-point checkpoint;
 - the endpoint range that must fit after relocation;
@@ -145,8 +147,12 @@ configuration, hash, logging and attended-safety gates. It flattens rack recipes
 and stops on the first non-`DONE` outcome without retry. It deliberately rejects
 plans containing a reposition barrier and never connects to the chassis.
 
-Chassis relocation, AprilTag collection, automatic resume and the coordinated
-multi-window L4 state machine remain separate. For the supplied job, flattening
+`app/localized_baseline_run.py` now provides the explicit direct-drive plus
+AprilTag multi-window path. It returns the pen between windows so checkpoint
+planning does not depend on hidden gripper state, requires a fresh localization
+generation after every move, and never uses commanded travel as the resumed
+offset. Its dry-run is L1 only; real coordinated behavior remains unvalidated
+L4. For the supplied job, flattening
 adds rack/gripper actions to the 5,220 top-level arm primitives, producing 5,257
 actual arm requests and 878 local wait steps. Full-job performance must be
 measured rather than hidden by increasing motion speed.

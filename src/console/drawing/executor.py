@@ -40,8 +40,33 @@ def flatten_plan_steps(plan):
     """Return immutable atomic steps; reject relocation and unknown wrappers."""
     if not plan.complete or plan.next_checkpoint is not None:
         raise DrawingError("complete_drawing_plan_required")
+    return _flatten_steps(plan.steps)
+
+
+def flatten_plan_window(plan):
+    """Return the executable prefix before one verified reposition barrier."""
+    if plan.complete:
+        return flatten_plan_steps(plan)
+    if plan.next_checkpoint is None or not plan.steps:
+        raise DrawingError("drawing_plan_has_no_reposition_barrier")
+    barrier = plan.steps[-1]
+    if barrier.kind != "reposition.required":
+        raise DrawingError("drawing_plan_has_no_reposition_barrier")
+    prefix = plan.steps[:-1]
+    if not prefix:
+        raise DrawingError("drawing_window_does_not_end_arm_safe")
+    final = prefix[-1]
+    if (
+        final.kind != "arm.home"
+        or final.payload.get("purpose") != "reposition_safe_pose"
+    ):
+        raise DrawingError("drawing_window_does_not_end_arm_safe")
+    return _flatten_steps(prefix)
+
+
+def _flatten_steps(steps):
     flattened = []
-    for step in plan.steps:
+    for step in steps:
         if step.kind in ("arm.home", "arm.relative", "sleep"):
             kind = "arm.move_joint" if step.kind == "arm.home" else step.kind
             flattened.append((step.label, kind, dict(step.payload)))
@@ -115,24 +140,16 @@ def _execute_atomic(client, kind, payload, sleep_func):
     raise DrawingExecutionError("unsupported_atomic_step")
 
 
-def execute_drawing_plan(
-    client,
-    plan,
-    config,
-    admission,
-    event_sink=None,
-    sleep_func=time.sleep,
+def _execute_steps(
+    client, steps, config, admission, emit, sleep_func, event_prefix
 ):
-    """Execute once in order. Any failure stops without retry or auto-resume."""
     admission.require()
     if not config.production_ready:
         raise DrawingExecutionError("drawing_not_production_ready")
-    steps = flatten_plan_steps(plan)
     status = require_ready_arm(client, config)
-    emit = event_sink or (lambda _event: None)
     emit(
         {
-            "event": "execution_ready",
+            "event": event_prefix + "_ready",
             "commands_total": sum(kind != "sleep" for _, kind, _ in steps),
             "steps_total": len(steps),
             "feedback_sample_id": status.sample_id,
@@ -165,5 +182,44 @@ def execute_drawing_plan(
                 completed_commands,
             ) from error
         emit({"event": "step_done", "index": index, "kind": kind})
-    emit({"event": "execution_done", "completed_commands": completed_commands})
+    emit({"event": event_prefix + "_done", "completed_commands": completed_commands})
     return {"completed_commands": completed_commands, "steps_total": len(steps)}
+
+
+def execute_drawing_plan(
+    client,
+    plan,
+    config,
+    admission,
+    event_sink=None,
+    sleep_func=time.sleep,
+):
+    """Execute one complete plan. Any failure stops without retry or resume."""
+    steps = flatten_plan_steps(plan)
+    return _execute_steps(
+        client, steps, config, admission, event_sink or (lambda _event: None),
+        sleep_func, "execution",
+    )
+
+
+def execute_drawing_window(
+    client,
+    plan,
+    config,
+    admission,
+    event_sink=None,
+    sleep_func=time.sleep,
+):
+    """Execute a complete plan or only the arm-safe prefix before its barrier."""
+    steps = flatten_plan_window(plan)
+    result = _execute_steps(
+        client, steps, config, admission, event_sink or (lambda _event: None),
+        sleep_func, "window",
+    )
+    return {
+        **result,
+        "complete": plan.complete,
+        "checkpoint": (
+            None if plan.next_checkpoint is None else plan.next_checkpoint.to_dict()
+        ),
+    }

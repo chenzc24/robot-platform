@@ -1638,3 +1638,26 @@ entry format:
 - Validation: 30 Python sources checked; 254 applicable L1 tests passed. Two legacy PySide6 GUI modules were not run because PySide6 is unavailable. The selected 439-stroke input dry-ran as 6,135 atomic steps / 5,257 arm requests / zero chassis commands; all 3,464 draw segments carried 12/100/20 speed/blend/acceleration.
 - Safety: implementation and simulation only. No device connection, upload, process change, controller import, chassis command, gripper request, or arm motion occurred. Real execution remains blocked by production-ready local configuration, compatible staged deployment, a fresh L4 safety gate, and operator review of the exact motion profile.
 - Commit status: pending at log entry time on `target/baseline-single-window-runner`.
+
+## 2026-09-08 - Add Localized Baseline drawing runner
+
+- Added a third explicit PC relocation mode, `localized_baseline`: it uses the
+  existing direct ESP32 velocity/stop route without line following, confirms
+  logical stop, then accepts only a fresh AprilTag generation and measured
+  one-axis JSON offset. Existing schema-1 Baseline and Advanced configs remain
+  readable; schema 2 is required to select the new mode.
+- Added guarded multi-window execution from planner checkpoints. Each barrier now
+  returns the held pen and ends at the configured home pose before chassis motion;
+  failures and unknown outcomes stop later commands without retry or fallback.
+- Added `app/localized_baseline_run.py`, which defaults to no-device dry-run and
+  requires production gates, exact job hash, exclusive durable log, current
+  attended confirmations, initial localization lock and one serialized chassis
+  session for real execution.
+- L1 passed Python compilation and 369 discovered app/console/protocol/ESP32/
+  MaixCam/robot-arm/development tests. The recorded 439-stroke sample dry-ran as
+  one window under example geometry; a deterministic fake-device test covered
+  two windows, direct travel, STOP/status and localization generation renewal.
+- No hardware connection, deployment, service action, controller import,
+  configuration write or motion occurred. Device deployment source was unchanged;
+  real camera/rail calibration and attended L4 execution remain outstanding.
+- Commit status: pending at log entry time on `target/localized-baseline`.

@@ -243,13 +243,16 @@ class DrawingPlannerTests(unittest.TestCase):
         self.assertEqual(moves[0].payload["translation_mm"][1], -40.0)
         self.assertEqual(moves[2].payload["translation_mm"][1], 50.0)
 
-    def test_first_point_outside_range_blocks_before_pen_or_arm_steps(self):
+    def test_first_point_outside_range_homes_before_reposition_barrier(self):
         config = parse_drawing_config(
             config_document(home_pose_user_y_mm=200)
         )
         plan = build_drawing_plan(self.job, config)
         self.assertFalse(plan.complete)
-        self.assertEqual([step.kind for step in plan.steps], ["reposition.required"])
+        self.assertEqual([step.kind for step in plan.steps], [
+            "arm.home", "reposition.required",
+        ])
+        self.assertEqual(plan.steps[0].payload["purpose"], "reposition_safe_pose")
         self.assertEqual(plan.next_checkpoint, PlanCheckpoint(0, 0, 0))
 
     def test_midstroke_barrier_lifts_homes_and_resumes_from_anchor(self):
@@ -262,8 +265,12 @@ class DrawingPlannerTests(unittest.TestCase):
         plan = build_drawing_plan(self.job, config)
         self.assertFalse(plan.complete)
         self.assertEqual(plan.next_checkpoint, PlanCheckpoint(0, 0, 2))
-        self.assertEqual(plan.steps[-3].payload["purpose"], "pen_up")
+        self.assertEqual(plan.steps[-1].kind, "reposition.required")
         self.assertEqual(plan.steps[-2].payload["purpose"], "reposition_safe_pose")
+        self.assertTrue(any(
+            step.kind == "pen.return" and step.payload["purpose"] == "group_change_return"
+            for step in plan.steps
+        ))
         barrier = plan.steps[-1].payload
         self.assertEqual(barrier["required_json_axis_offset_delta_range_mm"], [-60.0, -10.0])
         self.assertEqual(barrier["suggested_json_axis_offset_delta_mm"], -35.0)

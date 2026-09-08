@@ -261,6 +261,39 @@ def build_drawing_plan(job, config, json_axis_offset_mm=0.0, checkpoint=None):
         elif kind == "pen.select":
             pen_changes += 1
 
+    def prepare_reposition(prefix):
+        """Leave no pen held so checkpoint replanning remains stateless."""
+        nonlocal active_slot, active_group_name
+        if active_slot is not None:
+            add(
+                "arm.home",
+                "%s: home before pen return" % prefix,
+                {
+                    **_joint_payload(geometry, geometry.home_joints_deg),
+                    "purpose": "reposition_pen_return_prepare",
+                },
+            )
+            add(
+                "pen.return",
+                "%s: return pen for reposition" % prefix,
+                _pen_return_payload(
+                    active_group_name,
+                    active_slot,
+                    config,
+                    final_return=False,
+                ),
+            )
+            active_slot = None
+            active_group_name = None
+        add(
+            "arm.home",
+            "%s: safe home for reposition" % prefix,
+            {
+                **_joint_payload(geometry, geometry.home_joints_deg),
+                "purpose": "reposition_safe_pose",
+            },
+        )
+
     for group_index in range(start.group_index, len(job.groups)):
         group = job.groups[group_index]
         stroke_start = start.stroke_index if group_index == start.group_index else 0
@@ -281,6 +314,7 @@ def build_drawing_plan(job, config, json_axis_offset_mm=0.0, checkpoint=None):
             )
             if not _inside(geometry, anchor_absolute_y):
                 blocked = PlanCheckpoint(group_index, stroke_index, resume_index)
+                prepare_reposition("%s/%s" % (group.name, stroke.id))
                 steps.append(
                     _reposition_step(blocked, (anchor_absolute_y,), geometry)
                 )
@@ -382,14 +416,7 @@ def build_drawing_plan(job, config, json_axis_offset_mm=0.0, checkpoint=None):
                             "pen_up",
                         ),
                     )
-                    add(
-                        "arm.home",
-                        "%s: safe home for reposition" % prefix,
-                        {
-                            **_joint_payload(geometry, geometry.home_joints_deg),
-                            "purpose": "reposition_safe_pose",
-                        },
-                    )
+                    prepare_reposition(prefix)
                     blocked = PlanCheckpoint(group_index, stroke_index, point_index)
                     steps.append(
                         _reposition_step(

@@ -13,6 +13,13 @@ from .control_modes import (
     relocate_reposition_plan,
 )
 from .loader import load_drawing_job, parse_drawing_document
+from .executor import (
+    DrawingExecutionAdmission,
+    DrawingExecutionError,
+    execute_drawing_plan,
+    flatten_plan_steps,
+    require_ready_arm,
+)
 from .models import DrawingError, DrawingJob, DrawingPlan, PlanCheckpoint
 from .planner import build_drawing_plan
 
@@ -22,6 +29,8 @@ __all__ = (
     "DrawingControlConfig",
     "DrawingConfig",
     "DrawingError",
+    "DrawingExecutionAdmission",
+    "DrawingExecutionError",
     "DrawingGeometry",
     "DrawingJob",
     "DrawingPlan",
@@ -30,10 +39,13 @@ __all__ = (
     "RelocationResult",
     "build_drawing_plan",
     "create_relocator",
+    "execute_drawing_plan",
+    "flatten_plan_steps",
     "load_drawing_config",
     "load_drawing_control_config",
     "load_drawing_job",
     "parse_drawing_document",
     "parse_drawing_control_config",
     "relocate_reposition_plan",
+    "require_ready_arm",
 )

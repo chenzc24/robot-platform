@@ -9,7 +9,7 @@ sys.path.insert(0, str(ROOT / "src/maixcam/arm"))
 from arm_motion_gateway import ArmMotionGateway
 from command_service import ArmCommandService
 from control_envelope import EnvelopeStreamDecoder, encode_message
-from motion_link import decode_frame, encode_frame
+from motion_link import decode_fields, decode_frame, encode_frame
 
 
 def command(name, payload=None, sequence=1):
@@ -54,9 +54,24 @@ class ArmCommandServiceTests(unittest.TestCase):
 
     def test_xyz_jog_maps_to_relative_linear(self):
         service = ArmCommandService(self.gateway, admission=lambda _message: True)
+        payload = {"translation_mm": [0, 0, 5], "user": 0, "tool": 0, "accel_pct": 5, "speed_pct": 5, "blend_pct": 100}
+        service.feed_computer(encode_message(command("arm.jog_xyz", payload)))
+        frame = decode_frame(self.writes[-1])
+        self.assertEqual(frame["type"], "RELLINEAR")
+        fields = decode_fields(frame["payload"], ("translation_mm", "user", "tool", "accel_pct", "speed_pct", "blend_pct"))
+        self.assertEqual(fields["blend_pct"], "100")
+
+    def test_xyz_jog_defaults_to_zero_blend_and_rejects_invalid_blend(self):
+        service = ArmCommandService(self.gateway, admission=lambda _message: True)
         payload = {"translation_mm": [0, 0, 5], "user": 0, "tool": 0, "accel_pct": 5, "speed_pct": 5}
         service.feed_computer(encode_message(command("arm.jog_xyz", payload)))
-        self.assertEqual(decode_frame(self.writes[-1])["type"], "RELLINEAR")
+        self.assertIn("blend_pct=0", decode_frame(self.writes[-1])["payload"])
+        self.setUp()
+        service = ArmCommandService(self.gateway, admission=lambda _message: True)
+        payload["blend_pct"] = 101
+        result = self.messages(service.feed_computer(encode_message(command("arm.jog_xyz", payload))))
+        self.assertEqual(result[-1]["payload"]["error_code"], "invalid_blend")
+        self.assertEqual(self.writes, [])
 
     def test_status_preserves_measured_feedback_payload(self):
         self.service.feed_computer(encode_message(command("arm.status")))

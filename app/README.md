@@ -22,9 +22,30 @@ poses, 60/30 mm rack depths, 60/1 mm gripper widths, drawing `v=12`, and
 `cp=100`. Motions without a source-explicit speed use the project owner's
 clarified 50% default, and every arm motion uses 20% acceleration.
 
-The current MaixCam/RPA2 primitive route still forces blending to zero.
-Therefore the preview records the requested `cp=100`, but exact execution of
-that blend remains a separately reviewed cross-device executor/protocol change.
+`baseline_run.py` adds a separate guarded arm-only execution entry point. Its
+default is still dry-run. Real execution accepts only a complete plan with no
+reposition barrier, requires `production_ready=true`, an exact job-hash
+confirmation, four explicit attended-safety flags and a new durable log path,
+then requires ready YOLO status and valid feedback before the first motion. It
+opens no chassis session. Every command must return `DONE`; fault, rejection,
+unknown outcome or disconnect stops all later commands without retry or
+automatic resume.
+
+The upgraded MaixCam/RPA2 route carries drawing `blend_pct=100` to the
+controller's `RelMovLUser` `cp` option. Deploy the compatible controller project
+before MaixCam. Do not use the real execution entry point with an older endpoint.
+
+Dry-run remains the default:
+
+```powershell
+python app/baseline_run.py dataset/dobot-generation-1.json `
+  --config config/drawing.local.json
+```
+
+After a reviewed local config has `production_ready=true`, a real run additionally
+requires `--execute`, the exact dry-run `job_sha256`, a new `--log` path, and all
+four `--confirm-*` safety flags shown by `--help`. Never reuse an existing log or
+resume automatically after an unknown outcome.
 
 ## AprilTag localization
 

@@ -1630,3 +1630,11 @@ entry format:
   parity.
 - Implementation commit `459d44a` was merged through PR #14 into `main` as
   `ae8eeab`.
+
+## 2026-09-08 - Baseline blend protocol and grouped arm-only executor
+
+- Goal: carry drawing `cp=100` through PC/MaixCam/RPA2/controller and add a guarded grouped executor for complete single-window Baseline plans.
+- Scope: relative-linear arm protocol/client/gateway/controller path, drawing executor and CLI, affected tests and documentation, and generated ignored DobotStudio package.
+- Validation: 30 Python sources checked; 254 applicable L1 tests passed. Two legacy PySide6 GUI modules were not run because PySide6 is unavailable. The selected 439-stroke input dry-ran as 6,135 atomic steps / 5,257 arm requests / zero chassis commands; all 3,464 draw segments carried 12/100/20 speed/blend/acceleration.
+- Safety: implementation and simulation only. No device connection, upload, process change, controller import, chassis command, gripper request, or arm motion occurred. Real execution remains blocked by production-ready local configuration, compatible staged deployment, a fresh L4 safety gate, and operator review of the exact motion profile.
+- Commit status: pending at log entry time on `target/baseline-single-window-runner`.

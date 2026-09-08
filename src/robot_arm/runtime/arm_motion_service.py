@@ -191,8 +191,8 @@ class DobotControllerApi:
         options = {"a": accel, "v": speed, "cp": 0}
         self.rel_joint_movj(list(joint_delta_deg), options)
 
-    def jog_xyz(self, translation_mm, user, tool, accel, speed):
-        options = {"user": user, "tool": tool, "a": accel, "v": speed, "r": 0}
+    def jog_xyz(self, translation_mm, user, tool, accel, speed, blend=0):
+        options = {"user": user, "tool": tool, "a": accel, "v": speed, "cp": blend}
         self.rel_movl_user(list(translation_mm) + [0, 0, 0], options)
 
     def read_feedback(self, user=0, tool=0):
@@ -299,15 +299,20 @@ class ArmMotionService:
                 self.policy.relative(accel, speed)
                 return self._run(request, lambda: self.api.jog_joint(delta, accel, speed), "primitive=jog_joint;terminal_position=unknown")
             if kind == "RELLINEAR":
-                values = decode_fields(request["payload"], ("translation_mm", "user", "tool", "accel_pct", "speed_pct", "blend_mm"))
+                try:
+                    values = decode_fields(request["payload"], ("translation_mm", "user", "tool", "accel_pct", "speed_pct", "blend_pct"))
+                    blend = _integer(values["blend_pct"], 0, 100, "invalid_blend")
+                except MotionLinkError:
+                    values = decode_fields(request["payload"], ("translation_mm", "user", "tool", "accel_pct", "speed_pct", "blend_mm"))
+                    if values["blend_mm"] != "0": raise ValueError("blending_disabled")
+                    blend = 0
                 translation = _vector(values["translation_mm"], 3, "invalid_translation")
                 user = _integer(values["user"], 0, 9, "invalid_user")
                 tool = _integer(values["tool"], 0, 9, "invalid_tool")
                 accel = _integer(values["accel_pct"], 1, 100, "invalid_acceleration")
                 speed = _integer(values["speed_pct"], 1, 100, "invalid_speed")
-                if values["blend_mm"] != "0": raise ValueError("blending_disabled")
                 self.policy.relative(accel, speed)
-                return self._run(request, lambda: self.api.jog_xyz(translation, user, tool, accel, speed), "primitive=jog_xyz;terminal_position=unknown")
+                return self._run(request, lambda: self.api.jog_xyz(translation, user, tool, accel, speed, blend), "primitive=jog_xyz;blend_pct=%d;terminal_position=unknown" % blend)
             if kind == "GRIPPER":
                 values = decode_fields(request["payload"], ("width_mm",))
                 width = _integer(values["width_mm"], 0, 70, "invalid_gripper")

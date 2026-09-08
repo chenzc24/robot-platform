@@ -117,9 +117,13 @@ def arm_payload(name, payload):
             raise ArmMotionGatewayError("invalid_payload_fields")
         return "RELJOINT", encode_fields((("joint_delta_deg", ",".join(str(item) for item in payload["joint_delta_deg"])), ("accel_pct", payload["accel_pct"]), ("speed_pct", payload["speed_pct"]), ("blend_pct", 0)))
     if name == "arm.jog_xyz":
-        if set(payload) != {"translation_mm", "user", "tool", "accel_pct", "speed_pct"} or not isinstance(payload["translation_mm"], (list, tuple)) or len(payload["translation_mm"]) != 3:
+        required = {"translation_mm", "user", "tool", "accel_pct", "speed_pct"}
+        if set(payload) not in (required, required | {"blend_pct"}) or not isinstance(payload["translation_mm"], (list, tuple)) or len(payload["translation_mm"]) != 3:
             raise ArmMotionGatewayError("invalid_payload_fields")
-        return "RELLINEAR", encode_fields((("translation_mm", ",".join(str(item) for item in payload["translation_mm"])), ("user", payload["user"]), ("tool", payload["tool"]), ("accel_pct", payload["accel_pct"]), ("speed_pct", payload["speed_pct"]), ("blend_mm", 0)))
+        blend_pct = payload.get("blend_pct", 0)
+        if type(blend_pct) is not int or not 0 <= blend_pct <= 100:
+            raise ArmMotionGatewayError("invalid_blend")
+        return "RELLINEAR", encode_fields((("translation_mm", ",".join(str(item) for item in payload["translation_mm"])), ("user", payload["user"]), ("tool", payload["tool"]), ("accel_pct", payload["accel_pct"]), ("speed_pct", payload["speed_pct"]), ("blend_pct", blend_pct)))
     if name == "arm.move_joint":
         if set(payload) != {"joint_deg", "accel_pct", "speed_pct"} or not isinstance(payload["joint_deg"], (list, tuple)) or len(payload["joint_deg"]) != 6:
             raise ArmMotionGatewayError("invalid_payload_fields")

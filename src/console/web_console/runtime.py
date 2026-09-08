@@ -761,6 +761,10 @@ class WebConsoleRuntime:
                 if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 9:
                     raise WebConsoleError("invalid_" + field, 400)
                 clean[field] = value
+        if command == "jog_xyz":
+            clean["blend_pct"] = cls._arm_integer(
+                payload.get("blend_pct", 0), 0, 100, "invalid_blend_pct"
+            )
         return clean
 
     def arm_command(self, command, payload):

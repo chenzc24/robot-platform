@@ -32,6 +32,10 @@ dependency. Protocol validation and one-command-at-a-time transport ordering
 remain active; native controller limits, collision behavior, and emergency stop
 are unchanged.
 
+Relative user-coordinate linear motion accepts `blend_pct=0..100` and maps it
+to `RelMovLUser(..., {"cp": blend_pct})`. The controller accepts the earlier
+`blend_mm=0` frame for staged upgrades, but no nonzero legacy radius is enabled.
+
 `STATUS` now samples `GetAngle()` and `GetPose(0, 0)`. The fixed state payload
 marks the sample valid only when both calls normalize to six finite values; a
 read or shape failure is reported as unavailable without stopping the service.

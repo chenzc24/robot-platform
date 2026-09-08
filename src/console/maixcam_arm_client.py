@@ -100,8 +100,8 @@ class MaixCamArmClient:
         return self.command("arm.move_linear", {"pose": list(pose), "user": user, "tool": tool, "accel_pct": accel_pct, "speed_pct": speed_pct}, ttl_ms)
     def jog_joint(self, joint_delta_deg, accel_pct=5, speed_pct=5, ttl_ms=60000):
         return self.command("arm.jog_joint", {"joint_delta_deg": list(joint_delta_deg), "accel_pct": accel_pct, "speed_pct": speed_pct}, ttl_ms)
-    def jog_xyz(self, translation_mm, user=0, tool=0, accel_pct=5, speed_pct=5, ttl_ms=60000):
-        return self.command("arm.jog_xyz", {"translation_mm": list(translation_mm), "user": user, "tool": tool, "accel_pct": accel_pct, "speed_pct": speed_pct}, ttl_ms)
+    def jog_xyz(self, translation_mm, user=0, tool=0, accel_pct=5, speed_pct=5, ttl_ms=60000, blend_pct=0):
+        return self.command("arm.jog_xyz", {"translation_mm": list(translation_mm), "user": user, "tool": tool, "accel_pct": accel_pct, "speed_pct": speed_pct, "blend_pct": blend_pct}, ttl_ms)
     def gripper(self, width_mm, ttl_ms=2000): return self.command("arm.gripper", {"width_mm": width_mm}, ttl_ms)
 
 

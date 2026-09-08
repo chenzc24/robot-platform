@@ -11,10 +11,13 @@ The engineering project sets `YOLO_MODE=true` and accepts repeatable commands:
 - `RELJOINT`: `joint_delta_deg` has six finite values and maps directly to
   `RelJointMovJ`.
 - `RELLINEAR`: `translation_mm` has three finite X/Y/Z values and maps to
-  `RelMovLUser` with zero rotational delta.
+  `RelMovLUser` with zero rotational delta. Its integer `blend_pct` is 0 through
+  100 and maps directly to the Dobot `cp` motion option. A controller upgraded
+  first also accepts the legacy `blend_mm=0` form until MaixCam is upgraded.
 - `MOVEJ`, `MOVEL`, and `GRIPPER` remain available to programmatic clients.
 
-Acceleration and speed are integer percentages from 1 through 100. Blending is
-disabled. The application does not add a lease, one-use token, repeated enable,
+Acceleration and speed are integer percentages from 1 through 100. Relative
+linear blending is the integer percentage described above; other primitive
+blend fields remain zero. The application does not add a lease, one-use token, repeated enable,
 or chassis-state gate in YOLO mode. Dobot controller limits, collision handling,
 emergency stop, and recovery remain authoritative.

@@ -132,8 +132,8 @@ class FakeArm:
     def jog_joint(self, values, accel, speed):
         self.calls.append(("jog_joint", values, accel, speed)); return [{"lifecycle": "DONE", "payload": {}}]
 
-    def jog_xyz(self, values, user, tool, accel, speed):
-        self.calls.append(("jog_xyz", values, user, tool, accel, speed)); return [{"lifecycle": "DONE", "payload": {}}]
+    def jog_xyz(self, values, user, tool, accel, speed, blend_pct=0):
+        self.calls.append(("jog_xyz", values, user, tool, accel, speed, blend_pct)); return [{"lifecycle": "DONE", "payload": {}}]
 
     def move_joint(self, values, accel, speed):
         self.calls.append(("move_joint", values, accel, speed)); return [{"lifecycle": "DONE", "payload": {}}]
@@ -276,12 +276,15 @@ class WebRuntimeTests(unittest.TestCase):
     def test_arm_controls_are_independent_and_validate_precise_vectors(self):
         self.runtime.connect_arm()
         self.runtime.arm_command("jog_joint", {"joint_delta_deg": [2, 0, 0, 0, 0, 0], "speed_pct": 20, "accel_pct": 20})
-        self.runtime.arm_command("jog_xyz", {"translation_mm": [0, -5, 0], "user": 0, "tool": 0, "speed_pct": 20, "accel_pct": 20})
+        self.runtime.arm_command("jog_xyz", {"translation_mm": [0, -5, 0], "user": 0, "tool": 0, "speed_pct": 20, "accel_pct": 20, "blend_pct": 100})
         self.assertEqual(self.arm.calls[-2][0], "jog_joint")
         self.assertEqual(self.arm.calls[-1][0], "jog_xyz")
+        self.assertEqual(self.arm.calls[-1][-1], 100)
         self.assertEqual(self.runtime.snapshot()["chassis"]["link"], "offline")
         with self.assertRaisesRegex(WebConsoleError, "invalid_arm_vector"):
             self.runtime.arm_command("jog_joint", {"joint_delta_deg": [2]})
+        with self.assertRaisesRegex(WebConsoleError, "invalid_blend_pct"):
+            self.runtime.arm_command("jog_xyz", {"translation_mm": [0, -5, 0], "blend_pct": 101})
 
     def test_arm_measurement_is_exposed_aged_and_never_replaced_by_target(self):
         clock = [10.0]

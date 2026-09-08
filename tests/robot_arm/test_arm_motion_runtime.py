@@ -103,14 +103,21 @@ class ArmRuntimeTests(unittest.TestCase):
             ("relative_joint", [2.0, 0.0, 0.0, 0.0, 0.0, 0.0], {"a": 5, "v": 5, "cp": 0}),
         ])
 
-    def test_yolo_xyz_maps_to_relmovluser_with_zero_rotation(self):
+    def test_yolo_xyz_maps_blend_to_relmovluser_cp_with_zero_rotation(self):
+        service, raw = self.service(yolo=True)
+        request = encode_fields((("translation_mm", "0,-5,0"), ("user", 0), ("tool", 0), ("accel_pct", 6), ("speed_pct", 7), ("blend_pct", 100)))
+        replies, _ = service.feed(encode_frame("RPA2", "RELLINEAR", 1, 60000, request))
+        self.assertEqual(decode_frame(replies[-1])["type"], "DONE")
+        self.assertEqual(raw.calls, [
+            ("relative_linear_user", [0.0, -5.0, 0.0, 0, 0, 0], {"user": 0, "tool": 0, "a": 6, "v": 7, "cp": 100}),
+        ])
+
+    def test_legacy_zero_blend_mm_remains_accepted(self):
         service, raw = self.service(yolo=True)
         request = encode_fields((("translation_mm", "0,-5,0"), ("user", 0), ("tool", 0), ("accel_pct", 6), ("speed_pct", 7), ("blend_mm", 0)))
         replies, _ = service.feed(encode_frame("RPA2", "RELLINEAR", 1, 60000, request))
         self.assertEqual(decode_frame(replies[-1])["type"], "DONE")
-        self.assertEqual(raw.calls, [
-            ("relative_linear_user", [0.0, -5.0, 0.0, 0, 0, 0], {"user": 0, "tool": 0, "a": 6, "v": 7, "r": 0}),
-        ])
+        self.assertEqual(raw.calls[-1][2]["cp"], 0)
 
     def test_invalid_relative_vector_is_rejected_before_controller_call(self):
         service, raw = self.service(yolo=True)

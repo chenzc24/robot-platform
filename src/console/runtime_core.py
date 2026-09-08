@@ -155,6 +155,7 @@ def dispatch_arm(client, command, payload=None):
             payload.get("tool", 0),
             payload.get("accel_pct", 5),
             payload.get("speed_pct", 5),
+            blend_pct=payload.get("blend_pct", 0),
         ),
         "gripper": lambda: client.gripper(payload["width_mm"]),
     }

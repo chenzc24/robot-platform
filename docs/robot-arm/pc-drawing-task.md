@@ -68,9 +68,9 @@ intentional project behavior, not something the PC planner should silently
 normalize. P1-P4 were taught with User 0 / Tool 0; physical validity still
 requires confirmation before motion.
 
-`production_ready` remains false during offline planning. A future executor must
-require a separately reviewed true value; this stage never consumes it as
-motion permission.
+`production_ready` remains false during offline planning. The separate guarded
+Baseline executor requires a separately reviewed true value plus explicit
+attended admission; preview never consumes it as motion permission.
 
 The physical conversion is explicit:
 
@@ -92,8 +92,8 @@ segments explicitly carry `speed_pct=12` and `blend_pct=100`. Per the project
 owner's clarified defaults, Home, anchor, pen-down/up and rack movements carry
 `speed_pct=50`, and every arm motion carries `accel_pct=20`. Baseline and
 Advanced consume this same plan; only their chassis relocation strategy
-differs. The current primitive arm gateway cannot yet execute nonzero blending,
-so `cp=100` is source-faithful planning rather than a claim of runtime parity.
+differs. The upgraded primitive route carries `blend_pct=100` through MaixCam
+and RPA2 to the controller's `RelMovLUser` `cp` option.
 
 ## Preview
 
@@ -140,9 +140,13 @@ and wait for physical inspection and a new explicit task decision.
 
 ## Remaining boundary
 
-This stage records rack poses and gripper recipes but does not execute them. Arm
-status gates, network execution, chassis commands, AprilTag collection, buffered
-strokes and the coordinated L4 state machine remain separately reviewed goals.
-The current drawing route requires 5,220 sequential drawing-arm primitives for
-the supplied job, in addition to pen and chassis actions, so full-job performance
-must be measured rather than hidden by increasing motion speed.
+`app/baseline_run.py` can execute a complete, arm-only plan after strict status,
+configuration, hash, logging and attended-safety gates. It flattens rack recipes
+and stops on the first non-`DONE` outcome without retry. It deliberately rejects
+plans containing a reposition barrier and never connects to the chassis.
+
+Chassis relocation, AprilTag collection, automatic resume and the coordinated
+multi-window L4 state machine remain separate. For the supplied job, flattening
+adds rack/gripper actions to the 5,220 top-level arm primitives, producing 5,257
+actual arm requests and 878 local wait steps. Full-job performance must be
+measured rather than hidden by increasing motion speed.

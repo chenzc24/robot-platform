@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT / "src/console"))
 from arm_motion_gateway import ArmMotionGateway
 from command_service import ArmCommandService
 from maixcam_arm_client import MaixCamArmClient, MaixCamArmUnknown
+from control_envelope import EnvelopeStreamDecoder
 from motion_link import decode_frame, encode_frame
 
 
@@ -94,3 +95,17 @@ class MaixCamArmClientTests(unittest.TestCase):
         with self.assertRaises(MaixCamArmUnknown):
             MaixCamArmClient(connection).jog_joint((2, 0, 0, 0, 0, 0))
         self.assertEqual(len(connection.sent), 1)
+
+    def test_xyz_jog_emits_explicit_blend_percentage(self):
+        class CaptureConnection:
+            def __init__(self): self.sent = []
+            def send(self, data): self.sent.append(data); return len(data)
+            def recv(self, _size): raise TimeoutError("stop after capture")
+        connection = CaptureConnection()
+        with self.assertRaises(MaixCamArmUnknown):
+            MaixCamArmClient(connection).jog_xyz(
+                (0, 1, 2), accel_pct=20, speed_pct=12, blend_pct=100
+            )
+        messages, errors = EnvelopeStreamDecoder().feed(b"".join(connection.sent))
+        self.assertEqual(errors, [])
+        self.assertEqual(messages[0]["payload"]["blend_pct"], 100)

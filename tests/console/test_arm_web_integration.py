@@ -25,7 +25,7 @@ from web_console.server import create_server
 
 CASES = (
     ("jog_joint", {"joint_delta_deg": [2, 0, 0, 0, 0, 0]}),
-    ("jog_xyz", {"translation_mm": [5, 0, 0], "user": 0, "tool": 0}),
+    ("jog_xyz", {"translation_mm": [5, 0, 0], "user": 0, "tool": 0, "blend_pct": 100}),
     ("move_joint", {"joint_deg": [-88, 0, -140, -40, 0, 0]}),
     ("move_linear", {"pose": [-145.8, -102.846, 130.633, 90, 0, -90], "user": 0, "tool": 0}),
     ("gripper", {"width_mm": 28}),
@@ -107,9 +107,13 @@ class ArmWebIntegrationTests(unittest.TestCase):
                     self.assertEqual(wire, "width_mm=28")
                 else:
                     self.assertIn("accel_pct=20;speed_pct=20;", wire)
+                if command == "jog_xyz":
+                    self.assertIn("blend_pct=100", wire)
                 self.assertEqual(replies[-1]["type"], "DONE")
                 self.assertEqual(len(self.api.calls), before + 1)
                 self.assertEqual(self.api.calls[-1][0], command)
+                if command == "jog_xyz":
+                    self.assertEqual(self.api.calls[-1][1][-1], 100)
                 self.assertEqual(state["events"][0]["lifecycle"], "DONE")
                 self.assertEqual(state["faults"], [])
         self.assertEqual(self.runtime.snapshot()["chassis"]["link"], "offline")

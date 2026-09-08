@@ -14,6 +14,7 @@ if str(CONSOLE_SOURCE) not in sys.path:
 
 from drawing import (
     DrawingError,
+    load_drawing_control_config,
     load_drawing_config,
     load_drawing_job,
     simulate_localized_baseline,
@@ -46,13 +47,18 @@ def argument_parser():
         default=ROOT / "config" / "drawing.example.json",
     )
     result.add_argument(
+        "--control-config",
+        type=Path,
+        default=ROOT / "config" / "drawing-control.example.json",
+    )
+    result.add_argument(
         "--output",
         type=Path,
         default=ROOT / "tmp" / "localized-baseline-rehearsal.html",
     )
     result.add_argument("--rail-reference-mm", type=float, default=0.0)
     result.add_argument("--initial-rail-position-mm", type=float)
-    result.add_argument("--json-mm-per-rail-mm", type=float, default=-1.0)
+    result.add_argument("--json-mm-per-rail-mm", type=float)
     result.add_argument("--simulated-reachable-min-mm", type=float)
     result.add_argument("--simulated-reachable-max-mm", type=float)
     result.add_argument("--motion-gain", type=float, default=1.0)
@@ -70,12 +76,14 @@ def argument_parser():
 
 def build_rehearsal(args):
     config = load_drawing_config(args.drawing_config)
+    control_config = load_drawing_control_config(args.control_config)
     job = load_drawing_job(
         args.drawing_path, flat_group_name=config.flat_group_name
     )
     return simulate_localized_baseline(
         job,
         config,
+        control_config,
         rail_reference_mm=args.rail_reference_mm,
         initial_rail_position_mm=args.initial_rail_position_mm,
         json_mm_per_rail_mm=args.json_mm_per_rail_mm,

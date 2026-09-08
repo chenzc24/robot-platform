@@ -1798,3 +1798,25 @@ entry format:
   motion occurred. Concurrent unified-runner working-tree changes were preserved
   and excluded. Commit intent: push only the bounded physical-simulator goal on
   the sole `main` branch.
+
+## 2026-09-08 - Integrate rehearsal with production relocation runtime
+
+- Replaced the simulator's copied movement state machine with the production
+  drawing coordinator, window executor and `LocalizedBaselineRelocator`. Only
+  deterministic arm, chassis, localization and clock interfaces remain fake.
+- The fake chassis integrated the production timed `VELOCITY` refreshes before
+  applying declared gain/overshoot, while the fake AprilTag source supplied a
+  newer measured generation only after production `STOP` and status parsing.
+  The simulator now loads the same drawing-control model as the actual runner.
+- The colleague-tested User0-Y `[-200,180]` mm configuration completed all 439
+  strokes / 3,903 points in one window without moving the chassis. The fixed
+  stress scenario completed in three windows with two relocations and recorded
+  35 production `VELOCITY` calls, two `STOP`s, two `STATUS` checks and two fresh
+  localization requests. Its commanded and true travel remained respectively
+  `167.550502` mm and `163.84848192` mm.
+- L1 passed focused simulator, CLI, relocation, coordinator and executor tests,
+  Python compilation, generated-report JavaScript checks, `git diff --check`
+  and all 385 repository tests.
+- No hardware discovery, connection, command, configuration write, deployment,
+  service action or motion occurred. Commit intent: push this bounded
+  integration directly on the sole `main` branch.

@@ -23,6 +23,7 @@ class LocalizedBaselineSimCliTests(unittest.TestCase):
         folder = pathlib.Path(self.temp.name)
         self.drawing = folder / "drawing.json"
         self.config = folder / "drawing.json.config"
+        self.control_config = folder / "drawing-control.json"
         self.output = folder / "rehearsal.html"
         self.drawing.write_text(json.dumps({
             "version": "1.0", "coordinate_space": "normalized",
@@ -49,12 +50,26 @@ class LocalizedBaselineSimCliTests(unittest.TestCase):
                          "draw_blend_pct": 100, "travel_speed_pct": 50,
                          "accel_pct": 20},
         }), encoding="utf-8")
+        self.control_config.write_text(json.dumps({
+            "version": 2, "production_ready": False,
+            "selected_mode": "localized_baseline",
+            "json_mm_per_rail_mm": -1,
+            "baseline": {"initial_json_axis_offset_mm": 0,
+                         "speed_mm_s": 50, "refresh_ms": 100,
+                         "hold_ms": 250, "max_distance_mm": 300,
+                         "settle_ms": 2000},
+            "localized_baseline": {"poll_ms": 100,
+                                   "localization_timeout_ms": 10000},
+            "advanced": {"poll_ms": 100, "station_timeout_ms": 30000,
+                         "localization_timeout_ms": 10000},
+        }), encoding="utf-8")
 
     def tearDown(self):
         self.temp.cleanup()
 
     def command(self, *extra):
         return [str(self.drawing), "--drawing-config", str(self.config),
+                "--control-config", str(self.control_config),
                 "--output", str(self.output), "--simulated-reachable-min-mm", "-60",
                 "--simulated-reachable-max-mm", "40", *extra]
 
@@ -69,10 +84,12 @@ class LocalizedBaselineSimCliTests(unittest.TestCase):
             result = SIM.main(self.command())
         self.assertEqual(result, 0)
         report = self.output.read_text(encoding="utf-8")
-        self.assertIn("localized-baseline-rehearsal/2", report)
+        self.assertIn("localized-baseline-rehearsal/3", report)
         self.assertIn('"windows":2', report)
         self.assertIn('"actual_true_rail_move_mm"', report)
         self.assertIn('"measured_rail_position_mm"', report)
+        self.assertIn('"drawing.control_modes.LocalizedBaselineRelocator"', report)
+        self.assertIn('"velocity_calls":7', report)
         self.assertNotIn("__LOCALIZED_BASELINE_SIMULATION_DATA__", report)
         self.assertNotIn("fetch(", report)
         self.assertIn("SIMULATION_ONLY no runtime config", output.getvalue())

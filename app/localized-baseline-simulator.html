@@ -121,6 +121,11 @@
   </section>
 
   <section class="panel">
+    <div class="panel-head"><h2>生产移动路径证据</h2><span class="muted">与实际 runner 共用 coordinator / relocator / executor</span></div>
+    <p id="production-path"></p>
+  </section>
+
+  <section class="panel">
     <div class="panel-head"><h2>窗口检查点</h2><span class="muted">点击任一行查看该窗口</span></div>
     <div class="table-wrap">
       <table>
@@ -309,6 +314,10 @@ function update() {
 document.getElementById("subtitle").textContent =
   `${sim.summary.groups} 组 · ${sim.summary.strokes} 笔 · ${sim.summary.points} 点 · ${sim.summary.windows} 个窗口 · ` +
   (sim.source_config_reach_overridden ? "使用显式模拟可达范围" : "使用绘图配置可达范围");
+document.getElementById("production-path").textContent =
+  `VELOCITY ${sim.production_path.velocity_calls} 次 · STOP ${sim.production_path.stop_calls} 次 · ` +
+  `STATUS ${sim.production_path.status_calls} 次 · 重新定位 ${sim.production_path.relocalization_requests} 次 · ` +
+  `机械臂动作 ${sim.production_path.arm_motion_calls} 次`;
 document.getElementById("scenario-warning").textContent = sim.summary.rail_direction_changes
   ? `本次场景出现 ${sim.summary.rail_direction_changes} 次轨道方向反转；开环命令总行程 ${sim.summary.total_absolute_commanded_rail_travel_mm.toFixed(2)} mm，真实模型总行程 ${sim.summary.total_absolute_rail_travel_mm.toFixed(2)} mm。`
   : `本次场景没有轨道方向反转；开环命令总行程 ${sim.summary.total_absolute_commanded_rail_travel_mm.toFixed(2)} mm，真实模型总行程 ${sim.summary.total_absolute_rail_travel_mm.toFixed(2)} mm。`;

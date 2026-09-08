@@ -157,3 +157,8 @@ geometry, chassis movement or drawing accuracy.
 ```text
 feat(console): add offline grouped drawing planner
 ```
+
+## Submission
+
+- Implementation commit: `3aa32f8`
+- Review: PR #9, targeting `main`; no merge performed in this goal.

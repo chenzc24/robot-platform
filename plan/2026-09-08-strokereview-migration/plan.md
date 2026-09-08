@@ -60,3 +60,16 @@ PR targets the committed source branch target/localization-lock-state-machine to
 - Final aggregate diff check is required against base 0eec878, not just the clean working tree.
 - Final aggregate `git diff 0eec878 --check` passed after whitespace cleanup.
 - Draft review PR: https://github.com/chenzc24/robot-platform/pull/6. No merge performed.
+
+## Main integration
+
+- After localization PR #5 merged, rebased this branch onto `origin/main`
+  (`791e27a`). The only conflict was the append-only `plan/log.md`; both the
+  localization records and this migration record were retained.
+- Rebase changed implementation commit IDs to `35a396b` and `1d3e8b1`; the
+  original IDs above remain the historical pre-rebase publication record.
+- Revalidation after rebase: aggregate `git diff origin/main...HEAD --check`
+  passed. The rebase changed only ancestry and reconciled the factual log, so
+  the previously completed L1 application tests remain applicable.
+- Publish the rebased branch with force-with-lease, create a new PR against
+  `main`, merge it, then remove the merged migration branch and worktree.

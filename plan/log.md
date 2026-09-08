@@ -1419,3 +1419,9 @@ entry format:
 - Review: staged file audit excludes secrets, weights, environments and generated output; imported source adaptations reviewed against the verified archive. Initial staged diff check reported upstream whitespace issues in seven files; these are removed in the follow-up commit before final aggregate validation.
 - Commit status: `92bfe36` (`feat(strokereview): import image-to-stroke review workflow`) committed and pushed to origin/target/strokereview-migration; follow-up records results and removes inherited whitespace. Full robot execution, paper calibration and reconciliation with the other worker remain outside this migration.
 - Final follow-up: aggregate diff check against `0eec878` passed after inherited whitespace cleanup. Draft PR #6 created: https://github.com/chenzc24/robot-platform/pull/6; no merge performed.
+- Main integration follow-up: after localization PR #5 merged, the migration
+  branch was rebased onto synchronized `origin/main` at `791e27a`. The sole
+  conflict was this append-only log; both goals' records were retained. The
+  rebased migration commits are `35a396b` and `1d3e8b1`; aggregate diff check
+  against current main passed. A replacement PR will target `main`, after which
+  the merged migration branch and isolated worktree will be removed.

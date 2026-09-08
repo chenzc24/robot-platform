@@ -1608,3 +1608,5 @@ entry format:
   cross-device boundary is implemented and reviewed.
 - No hardware connection, deployment, controller import, reset, service action,
   configuration write or motion occurred.
+- Implementation commit `2e6a388` was merged through PR #12 into `main` as
+  `8028f4e`.

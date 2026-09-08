@@ -1,6 +1,6 @@
 # Simplify localization to one-dimensional rail offsets
 
-- Status: complete; submission pending
+- Status: complete
 - Responsible: agent implementation and offline validation
 - Highest validation level: L1
 
@@ -120,6 +120,8 @@ camera calibration, sign convention, JSON alignment, pen setup or drawing error.
   JSON parsing and working-tree diff checks passed.
 - The ignored local console remains schema 4 and compatible. No local values,
   device connection, service start, deployment or motion were used.
+- Implementation commit `b9b10d8` was pushed and PR #5 was retitled and updated
+  to describe the one-dimensional rail design.
 
 ## Outstanding matters
 

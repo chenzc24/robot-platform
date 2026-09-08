@@ -108,15 +108,13 @@ chassis arrives → confirmed stop → vision detection → target validation
 → arm pick → result → arm safe pose → chassis may continue
 ```
 
-Drawing relocation uses one PC-selected strategy with the same ownership
-boundary. `baseline` commands a bounded direct chassis displacement and treats
-the commanded distance as an open-loop estimate; it does not use line sensors
-or AprilTag. `localized_baseline` uses the same direct displacement but replaces
-the estimate with a fresh AprilTag localization after confirmed logical stop.
-`advanced` asks ESP32 to perform its local sensor-rate line-follow loop to a
-station, then the computer likewise accepts only a fresh AprilTag localization
-generation. ESP32 owns all strategies' motor watchdog and stop behavior. A
-failed run stops and does not silently fall back to another strategy.
+Production drawing exposes only `localized_baseline`: the PC commands a bounded
+direct chassis displacement, confirms logical stop, and accepts only a fresh
+one-dimensional AprilTag localization generation before resuming the exact
+drawing checkpoint. `baseline` remains an internal open-loop chassis diagnostic;
+`advanced` remains a future line-following strategy. All share the same deployed
+ESP32, MaixCam and robot-arm services, and a failed run never falls back to
+another strategy. ESP32 owns every strategy's motor watchdog and stop behavior.
 
 ## 6. Shared Message Contract
 

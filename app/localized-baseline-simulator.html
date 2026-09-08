@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Localized Baseline 坐标演练</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: light-dark(#f7f8fa, #11161b);
+      --surface: light-dark(#ffffff, #1a2229);
+      --surface-soft: light-dark(#eef2f5, #222d35);
+      --ink: light-dark(#17202a, #edf3f7);
+      --muted: light-dark(#5d6975, #aab6c0);
+      --line: light-dark(#cbd3da, #43515d);
+      --accent: light-dark(#0b6e75, #5bd1d8);
+      --accent-soft: light-dark(#dceff0, #17383b);
+      --done: light-dark(#6b7d88, #91a1ab);
+      --pending: light-dark(#c6ccd1, #47535d);
+      --danger: light-dark(#b42318, #ff8a80);
+      --safe: light-dark(#16803c, #62d986);
+      font-family: Inter, "Segoe UI", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); }
+    main { max-width: 1180px; margin: 0 auto; padding: 24px; }
+    h1, h2 { font-weight: 500; margin: 0; }
+    h1 { font-size: clamp(1.45rem, 3vw, 2rem); }
+    h2 { font-size: 1.05rem; }
+    p { margin: 0; }
+    .muted { color: var(--muted); }
+    .header { display: grid; gap: 8px; margin-bottom: 20px; }
+    .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .metric, .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+    .metric { padding: 14px; }
+    .metric span { display: block; color: var(--muted); font-size: .82rem; margin-bottom: 5px; }
+    .metric strong { font-size: 1.25rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+    .panel { padding: 16px; margin-bottom: 16px; }
+    .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+    .controls { display: flex; gap: 14px; flex-wrap: wrap; align-items: end; }
+    label { display: grid; gap: 5px; color: var(--muted); font-size: .82rem; }
+    input[type="range"] { width: min(280px, 70vw); accent-color: var(--accent); }
+    button { border: 1px solid var(--line); background: var(--surface-soft); color: var(--ink); border-radius: 7px; padding: 8px 12px; cursor: pointer; }
+    button:hover { border-color: var(--accent); }
+    button:focus-visible, input:focus-visible { outline: 3px solid var(--accent-soft); outline-offset: 2px; }
+    button:disabled { opacity: .45; cursor: default; }
+    svg { display: block; width: 100%; min-height: 380px; background: var(--surface-soft); border-radius: 7px; }
+    #rail-chart { min-height: 110px; }
+    .legend { display: flex; gap: 16px; flex-wrap: wrap; color: var(--muted); font-size: .82rem; margin-top: 10px; }
+    .legend i { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 5px; background: var(--pending); }
+    .legend .current { background: var(--accent); }
+    .legend .done { background: var(--done); }
+    .legend .bad { background: var(--danger); }
+    .probe { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .probe-result { grid-column: 1 / -1; padding: 12px; background: var(--surface-soft); border-radius: 7px; font-variant-numeric: tabular-nums; }
+    .phase { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+    .phase span { padding: 6px 8px; background: var(--surface-soft); border-radius: 6px; }
+    .phase b { color: var(--muted); font-weight: 400; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+    th, td { padding: 9px 8px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+    th { color: var(--muted); font-weight: 500; }
+    tr[data-window] { cursor: pointer; }
+    tr[data-window]:hover, tr.selected { background: var(--accent-soft); }
+    .warning { border-left: 4px solid var(--danger); padding-left: 12px; display: grid; gap: 5px; }
+    code { color: var(--accent); }
+    @media (max-width: 680px) {
+      main { padding: 14px; }
+      .metrics { grid-template-columns: 1fr; }
+      .probe { grid-template-columns: 1fr; }
+      .probe-result { grid-column: 1; }
+      svg { min-height: 330px; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header class="header">
+    <h1>Localized Baseline 坐标演练</h1>
+    <p class="muted" id="subtitle"></p>
+  </header>
+
+  <section class="metrics" aria-label="演练摘要">
+    <div class="metric"><span>当前窗口 / 总窗口</span><strong id="metric-window"></strong></div>
+    <div class="metric"><span>定位 generation</span><strong id="metric-generation"></strong></div>
+    <div class="metric"><span>JSON 轴补偿</span><strong id="metric-offset"></strong></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>User0 Y–Z 模拟画布</h2>
+      <div class="controls">
+        <button id="previous" type="button">上一个窗口</button>
+        <label>窗口 <input id="window" type="range" min="1" step="1"></label>
+        <button id="next" type="button">下一个窗口</button>
+      </div>
+    </div>
+    <svg id="drawing" role="img" aria-labelledby="drawing-title drawing-desc">
+      <title id="drawing-title">机械臂 User0 Y-Z 平面中的绘图窗口</title>
+      <desc id="drawing-desc">显示已完成、当前、待绘制和超出模拟 User-Y 可达范围的笔画。</desc>
+    </svg>
+    <div class="legend" aria-label="图例">
+      <span><i class="done"></i>已完成</span><span><i class="current"></i>当前窗口</span>
+      <span><i></i>待绘制</span><span><i class="bad"></i>当前偏移下不可达</span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>坐标探针</h2><span class="muted">拖动逻辑点，检查当前窗口的映射</span></div>
+    <div class="probe">
+      <label>u（右为正）<input id="probe-u" type="range" min="0" max="1" step="0.001" value="0.5"></label>
+      <label>v（下为正）<input id="probe-v" type="range" min="0" max="1" step="0.001" value="0.5"></label>
+      <div class="probe-result" id="probe-result" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>轨道参考与重定位</h2><span class="muted" id="rail-label"></span></div>
+    <svg id="rail-chart" role="img" aria-label="参考轨道位置与各窗口实测位置"></svg>
+    <div class="phase" id="phase" aria-live="polite"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>窗口检查点</h2><span class="muted">点击任一行查看该窗口</span></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>窗口</th><th>generation</th><th>r (mm)</th><th>offset (mm)</th><th>计划点</th><th>结束检查点</th><th>下一动作</th></tr></thead>
+        <tbody id="trace"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel warning">
+    <h2>边界</h2>
+    <p>这是理想一维坐标演练：不模拟相机噪声、Tag 丢失、轮滑、停车距离、偏航、碰撞或机械臂运动学。</p>
+    <p><code>enabled_stopped</code> 在这里仍只是逻辑状态，不代表物理静止。此结果不能替代明天上机前的标定和 L3/L4 人工安全门。</p>
+    <p id="scenario-warning"></p>
+  </section>
+</main>
+
+<script>
+const sim = __LOCALIZED_BASELINE_SIMULATION_DATA__;
+const windows = sim.windows;
+const geometry = sim.geometry;
+const canvas = sim.drawing.canvas;
+let selected = 0;
+
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const clean = value => Math.abs(value) < 1e-9 ? 0 : value;
+const mm = value => `${clean(value).toFixed(2)} mm`;
+const checkpoint = value => value ? `G${value.group_index}/S${value.stroke_index}/P${value.next_point_index}` : "完成";
+
+const strokes = [];
+let rank = 0;
+sim.drawing.groups.forEach(group => group.strokes.forEach(stroke => {
+  const points = stroke.points.map(point => ({u: point[0], v: point[1], rank: rank++}));
+  strokes.push({group: group.name, id: stroke.id, points});
+}));
+
+function mapped(point, offset) {
+  const relativeY = point.u / canvas.width * geometry.canvas_width_mm + geometry.user_y_offset_mm + offset;
+  return {
+    y: geometry.home_pose_user_y_mm + relativeY,
+    z: (1 - point.v / canvas.height) * geometry.canvas_height_mm + geometry.user_z_offset_mm
+  };
+}
+
+function svgNode(name, attributes = {}) {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", name);
+  Object.entries(attributes).forEach(([key, value]) => node.setAttribute(key, value));
+  return node;
+}
+
+function drawCanvas() {
+  const svg = document.getElementById("drawing");
+  const width = Math.max(320, Math.round(svg.getBoundingClientRect().width));
+  const height = width < 560 ? 350 : 470;
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  svg.replaceChildren(svgNode("title"), svgNode("desc"));
+  svg.firstChild.textContent = "User0 Y-Z 模拟画布";
+  svg.lastChild.textContent = "当前窗口坐标和可达范围";
+  const margin = {left: 64, right: 24, top: 24, bottom: 48};
+  const w = width - margin.left - margin.right;
+  const h = height - margin.top - margin.bottom;
+  const window = windows[selected];
+  const mappedAll = strokes.flatMap(stroke => stroke.points.map(point => mapped(point, window.json_axis_offset_mm)));
+  const yValues = mappedAll.map(p => p.y).concat([geometry.reachable_user_y_min_mm, geometry.reachable_user_y_max_mm]);
+  const zValues = mappedAll.map(p => p.z);
+  const yPad = Math.max(10, (Math.max(...yValues) - Math.min(...yValues)) * .06);
+  const zPad = Math.max(10, (Math.max(...zValues) - Math.min(...zValues)) * .08);
+  const yMin = Math.min(...yValues) - yPad, yMax = Math.max(...yValues) + yPad;
+  const zMin = Math.min(...zValues) - zPad, zMax = Math.max(...zValues) + zPad;
+  const x = value => margin.left + (value - yMin) / (yMax - yMin) * w;
+  const y = value => margin.top + (zMax - value) / (zMax - zMin) * h;
+
+  svg.appendChild(svgNode("rect", {
+    x: x(geometry.reachable_user_y_min_mm), y: margin.top,
+    width: x(geometry.reachable_user_y_max_mm) - x(geometry.reachable_user_y_min_mm),
+    height: h, fill: css("--accent-soft")
+  }));
+  [geometry.reachable_user_y_min_mm, geometry.reachable_user_y_max_mm].forEach(value => {
+    svg.appendChild(svgNode("line", {x1:x(value), x2:x(value), y1:margin.top, y2:margin.top+h, stroke:css("--safe"), "stroke-width":1.5}));
+  });
+
+  for (let i = 0; i <= 5; i++) {
+    const value = yMin + (yMax - yMin) * i / 5;
+    svg.appendChild(svgNode("line", {x1:x(value), x2:x(value), y1:margin.top+h, y2:margin.top+h+5, stroke:css("--line")}));
+    const text = svgNode("text", {x:x(value), y:height-20, fill:css("--muted"), "font-size":12, "text-anchor":"middle"});
+    text.textContent = value.toFixed(0); svg.appendChild(text);
+  }
+  for (let i = 0; i <= 4; i++) {
+    const value = zMin + (zMax - zMin) * i / 4;
+    const text = svgNode("text", {x:margin.left-9, y:y(value)+4, fill:css("--muted"), "font-size":12, "text-anchor":"end"});
+    text.textContent = value.toFixed(0); svg.appendChild(text);
+  }
+  const xTitle = svgNode("text", {x:margin.left+w/2, y:height-3, fill:css("--ink"), "font-size":12, "text-anchor":"middle"});
+  xTitle.textContent = "absolute User-Y (mm)"; svg.appendChild(xTitle);
+  const yTitle = svgNode("text", {x:15, y:margin.top+h/2, fill:css("--ink"), "font-size":12, "text-anchor":"middle", transform:`rotate(-90 15 ${margin.top+h/2})`});
+  yTitle.textContent = "relative User-Z (mm)"; svg.appendChild(yTitle);
+
+  strokes.forEach(stroke => {
+    for (let i = 1; i < stroke.points.length; i++) {
+      const a = mapped(stroke.points[i-1], window.json_axis_offset_mm);
+      const b = mapped(stroke.points[i], window.json_axis_offset_mm);
+      const segmentRank = stroke.points[i].rank;
+      const reachable = [a.y, b.y].every(value => value >= geometry.reachable_user_y_min_mm && value <= geometry.reachable_user_y_max_mm);
+      let color = css("--pending"), widthPx = 1.2;
+      if (segmentRank < window.point_rank_start) color = css("--done");
+      else if (segmentRank < window.point_rank_end_exclusive) { color = css("--accent"); widthPx = 2.4; }
+      if (!reachable) { color = css("--danger"); widthPx = 1.8; }
+      svg.appendChild(svgNode("line", {x1:x(a.y), y1:y(a.z), x2:x(b.y), y2:y(b.z), stroke:color, "stroke-width":widthPx, "stroke-linecap":"round"}));
+    }
+  });
+}
+
+function drawRail() {
+  const svg = document.getElementById("rail-chart");
+  const width = Math.max(320, Math.round(svg.getBoundingClientRect().width));
+  const height = 110, left = 42, right = 24;
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  svg.replaceChildren();
+  const values = windows.map(w => w.rail_position_mm).concat([sim.calibration.rail_reference_mm]);
+  const spread = Math.max(40, Math.max(...values) - Math.min(...values));
+  const min = Math.min(...values) - spread*.12, max = Math.max(...values) + spread*.12;
+  const x = value => left + (value-min)/(max-min)*(width-left-right);
+  svg.appendChild(svgNode("line", {x1:left, x2:width-right, y1:55, y2:55, stroke:css("--line"), "stroke-width":2}));
+  windows.forEach((window, index) => {
+    const circle = svgNode("circle", {cx:x(window.rail_position_mm), cy:55, r:index===selected?7:4, fill:index===selected?css("--accent"):css("--done")});
+    svg.appendChild(circle);
+    const text = svgNode("text", {x:x(window.rail_position_mm), y:index%2?91:25, fill:css("--ink"), "font-size":12, "text-anchor":"middle"});
+    text.textContent = `W${window.index}: ${window.rail_position_mm.toFixed(1)}`; svg.appendChild(text);
+  });
+  const ref = x(sim.calibration.rail_reference_mm);
+  svg.appendChild(svgNode("line", {x1:ref, x2:ref, y1:38, y2:72, stroke:css("--danger"), "stroke-width":1.5}));
+}
+
+function updateProbe() {
+  const u = Number(document.getElementById("probe-u").value);
+  const v = Number(document.getElementById("probe-v").value);
+  const window = windows[selected];
+  const point = mapped({u, v}, window.json_axis_offset_mm);
+  const relativeY = point.y - geometry.home_pose_user_y_mm;
+  const inside = point.y >= geometry.reachable_user_y_min_mm && point.y <= geometry.reachable_user_y_max_mm;
+  document.getElementById("probe-result").innerHTML =
+    `<strong>(${u.toFixed(3)}, ${v.toFixed(3)})</strong> → ΔY=${mm(relativeY)}, ΔZ=${mm(point.z)}, absolute User-Y=${mm(point.y)} · ` +
+    `<strong style="color:${inside ? css("--safe") : css("--danger")}">${inside ? "在模拟可达窗口内" : "超出模拟 User-Y 窗口"}</strong>`;
+}
+
+function renderTrace() {
+  const body = document.getElementById("trace");
+  body.replaceChildren();
+  windows.forEach((window, index) => {
+    const row = document.createElement("tr");
+    row.dataset.window = index;
+    if (index === selected) row.className = "selected";
+    row.innerHTML = `<td>W${window.index}</td><td>${window.generation}</td><td>${window.rail_position_mm.toFixed(2)}</td>` +
+      `<td>${window.json_axis_offset_mm.toFixed(2)}</td><td>${window.statistics.planned_points}</td>` +
+      `<td>${checkpoint(window.checkpoint_end)}</td><td>${window.complete ? "完成" : "安全重定位"}</td>`;
+    row.addEventListener("click", () => { selected = index; update(); });
+    body.appendChild(row);
+  });
+}
+
+function update() {
+  const window = windows[selected];
+  document.getElementById("window").value = selected + 1;
+  document.getElementById("previous").disabled = selected === 0;
+  document.getElementById("next").disabled = selected === windows.length - 1;
+  document.getElementById("metric-window").textContent = `${window.index} / ${windows.length}`;
+  document.getElementById("metric-generation").textContent = window.generation;
+  document.getElementById("metric-offset").textContent = mm(window.json_axis_offset_mm);
+  document.getElementById("rail-label").textContent = `r0=${mm(sim.calibration.rail_reference_mm)} · scale=${sim.calibration.json_mm_per_rail_mm}`;
+  const phase = document.getElementById("phase");
+  const sequence = window.relocation ? window.relocation.sequence : ["drawing_complete", "stop", "disable"];
+  phase.innerHTML = sequence.map((name, index) => `<span>${name}</span>${index < sequence.length-1 ? "<b>→</b>" : ""}`).join("");
+  drawCanvas(); drawRail(); updateProbe(); renderTrace();
+}
+
+document.getElementById("subtitle").textContent =
+  `${sim.summary.groups} 组 · ${sim.summary.strokes} 笔 · ${sim.summary.points} 点 · ${sim.summary.windows} 个窗口 · ` +
+  (sim.source_config_reach_overridden ? "使用显式模拟可达范围" : "使用绘图配置可达范围");
+document.getElementById("scenario-warning").textContent = sim.summary.rail_direction_changes
+  ? `本次场景出现 ${sim.summary.rail_direction_changes} 次轨道方向反转，总绝对移动 ${sim.summary.total_absolute_rail_travel_mm.toFixed(2)} mm；上机前应审查颜色/笔画顺序和实际可达窗口。`
+  : `本次场景没有轨道方向反转，总绝对移动 ${sim.summary.total_absolute_rail_travel_mm.toFixed(2)} mm。`;
+const slider = document.getElementById("window");
+slider.max = windows.length;
+slider.addEventListener("input", event => { selected = Number(event.target.value)-1; update(); });
+document.getElementById("previous").addEventListener("click", () => { if(selected>0){selected--;update();} });
+document.getElementById("next").addEventListener("click", () => { if(selected<windows.length-1){selected++;update();} });
+document.getElementById("probe-u").addEventListener("input", updateProbe);
+document.getElementById("probe-v").addEventListener("input", updateProbe);
+new ResizeObserver(() => { drawCanvas(); drawRail(); }).observe(document.querySelector("main"));
+update();
+</script>
+</body>
+</html>

@@ -26,6 +26,7 @@ from .executor import (
 )
 from .models import DrawingError, DrawingJob, DrawingPlan, PlanCheckpoint
 from .planner import build_drawing_plan
+from .simulator import simulate_localized_baseline
 
 __all__ = (
     "AdvancedRelocator",
@@ -56,4 +57,5 @@ __all__ = (
     "parse_drawing_control_config",
     "relocate_reposition_plan",
     "require_ready_arm",
+    "simulate_localized_baseline",
 )

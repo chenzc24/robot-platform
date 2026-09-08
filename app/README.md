@@ -32,12 +32,33 @@ opens no chassis session. Every command must return `DONE`; fault, rejection,
 unknown outcome or disconnect stops all later commands without retry or
 automatic resume.
 
-`localized_baseline_run.py` adds the intermediate multi-window entry point:
+`localized_baseline_run.py` is the only normal production-candidate entry point:
 direct chassis motion without line following, followed by a mandatory fresh
 AprilTag lock. It returns the pen and reaches the configured safe home at every
 planner barrier, replaces the open-loop travel estimate with the measured
 one-axis offset, and resumes the exact checkpoint. It uses the same deployed
 ESP32, MaixCam and arm services as the other modes; only PC orchestration differs.
+
+`baseline_run.py` remains an internal arm/chassis diagnostic path. Advanced
+line-following remains a future strategy; neither is an automatic fallback.
+
+## Localized Baseline coordinate rehearsal
+
+Before using hardware, generate a self-contained simulated canvas and step
+through the exact window/checkpoint sequence:
+
+```powershell
+python app/localized_baseline_sim.py dataset/dobot-generation-1.json `
+  --drawing-config config/drawing.example.json `
+  --simulated-reachable-min-mm -60 `
+  --simulated-reachable-max-mm 60 `
+  --force --open
+```
+
+This command imports no device client and opens no connection. The reach
+override exists only to force a multi-window exercise; it does not update local
+or production configuration. See
+[the simulator guide](../docs/console/localized-baseline-simulator.md).
 
 The upgraded MaixCam/RPA2 route carries drawing `blend_pct=100` to the
 controller's `RelMovLUser` `cp` option. Deploy the compatible controller project

@@ -1689,6 +1689,34 @@ entry format:
 - Commit intent: commit and push only this cleanup plan and factual log entry
   directly on `main`.
 
+## 2026-09-08 - Add Localized Baseline coordinate rehearsal simulator
+
+- Added a no-device simulator for the sole production-candidate drawing chain:
+  normalized JSON, fixed User0 Y/Z mapping, one-axis AprilTag offset, planner
+  reach window, safe barrier, ideal direct rail move, logical STOP, new
+  localization generation and exact checkpoint resume.
+- Reused the production drawing loader and planner. Added a self-contained HTML
+  report with window selection, User-Y/Z canvas, reach band, coordinate probe,
+  rail trace, barrier phases, checkpoints and explicit limitations. The CLI has
+  no execute/device endpoint and imports no runtime or device factory.
+- Set the safe drawing-control example to `localized_baseline` and documented it
+  as the only normally exposed production candidate. Baseline remains an
+  internal diagnostic and Advanced a future strategy; all use one unchanged
+  device deployment and there is no automatic fallback.
+- The full 439-stroke / 3,903-point dataset completed an ideal exercise in three
+  windows under an explicitly simulated User-Y `[-60,60]` mm interval. Two
+  relocations ended at rail `+35.25555` mm / offset `-35.25555` mm / generation
+  3. The route reversed direction once and travelled `170.52795` mm in total;
+  this is a narrow-window/group-order review signal, not measured hardware
+  behavior.
+- L1 passed 6 focused simulator tests and all 375 repository tests, Python
+  compilation, JSON validation, generated JavaScript syntax, self-contained
+  no-fetch checks and diff checks. Local-file browser navigation was blocked, so
+  operator visual inspection of the generated report remains required.
+- No device connection, deployment, runtime configuration, service action or
+  motion occurred. Commit intent: push the bounded simulator goal on the sole
+  `main` branch.
+
 ## 2026-09-08 - Define provisional GC4653 native intrinsics
 
 - Expressed the supplied GC4653 H81/V51 field-of-view estimate at native

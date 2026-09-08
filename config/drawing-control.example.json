@@ -1,7 +1,7 @@
 {
   "version": 2,
   "production_ready": false,
-  "selected_mode": "baseline",
+  "selected_mode": "localized_baseline",
   "json_mm_per_rail_mm": -1.0,
   "baseline": {
     "speed_mm_s": 50,

@@ -25,6 +25,7 @@ Subsystem and operating documentation:
 - [Robot-arm YOLO manual control](docs/robot-arm/yolo-manual-control.md)
 - [One-dimensional AprilTag rail lock and task interface](docs/console/localization-state-machine.md)
 - [Baseline and advanced drawing relocation modes](docs/console/drawing-control-modes.md)
+- [Localized Baseline coordinate rehearsal](docs/console/localized-baseline-simulator.md)
 - [PC grouped drawing tools](app/README.md)
 
 As of 2026-09-03, the [dated deployment record](docs/deployment/2026-09-03-esp32-maixcam.md)
@@ -106,3 +107,9 @@ line-art review and normalized stroke JSON export on the computer. Run
 `.\stroke-review.cmd -SkipModels` from the repository root for classic mode.
 The imported application lives under `apps/strokereview/`; robot execution and
 paper-to-arm calibration remain separate from image processing.
+
+For production drawing orchestration, `localized_baseline` is the only exposed
+candidate: direct bounded chassis movement followed by a fresh one-dimensional
+AprilTag lock and exact checkpoint resume. Baseline and Advanced remain internal
+diagnostic/future strategies. Before hardware use, rehearse the coordinate and
+window sequence with `app/localized_baseline_sim.py`.

@@ -1,5 +1,10 @@
 # Drawing relocation control modes
 
+Normal operation exposes only `localized_baseline`. `baseline` remains an
+internal open-loop diagnostic and `advanced` remains disabled as a future
+line-following strategy. They share the same device deployment and planner;
+there is no runtime fallback between them.
+
 The drawing system uses one planner and one explicit PC-selected relocation
 strategy. Copy `config/drawing-control.example.json` to the ignored
 `config/drawing-control.local.json`; keep `production_ready` false until the

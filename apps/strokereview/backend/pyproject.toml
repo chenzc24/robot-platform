@@ -1,0 +1,33 @@
+[project]
+name = "stroke-review-api"
+version = "0.1.0"
+description = "Line-art preprocessing and stroke review API"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "defusedxml>=0.7,<1",
+  "fastapi>=0.116,<1",
+  "httpx>=0.28,<1",
+  "networkx>=3.6,<4",
+  "opencv-contrib-python-headless>=4.12,<6",
+  "pillow>=11,<13",
+  "python-multipart>=0.0.20,<1",
+  "scikit-image>=0.26,<0.27",
+  "scipy>=1.18,<1.19",
+  "skan>=0.13,<0.14",
+  "svgelements==1.9.6",
+  "uvicorn[standard]>=0.35,<1",
+]
+
+[dependency-groups]
+dev = [
+  "httpx>=0.28,<1",
+  "pytest>=8.4,<10",
+]
+desktop = [
+  "pyinstaller>=6.15,<7",
+  "pywebview>=6,<7",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

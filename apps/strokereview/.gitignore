@@ -1,0 +1,21 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+node_modules/
+dist/
+.devlogs/
+.desktop-build/
+release/
+backend/static/
+*.pyc
+.env
+# Local runtime, exports and optional model weights
+.devstate/
+stroke-output/
+*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+model-service/models/*.pth
+model-service/models/*.pt
+model-service/models/*.onnx

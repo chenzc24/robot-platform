@@ -1,0 +1,7 @@
+Import StrokeReview into apps/strokereview so image/SVG processing, interactive line-art review and normalized stroke JSON export live alongside the robot platform. Add the root stroke-review.cmd launcher and document the paper-coordinate contract and remaining robot integration boundary. Preserve upstream algorithms and optional local/cloud providers; weights stay local and ignored.
+
+Fix the imported frontend proxy to follow the selected backend port, allowing separate worktrees to run on different ports. Bootstrap dependencies from committed locks.
+
+Validation: backend 48, frontend 33, model-interface 7 and desktop-launcher 5 tests passed; frontend production build passed. A synthetic non-square PNG was processed through the actual custom-port frontend proxy and HTTP export client; two strokes and canvas bounds/order were verified. Original archive manifest and local weight hashes verified. Model-interface tests used the backend Python 3.13 environment; full model inference, cloud calls and packaged binaries were not tested. No hardware was connected or moved; temporary services were stopped.
+
+This draft targets the committed localization branch used as the migration base, avoiding inclusion of its earlier work in the diff. The other worker's dirty checkout and obsolete drawing demo remain untouched. Robot task execution/calibration are follow-up integration work; this PR does not claim an end-to-end hardware workflow.

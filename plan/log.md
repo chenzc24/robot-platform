@@ -1408,3 +1408,20 @@ entry format:
 - No runtime source, device state, deployment, service or motion changed. User
   settings, drawing demo, XYZ log hunk, SVG and diagnostic directories remain
   present and unstaged. Commit/push only the merge-cleanup record on main.
+
+## 2026-09-08 — StrokeReview source migration
+
+- Goal: import image/SVG processing, line-art review and normalized stroke export into `apps/strokereview/`, with root `stroke-review.cmd` and integration documentation. Old drawing demo and device runtime are outside scope.
+- Isolation: new worktree `E:/Device Network-strokereview`, branch `target/strokereview-migration`, base `0eec878`. Original checkout dirty paths belong to another worker and were not modified, staged or copied.
+- Scope: imported application source/locks/tests/docs, root README/launcher, `docs/console/strokereview.md`, goal plan and this log. Corrected custom backend port propagation to Vite proxy; dependency bootstrap uses locked installation. Four verified model weights remain local and ignored.
+- Validation: L1, backend 48 tests, frontend 33 tests plus production build, model-interface 7 tests and desktop-launcher 5 tests passed. Model-interface tests used the backend Python 3.13 environment; full Python 3.12 model runtime/inference and desktop binary builds were not run. Original 95-entry ZIP manifest and weight hashes verified. Synthetic non-square PNG processed through custom-port frontend proxy and HTTP client, exported two strokes and validated canvas/bounds/order. Dependency deprecation warnings remain.
+- Hardware: no device connection, deployment or movement; no paid cloud calls. Loopback backend/frontend launched for smoke testing and stopped afterward using this worktree's lifecycle state.
+- Review: staged file audit excludes secrets, weights, environments and generated output; imported source adaptations reviewed against the verified archive. Initial staged diff check reported upstream whitespace issues in seven files; these are removed in the follow-up commit before final aggregate validation.
+- Commit status: `92bfe36` (`feat(strokereview): import image-to-stroke review workflow`) committed and pushed to origin/target/strokereview-migration; follow-up records results and removes inherited whitespace. Full robot execution, paper calibration and reconciliation with the other worker remain outside this migration.
+- Final follow-up: aggregate diff check against `0eec878` passed after inherited whitespace cleanup. Draft PR #6 created: https://github.com/chenzc24/robot-platform/pull/6; no merge performed.
+- Main integration follow-up: after localization PR #5 merged, the migration
+  branch was rebased onto synchronized `origin/main` at `791e27a`. The sole
+  conflict was this append-only log; both goals' records were retained. The
+  rebased migration commits are `35a396b` and `1d3e8b1`; aggregate diff check
+  against current main passed. A replacement PR will target `main`, after which
+  the merged migration branch and isolated worktree will be removed.

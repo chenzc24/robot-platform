@@ -1,0 +1,24 @@
+[project]
+name = "stroke-review-model-service"
+version = "0.1.0"
+description = "Local CPU line-art model service"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "controlnet-aux==0.0.10",
+  "fastapi>=0.116,<1",
+  "python-multipart>=0.0.20,<1",
+  "uvicorn[standard]>=0.35,<1",
+]
+
+[dependency-groups]
+dev = [
+  "httpx>=0.28,<1",
+  "pytest>=8.4,<10",
+]
+desktop = [
+  "pyinstaller>=6.15,<7",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

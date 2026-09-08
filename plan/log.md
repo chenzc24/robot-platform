@@ -1425,3 +1425,27 @@ entry format:
   rebased migration commits are `35a396b` and `1d3e8b1`; aggregate diff check
   against current main passed. A replacement PR will target `main`, after which
   the merged migration branch and isolated worktree will be removed.
+
+## 2026-09-08 — Merge StrokeReview and prune obsolete branches
+
+- Rebased the clean `target/strokereview-migration` worktree onto main, retaining
+  both sides of the sole append-only `plan/log.md` conflict. PR #7 was cleanly
+  mergeable and merged into remote `main` as `e36a721`; its remote head was
+  deleted. Closed PR #6 remains historical metadata.
+- Deleted five orphaned remote branches with no associated PR and superseded
+  scope: `target/control-console-ui-convergence`,
+  `target/integration-readiness-map`, `target/maixcam-esp32-uart-l2`,
+  `target/motion-services-v1`, and
+  `target/protocol-v1-deployment-workflow`.
+- Kept `target/chassis-hold-release-fix`, `target/arm-fault-foundation`, and the
+  latter's worktree because open draft PR #2 depends on them. The primary main
+  worktree is also retained because its uncommitted files belong to another
+  worker.
+- Validation: PR mergeability was CLEAN; aggregate migration diff check passed;
+  remote refs were fetched/pruned after deletion. No application code changed
+  after the recorded L1 validation, and no hardware, services, deployment or
+  motion were used during merge cleanup.
+- Commit this factual record directly atop remote main, then remove the clean
+  migration worktree and local migration/cleanup refs. Local main cannot be
+  fast-forwarded safely while another worker has an overlapping uncommitted
+  `plan/log.md`; its files remain untouched.

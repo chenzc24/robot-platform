@@ -73,3 +73,25 @@ PR targets the committed source branch target/localization-lock-state-machine to
   the previously completed L1 application tests remain applicable.
 - Publish the rebased branch with force-with-lease, create a new PR against
   `main`, merge it, then remove the merged migration branch and worktree.
+
+## Merge and cleanup outcome
+
+- Rebased branch published with force-with-lease. Replacement PR #7 targeted
+  `main`, was cleanly mergeable, and merged as `e36a721`; its remote head branch
+  was deleted. Closed PR #6 remains only as historical review metadata.
+- Deleted five orphaned remote branches with no associated PR, all superseded
+  by later mainline work: `target/control-console-ui-convergence`,
+  `target/integration-readiness-map`, `target/maixcam-esp32-uart-l2`,
+  `target/motion-services-v1`, and
+  `target/protocol-v1-deployment-workflow`.
+- Preserved `target/chassis-hold-release-fix` because open draft PR #2 uses it
+  as its base. Preserved `target/arm-fault-foundation` and its worktree because
+  that PR remains open and unmerged.
+- The primary `main` worktree still contains another worker's uncommitted
+  `.vscode/settings.json`, `app/demo.py`, `plan/log.md`, SVG and diagnostic plan
+  changes. They were not modified or temporarily displaced. Remote `main` is
+  updated here; that working tree must fast-forward after its owner finishes or
+  commits the overlapping log change.
+- After this record is pushed directly to remote `main`, remove the clean
+  `E:/Device Network-strokereview` worktree and both local migration/cleanup
+  branch names, then prune worktree metadata.

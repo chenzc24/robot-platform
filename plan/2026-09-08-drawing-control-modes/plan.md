@@ -120,3 +120,7 @@ existing architecture; it does not transfer the sensor loop to the computer.
 ```text
 feat(console): add baseline and advanced drawing relocation modes
 ```
+
+Implementation commit `9fb9291` was pushed to
+`target/drawing-control-modes`; PR #10 targets `main`. No merge or deployment
+was performed.

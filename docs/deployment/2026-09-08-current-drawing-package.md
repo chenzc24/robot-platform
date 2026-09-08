@@ -1,15 +1,15 @@
 # Current drawing deployment package
 
-Candidate `drawing-20260908-97253c9` freezes clean `main` commit
-`97253c9e79149cf4be2b89df1bd0d575d30c5f9a`. The local package is:
+Candidate `drawing-20260908-d2469eb` freezes clean `main` commit
+`d2469eb667da397b8041230e872be878a63aa2dd`. The local package is:
 
 ```text
-E:\Device Network\build\drawing-97253c9
-E:\Device Network\build\drawing-97253c9.zip
+E:\Device Network\build\drawing-d2469eb
+E:\Device Network\build\drawing-d2469eb.zip
 ```
 
 The final ZIP SHA-256 is stored beside the archive in
-`drawing-97253c9.zip.sha256`; it is intentionally outside the ZIP to avoid a
+`drawing-d2469eb.zip.sha256`; it is intentionally outside the ZIP to avoid a
 self-referential archive hash.
 
 It is prepared and L1-validated only. It has not been uploaded, imported,
@@ -19,13 +19,13 @@ payload file. Real local configuration and secrets are deliberately absent.
 ## Package layout
 
 ```text
-drawing-97253c9/
+drawing-d2469eb/
 ├── esp32/root/                 14 flat MicroPython runtime files
 ├── maixcam/arm/                8 arm-gateway files, including flat protocols
 ├── maixcam/video/              7 RTSP service files
 ├── robot-arm/DobotStudio/      main.py, var.py, prj.json, point.json
 ├── device-config-templates/    examples only; never overwrite real config
-├── pc-config-templates/        examples only; copy/review as *.local files
+├── pc-config-templates/        examples plus a Baseline-specific template
 ├── DEPLOY.md                   this guide
 └── manifest.json               payload SHA-256 manifest
 ```
@@ -42,6 +42,12 @@ drawing-97253c9/
   another project's taught points.
 - PC: preserve ignored `config/*.local.json` and credentials. Templates remain
   `production_ready=false` and contain no secrets.
+
+The drawing template is 700 x 200 mm. For an open-loop Baseline rehearsal,
+copy `drawing-control.baseline.example.json` to the ignored local configuration
+and replace its zero `initial_json_axis_offset_mm` only after establishing the
+physical starting position. The zero value is not a calibration result. The
+ordinary `drawing-control.example.json` continues to select Localized Baseline.
 
 ## Tomorrow's stopped deployment order
 

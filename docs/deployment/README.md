@@ -15,9 +15,9 @@ freezes commit `301320c` and its generated arm-project hashes. It is retained as
 historical preparation evidence, not a current package or deployment record.
 
 The newer [current drawing package](2026-09-08-current-drawing-package.md)
-supersedes that candidate for tomorrow's work. It freezes commit `97253c9`,
+supersedes that candidate for tomorrow's work. It freezes commit `d2469eb`,
 including the compatible MaixCam/controller `blend_pct` path and unified PC
-runner, in ignored local directory `build/drawing-97253c9`. It is also
+runner, in ignored local directory `build/drawing-d2469eb`. It is also
 preparation evidence only; nothing in that package has yet been deployed.
 
 ## 1. Deployment Topology

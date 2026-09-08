@@ -1,8 +1,8 @@
 {
-  "candidate_id": "drawing-20260908-97253c9",
-  "source_commit": "97253c9e79149cf4be2b89df1bd0d575d30c5f9a",
+  "candidate_id": "drawing-20260908-d2469eb",
+  "source_commit": "d2469eb667da397b8041230e872be878a63aa2dd",
   "deployed": false,
-  "local_package_path": "build/drawing-97253c9",
+  "local_package_path": "build/drawing-d2469eb",
   "package_metadata_files_are_not_self_hashed": ["DEPLOY.md", "manifest.json"],
   "files": {
     "device-config-templates/arm_service_config_example.py": "b8187a41b35a4169f34630a3b0ee6ba492fa9b20f799dc6a66899826444baf7e",
@@ -40,8 +40,9 @@
     "pc-config-templates/apriltag-board.example.json": "127036636b5f5de39c47f3329014a6860f6dbcf017d9662915941422600b5b04",
     "pc-config-templates/camera-calibration.example.json": "3044ad9a6c31096c6e291c722c1bfe8deb51bc0e0d052c4b9bc8144170dccccc",
     "pc-config-templates/console.example.json": "c82706f32c0d88890628463ce394e581e8d69ab231fe0be2a1f59cefbe83dfdc",
+    "pc-config-templates/drawing-control.baseline.example.json": "1de0a41a88f653fa731d66cc4af61bd746eb3f7f798f604f6ac6d1be74356230",
     "pc-config-templates/drawing-control.example.json": "ad3950565c9068b67271726e835bd57347ca3e5b684168b0d95744119d92c6ad",
-    "pc-config-templates/drawing.example.json": "fee6471a751e4332b564755c4c78666e3101c5a4c61dc9452fc21bd32ed10803",
+    "pc-config-templates/drawing.example.json": "ae786c2952da667a6a5f05b660b85a36ce6fef6f078e6537fc45bfd66eccb13e",
     "robot-arm/DobotStudio/main.py": "df6149abdda455a429baf641194f410a135bb33350964fd04158d5a9de29a046",
     "robot-arm/DobotStudio/point.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
     "robot-arm/DobotStudio/prj.json": "c95b07f45676116ab8ac1a45cf2fc50c2e471e0c917e6affcdf2d809a0d67527",

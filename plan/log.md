@@ -1842,3 +1842,23 @@ entry format:
 - No hardware discovery, connection, command, configuration write, deployment,
   service action or motion occurred. The ignored AprilTag board configuration
   was unchanged. Commit status was pending at log-entry time on `main`.
+
+## 2026-09-08 - Refreeze the 700 x 200 drawing deployment package
+
+- Froze clean product-source commit `d2469eb` into ignored directory
+  `build/drawing-d2469eb`, ZIP `build/drawing-d2469eb.zip`, and its SHA-256
+  sidecar. The package has 42 manifest payloads and 44 total files.
+- Preserved the unchanged 14-file ESP32, 15-file MaixCam arm/video and four-file
+  generated DobotStudio payloads. Updated the PC drawing template to 700 x
+  200 mm and added a default-deny Baseline template with a 300 mm per-hop limit
+  and unmeasured zero initial offset placeholder.
+- All payload/source/generated hashes, JSON, 30 Python files, four shell files,
+  a deterministic second arm build and all 44 expanded ZIP entries passed.
+  The packaged Baseline templates also passed unified dry-run on the real
+  439-stroke / 3,903-point sample without requiring AprilTag. All 386 repository
+  tests passed. Final ZIP SHA-256:
+  `6cdd35e7c3b6f10661ac29f353408b4190857db7e5dbedaf22d9f5e249dd1e66`.
+- No hardware discovery, connection, upload, controller import, reset, service
+  action, configuration write or motion occurred. Site offset measurement and
+  stopped L2/L3/L4 gates remain outstanding. Commit status was pending at
+  log-entry time on `main`.

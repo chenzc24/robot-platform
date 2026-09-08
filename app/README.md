@@ -59,11 +59,14 @@ python app/drawing_task.py dataset/dobot-generation-1.json `
 ```
 
 `drawing_task.py` remains preview-only: it opens no device connection and
-sends no motion. The formal configuration preserves the coworker project's
-150 mm canvas, User-Y/Z mapping, 51 mm pen travel, home joints, P1-P4 rack
-poses, 60/30 mm rack depths, 60/1 mm gripper widths, drawing `v=12`, and
-`cp=100`. Motions without a source-explicit speed use the project owner's
-clarified 50% default, and every arm motion uses 20% acceleration.
+sends no motion. The formal configuration uses the selected 700 x 200 mm
+canvas while preserving the coworker project's parameterized User-Y/Z mapping,
+51 mm pen travel, home joints, P1-P4 rack poses, 60/30 mm rack depths, 60/1 mm
+gripper widths, drawing `v=12`, and `cp=100`. Its 700 mm width exceeds the
+retained `-200..180` mm User-Y window, so normal Localized Baseline execution
+must divide the job into reachable windows and relocate the chassis. Motions
+without a source-explicit speed use the project owner's clarified 50% default,
+and every arm motion uses 20% acceleration.
 
 `baseline_run.py` adds a separate guarded arm-only execution entry point. Its
 default is still dry-run. Real execution accepts only a complete plan with no

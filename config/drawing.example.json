@@ -29,10 +29,10 @@
     }
   },
   "geometry": {
-    "canvas_width_mm": 150.0,
-    "canvas_height_mm": 150.0,
-    "user_y_offset_mm": -75.0,
-    "user_z_offset_mm": -100.0,
+    "canvas_width_mm": 700.0,
+    "canvas_height_mm": 200.0,
+    "user_y_offset_mm": -350.0,
+    "user_z_offset_mm": -133.333333333,
     "home_pose_user_y_mm": 0.0,
     "reachable_user_y_min_mm": -200.0,
     "reachable_user_y_max_mm": 180.0,

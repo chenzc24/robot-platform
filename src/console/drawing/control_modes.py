@@ -210,6 +210,10 @@ class _Relocator:
     def _emit(self, state, **details):
         self.event({"state": state, **details})
 
+    def barrier_delta(self, json_delta_mm):
+        """Return the mode-specific delta for one planner barrier."""
+        return _number(json_delta_mm, "json offset delta")
+
 
 class BaselineRelocator(_Relocator):
     """Trust configured speed and elapsed time; never claim measured travel."""
@@ -217,6 +221,15 @@ class BaselineRelocator(_Relocator):
     def __init__(self, chassis, config, **kwargs):
         super().__init__(config, **kwargs)
         self.chassis = chassis
+
+    def barrier_delta(self, json_delta_mm):
+        """Bound one direct move while preserving the requested direction."""
+        rail_distance = self._rail_distance(json_delta_mm)
+        limit = self.config.baseline.max_distance_mm
+        if abs(rail_distance) <= limit:
+            return _number(json_delta_mm, "json offset delta")
+        bounded_rail_distance = limit if rail_distance > 0 else -limit
+        return bounded_rail_distance * self.config.json_mm_per_rail_mm
 
     def relocate(self, offset_before_mm, json_delta_mm, admission):
         self._admit(admission)
@@ -446,7 +459,9 @@ def relocate_reposition_plan(plan, relocator, admission):
     barrier = plan.steps[-1]
     if barrier.kind != "reposition.required":
         raise DrawingError("drawing_plan_has_no_reposition_barrier")
-    delta = barrier.payload.get("suggested_json_axis_offset_delta_mm")
+    delta = relocator.barrier_delta(
+        barrier.payload.get("suggested_json_axis_offset_delta_mm")
+    )
     result = relocator.relocate(
         plan.json_axis_offset_mm,
         delta,

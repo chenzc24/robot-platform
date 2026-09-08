@@ -46,8 +46,14 @@ following. Once `STOP` returns, it also requires an exact `STATUS` report of
 `enabled_stopped`, invalidates the old localization on motion intent, waits the
 localization settling interval, and accepts only a newer stable AprilTag lock.
 
-The planner's requested delta chooses the coarse direct distance, but that
-open-loop estimate is never used as the resumed drawing offset. The replacement
+The planner's requested delta chooses the coarse direct distance. When its
+centering suggestion exceeds `max_distance_mm`, the coordinator limits that
+single direct hop to `max_distance_mm`, stops, obtains the mode-required fresh
+localization, and replans from the same checkpoint. The relocator's direct-call
+distance guard remains active. The measured result, rather than the unexecuted
+remainder of the centering suggestion, determines whether another hop is
+needed. In Localized Baseline, the corresponding open-loop estimate is never
+used as the resumed drawing offset. The replacement
 offset, rail position, generation and confidence all come from the new AprilTag
 context. `baseline.settle_ms` belongs only to Baseline; Localized Baseline uses
 the localization state's configured settling and sample windows.

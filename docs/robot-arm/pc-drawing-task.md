@@ -106,8 +106,9 @@ python app/drawing_task.py dataset/dobot-generation-1.json `
 
 Add `--show-steps` to print each abstract step or `--output-plan <new-file>` to
 write a review artifact. An existing output is never overwritten. The summary
-shows both canvas metadata and configured executed size so the archive's
-210-versus-150 mm discrepancy remains visible.
+shows both canvas metadata and configured executed size. Drawing inputs used
+with the example configuration must declare the selected 700 x 200 mm physical
+target; normalized source points remain unchanged.
 
 The plan contains `pen.select`, `pen.return`, `arm.home`, `arm.relative`, `sleep`,
 and `reposition.required` steps. Each pen step now carries the configured rack

@@ -1820,3 +1820,25 @@ entry format:
 - No hardware discovery, connection, command, configuration write, deployment,
   service action or motion occurred. Commit intent: push this bounded
   integration directly on the sole `main` branch.
+
+## 2026-09-08 - Expand drawing canvas to 700 x 200 mm
+
+- Changed the drawing geometry to 700 x 200 mm with the first-generation
+  parameterized offsets, producing `User-Y=700u-350+offset` and
+  `User-Z=200(1-v)-133.333333333`. Retained the colleague-tested User-Y
+  drawing window `[-200,180]` and the 300 mm direct-move limit.
+- Made production Baseline/Localized Baseline coordination bound an oversized
+  planner-centering suggestion to one configured-distance hop, then stop and
+  replan from the measured result. Direct relocator over-limit calls remain
+  rejected.
+- Updated both ignored local real-sample canvas metadata to 700 x 200 mm without
+  changing normalized stroke points. The grouped 439-stroke / 3,903-point
+  sample completed the production-path ideal rehearsal in six windows and five
+  relocations, with three rail reversals and 1,215.8966 mm absolute travel.
+  The declared-error scenario also completed in six windows and five moves.
+- L1 passed JSON parsing, Python compilation, 13 focused control-mode tests,
+  all 386 repository tests and `git diff --check`. The flat local sample still
+  lacks a `default` pen-slot mapping; no physical pen choice was inferred.
+- No hardware discovery, connection, command, configuration write, deployment,
+  service action or motion occurred. The ignored AprilTag board configuration
+  was unchanged. Commit status was pending at log-entry time on `main`.

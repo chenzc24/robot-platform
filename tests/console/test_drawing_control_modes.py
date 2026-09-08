@@ -243,6 +243,33 @@ class BaselineRelocatorTests(unittest.TestCase):
         self.assertEqual(resume["json_axis_offset_mm"], -5)
         self.assertEqual(resume["checkpoint"]["next_point_index"], 3)
 
+    def test_planner_barrier_bounds_long_centering_move_to_one_direct_hop(self):
+        clock = FakeClock()
+        chassis = FakeChassis()
+        config = parse_drawing_control_config(config_document())
+        relocator = create_relocator(config, chassis, clock=clock, sleep=clock.sleep)
+        checkpoint = types.SimpleNamespace(to_dict=lambda: {
+            "group_index": 2,
+            "stroke_index": 0,
+            "next_point_index": 0,
+        })
+        plan = types.SimpleNamespace(
+            complete=False,
+            next_checkpoint=checkpoint,
+            json_axis_offset_mm=-6,
+            steps=(types.SimpleNamespace(
+                kind="reposition.required",
+                payload={"suggested_json_axis_offset_delta_mm": 480},
+            ),),
+        )
+
+        resume = relocate_reposition_plan(plan, relocator, admission())
+
+        self.assertEqual(resume["json_axis_offset_mm"], 294)
+        self.assertEqual(
+            resume["relocation"]["commanded_rail_distance_mm"], -300
+        )
+
 
 class AdvancedRelocatorTests(unittest.TestCase):
     def test_station_then_fresh_localization_is_the_only_offset_source(self):

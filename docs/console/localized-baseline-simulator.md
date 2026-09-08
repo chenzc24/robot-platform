@@ -21,25 +21,26 @@ connections.
 ## Run the full drawing rehearsal
 
 The checked-in User-Y `-200..180` mm drawing window is inherited from the
-colleague-tested first-generation arm program. The 150 mm sample drawing
-normally fits one window. That is the configuration-faithful result and must
-not be reported as a relocation test. To run a separate physical
-stress scenario, declare a narrower hypothetical reach and fixed error parameters
-that are independent of planner output:
+colleague-tested first-generation arm program. The selected 700 x 200 mm
+canvas uses `User-Y = 700u - 350 + offset` and therefore exceeds that 380 mm
+window. The default rehearsal is consequently a configuration-faithful test of
+checkpointing, chassis relocation, fresh AprilTag localization and resume. Run
+it without a simulated reach override:
 
 ```powershell
 python app/localized_baseline_sim.py dataset/dobot-generation-1.json `
   --drawing-config config/drawing.example.json `
   --control-config config/drawing-control.example.json `
-  --simulated-reachable-min-mm -60 `
-  --simulated-reachable-max-mm 60 `
   --motion-gain 0.96 `
   --stop-overshoot-mm 1.5 `
   --localization-errors-mm 0.4,-0.3,0.8,-0.6,0.2,-0.1,0.5,-0.2,0.3,-0.4,0.1,0.0 `
-  --rail-min-mm -150 `
-  --rail-max-mm 150 `
+  --rail-min-mm -500 `
+  --rail-max-mm 500 `
   --force --open
 ```
+
+The deterministic gain, overshoot and localization errors are simulator inputs,
+not production calibration. Omit them for the simulator's ideal-motion defaults.
 
 The default report is written to ignored temporary output:
 
@@ -105,8 +106,8 @@ not model:
   motor dynamics; motion gain and stop overshoot are fixed scalars;
 - physical standstill; `enabled_stopped` remains a logical ESP32 state.
 
-Do not copy simulated reach overrides or error parameters into production
-configuration. Hardware execution still needs the real common-board tag
+Do not copy simulated error parameters into production configuration. Hardware
+execution still needs the real common-board tag
 coordinates, reference rail position `r0`, verified rail scale/sign and local
 production-ready drawing/control configuration. Any L3/L4 run also needs the
 fresh attended physical safety gate in `AGENTS.md`.

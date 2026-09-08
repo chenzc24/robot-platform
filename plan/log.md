@@ -1755,6 +1755,27 @@ entry format:
   rail scale and L4 validation remain outstanding. Commit status was pending at
   log-entry time on `main`.
 
+## 2026-09-08 - Freeze current drawing deployment package
+
+- Froze clean `main` commit `97253c9` into ignored local directory
+  `build/drawing-97253c9` and ZIP `build/drawing-97253c9.zip`. The package has
+  14 ESP32 runtime files, 8 MaixCam arm files, 7 MaixCam video files, a freshly
+  generated four-file YOLO DobotStudio project, and default-off device/PC
+  configuration templates.
+- Excluded real `device_config.py`, `secrets.py`, `arm_service_config.py`, PC
+  local configuration and credentials. The deployment guide requires target
+  backups and preservation of those reviewed local files.
+- All 41 payload SHA-256 values matched the committed manifest and repository
+  sources; all 43 ZIP entries matched the final directory. A second arm build
+  was byte-identical. Final ZIP SHA-256:
+  `6713bb2f11677f604a4dc8f6e308fd3008af11eb43582a041e81df148485ecab`.
+- L1 passed package Python/shell/JSON validation, `git diff --check`, and all
+  385 repository tests. No hardware connection, upload, controller import,
+  service action, configuration write or motion occurred.
+- Device readback/version checks, stopped L2 deployment, real calibration and
+  attended L3/L4 validation remain tomorrow's work. Commit status was pending
+  at log-entry time on `main`.
+
 ## 2026-09-08 - Rehearse Localized Baseline with independent physical errors
 
 - Replaced the simulator's exact-target relocation assumption with separate

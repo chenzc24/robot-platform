@@ -10,9 +10,15 @@ record publication, readback and feedback evidence. Later
 is separate from deployment. Git consolidation does not upload files, restart
 services or replace the operator's controller project.
 
-The [2026-09-08 Baseline candidate](2026-09-08-baseline-candidate.md) freezes
-the latest merged source and generated arm-project hashes for the next staged
-deployment. It is preparation evidence only, not a device deployment record.
+The older [2026-09-08 Baseline candidate](2026-09-08-baseline-candidate.md)
+freezes commit `301320c` and its generated arm-project hashes. It is retained as
+historical preparation evidence, not a current package or deployment record.
+
+The newer [current drawing package](2026-09-08-current-drawing-package.md)
+supersedes that candidate for tomorrow's work. It freezes commit `97253c9`,
+including the compatible MaixCam/controller `blend_pct` path and unified PC
+runner, in ignored local directory `build/drawing-97253c9`. It is also
+preparation evidence only; nothing in that package has yet been deployed.
 
 ## 1. Deployment Topology
 

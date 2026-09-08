@@ -53,13 +53,30 @@ def _checkpoint(job, value):
     return value
 
 
-def _move_payload(geometry, translation, speed_pct, purpose):
+def _motion_options(accel_pct=None, speed_pct=None, blend_pct=None):
+    options = {}
+    if accel_pct is not None:
+        options["accel_pct"] = accel_pct
+    if speed_pct is not None:
+        options["speed_pct"] = speed_pct
+    if blend_pct is not None:
+        options["blend_pct"] = blend_pct
+    return options
+
+
+def _joint_payload(geometry, joints):
+    return {
+        "joint_deg": list(joints),
+        **_motion_options(geometry.accel_pct, geometry.travel_speed_pct),
+    }
+
+
+def _move_payload(geometry, translation, speed_pct, purpose, blend_pct=None):
     return {
         "translation_mm": list(translation),
         "user": geometry.user,
         "tool": geometry.tool,
-        "accel_pct": geometry.accel_pct,
-        "speed_pct": speed_pct,
+        **_motion_options(geometry.accel_pct, speed_pct, blend_pct),
         "purpose": purpose,
     }
 
@@ -76,9 +93,7 @@ def _pen_select_payload(group_name, slot, config):
         "steps": [
             {
                 "kind": "arm.move_joint",
-                "joint_deg": list(slot.joint_deg),
-                "accel_pct": geometry.accel_pct,
-                "speed_pct": geometry.travel_speed_pct,
+                **_joint_payload(geometry, slot.joint_deg),
             },
             {"kind": "arm.gripper", "width_mm": rack.gripper_open_mm},
             {
@@ -113,9 +128,7 @@ def _pen_return_payload(group_name, slot, config, final_return):
     steps = [
         {
             "kind": "arm.move_joint",
-            "joint_deg": list(slot.joint_deg),
-            "accel_pct": geometry.accel_pct,
-            "speed_pct": geometry.travel_speed_pct,
+            **_joint_payload(geometry, slot.joint_deg),
         },
         {
             "kind": "arm.relative",
@@ -141,9 +154,7 @@ def _pen_return_payload(group_name, slot, config, final_return):
         steps.append(
             {
                 "kind": "arm.move_joint",
-                "joint_deg": list(geometry.home_joints_deg),
-                "accel_pct": geometry.accel_pct,
-                "speed_pct": geometry.travel_speed_pct,
+                **_joint_payload(geometry, geometry.home_joints_deg),
             }
         )
     return {
@@ -326,9 +337,7 @@ def build_drawing_plan(job, config, json_axis_offset_mm=0.0, checkpoint=None):
                 "arm.home",
                 "%s: home" % prefix,
                 {
-                    "joint_deg": list(geometry.home_joints_deg),
-                    "accel_pct": geometry.accel_pct,
-                    "speed_pct": geometry.travel_speed_pct,
+                    **_joint_payload(geometry, geometry.home_joints_deg),
                     "purpose": "stroke_start",
                 },
             )
@@ -377,9 +386,7 @@ def build_drawing_plan(job, config, json_axis_offset_mm=0.0, checkpoint=None):
                         "arm.home",
                         "%s: safe home for reposition" % prefix,
                         {
-                            "joint_deg": list(geometry.home_joints_deg),
-                            "accel_pct": geometry.accel_pct,
-                            "speed_pct": geometry.travel_speed_pct,
+                            **_joint_payload(geometry, geometry.home_joints_deg),
                             "purpose": "reposition_safe_pose",
                         },
                     )
@@ -420,6 +427,7 @@ def build_drawing_plan(job, config, json_axis_offset_mm=0.0, checkpoint=None):
                         ),
                         geometry.draw_speed_pct,
                         "draw_segment",
+                        geometry.draw_blend_pct,
                     ),
                 )
                 planned_points += 1

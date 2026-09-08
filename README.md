@@ -25,7 +25,7 @@ Subsystem and operating documentation:
 - [Robot-arm YOLO manual control](docs/robot-arm/yolo-manual-control.md)
 - [One-dimensional AprilTag rail lock and task interface](docs/console/localization-state-machine.md)
 - [Baseline and advanced drawing relocation modes](docs/console/drawing-control-modes.md)
-- [PC JSON drawing demo](app/README.md)
+- [PC grouped drawing tools](app/README.md)
 
 As of 2026-09-03, the [dated deployment record](docs/deployment/2026-09-03-esp32-maixcam.md)
 records the ESP32 v3 service, MaixCam arm/video activation and measured arm

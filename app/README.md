@@ -5,6 +5,48 @@ Baseline and Advanced now share the grouped drawing loader, planner, pen
 workflow and coworker motion profile. They differ only in the chassis
 relocation strategy.
 
+## Unified image or JSON entry point
+
+`run_drawing.py` is the common PC entry point. It accepts an exported stroke
+JSON directly, or sends PNG/JPEG/WebP/SVG input to the loopback StrokeReview
+API. Image input always uses the physical canvas dimensions from
+`drawing.local.json`; generated `strokes.json`, `audit.json`, the full response
+and an input manifest are retained under ignored `dataset/generated/` by
+default and are never silently overwritten.
+
+Start StrokeReview before using an image:
+
+```powershell
+.\stroke-review.cmd -SkipModels
+python app/run_drawing.py .\picture.png --mode baseline
+python app/run_drawing.py .\picture.png --mode localized_baseline
+python app/run_drawing.py .\picture.png --mode advanced
+```
+
+The default is a no-device dry run. Existing reviewed JSON uses the same entry:
+
+```powershell
+python app/run_drawing.py dataset/dobot-generation-1.json `
+  --mode localized_baseline --allow-uniform-canvas-rescale
+```
+
+The runner rejects a JSON whose `target_width_mm` or `target_height_mm` differs
+from the configured physical canvas, preventing silent scale or aspect-ratio
+changes. A legacy JSON with the same aspect ratio may be deliberately mapped to
+the configured board with `--allow-uniform-canvas-rescale`; non-uniform stretch
+is always rejected. For image execution, the normal job-hash and attended-motion gates are
+supplemented by `--confirm-auto-review`; operators may instead review/edit and
+export JSON in the StrokeReview UI, then run that JSON without this extra flag.
+
+All modes use the same device deployment. `baseline` begins with
+`baseline.initial_json_axis_offset_mm` and subsequently trusts commanded direct
+travel. `localized_baseline` uses direct travel plus a fresh AprilTag lock.
+`advanced` uses ESP32 line following plus a fresh lock. There is no automatic
+fallback between modes. Localized Baseline remains the only production
+candidate until the other strategies receive their own physical validation.
+Dry-run may preview any `--mode`; real execution additionally requires that
+mode to equal `selected_mode` in the reviewed local control configuration.
+
 ## Grouped drawing preview
 
 Import the delivered Dobot project data as documented in
@@ -32,15 +74,15 @@ opens no chassis session. Every command must return `DONE`; fault, rejection,
 unknown outcome or disconnect stops all later commands without retry or
 automatic resume.
 
-`localized_baseline_run.py` is the only normal production-candidate entry point:
+`localized_baseline_run.py` remains a compatibility production-candidate entry point:
 direct chassis motion without line following, followed by a mandatory fresh
 AprilTag lock. It returns the pen and reaches the configured safe home at every
 planner barrier, replaces the open-loop travel estimate with the measured
 one-axis offset, and resumes the exact checkpoint. It uses the same deployed
 ESP32, MaixCam and arm services as the other modes; only PC orchestration differs.
 
-`baseline_run.py` remains an internal arm/chassis diagnostic path. Advanced
-line-following remains a future strategy; neither is an automatic fallback.
+`baseline_run.py` remains the older arm-only diagnostic path. Advanced
+line-following remains physically unvalidated; neither is an automatic fallback.
 
 ## Localized Baseline coordinate rehearsal
 

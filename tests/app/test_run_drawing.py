@@ -1,4 +1,4 @@
-"""CLI gates for the AprilTag/direct-drive drawing mode."""
+"""Unified image/JSON drawing runner gates."""
 
 import importlib.util
 import io
@@ -10,14 +10,12 @@ from contextlib import redirect_stderr, redirect_stdout
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-SPEC = importlib.util.spec_from_file_location(
-    "localized_baseline_run", ROOT / "app/localized_baseline_run.py"
-)
+SPEC = importlib.util.spec_from_file_location("run_drawing", ROOT / "app/run_drawing.py")
 RUNNER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(RUNNER)
 
 
-class LocalizedBaselineRunCliTests(unittest.TestCase):
+class UnifiedRunDrawingTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         folder = pathlib.Path(self.temp.name)
@@ -27,11 +25,11 @@ class LocalizedBaselineRunCliTests(unittest.TestCase):
         self.drawing.write_text(json.dumps({
             "version": "1.0", "coordinate_space": "normalized",
             "axis": {"origin": "top-left", "x_positive": "right", "y_positive": "down"},
-            "canvas": {"width": 1, "height": 1, "source_width": 10,
-                       "source_height": 10, "source_aspect_ratio": 1,
-                       "target_width_mm": 100, "target_height_mm": 100},
+            "canvas": {"width": 1, "height": 0.8, "source_width": 10,
+                       "source_height": 8, "source_aspect_ratio": 1.25,
+                       "target_width_mm": 100, "target_height_mm": 80},
             "strokes": [{"id": "s1", "order": 1,
-                         "points": [[0, 0], [1, 1]], "closed": False}],
+                         "points": [[0, 0], [1, 0.8]], "closed": False}],
         }), encoding="utf-8")
         self.drawing_config.write_text(json.dumps({
             "production_ready": False, "flat_group_name": "default",
@@ -40,10 +38,10 @@ class LocalizedBaselineRunCliTests(unittest.TestCase):
                          "gripper_open_mm": 60, "gripper_closed_mm": 1,
                          "slots": {name: {"joint_deg": [index] * 6}
                                    for index, name in enumerate(("P1", "P2", "P3", "P4"), 1)}},
-            "geometry": {"canvas_width_mm": 100, "canvas_height_mm": 100,
-                         "user_y_offset_mm": -50, "user_z_offset_mm": -50,
+            "geometry": {"canvas_width_mm": 100, "canvas_height_mm": 80,
+                         "user_y_offset_mm": -50, "user_z_offset_mm": -40,
                          "home_pose_user_y_mm": 0, "reachable_user_y_min_mm": -100,
-                         "reachable_user_y_max_mm": 100, "pen_travel_x_mm": 20,
+                         "reachable_user_y_max_mm": 100, "pen_travel_x_mm": 51,
                          "home_joints_deg": [-120, 0, -90, -90, -30, 90],
                          "user": 0, "tool": 0, "draw_speed_pct": 12,
                          "draw_blend_pct": 100, "travel_speed_pct": 50,
@@ -52,9 +50,9 @@ class LocalizedBaselineRunCliTests(unittest.TestCase):
         self.control_config.write_text(json.dumps({
             "version": 2, "production_ready": False,
             "selected_mode": "localized_baseline", "json_mm_per_rail_mm": -1,
-            "baseline": {"initial_json_axis_offset_mm": 0,
-                         "speed_mm_s": 50, "refresh_ms": 100,
-                         "hold_ms": 250, "max_distance_mm": 300, "settle_ms": 2000},
+            "baseline": {"initial_json_axis_offset_mm": 0, "speed_mm_s": 50,
+                         "refresh_ms": 100, "hold_ms": 250,
+                         "max_distance_mm": 300, "settle_ms": 2000},
             "localized_baseline": {"poll_ms": 100, "localization_timeout_ms": 10000},
             "advanced": {"poll_ms": 100, "station_timeout_ms": 30000,
                          "localization_timeout_ms": 10000},
@@ -67,25 +65,39 @@ class LocalizedBaselineRunCliTests(unittest.TestCase):
         return [str(self.drawing), "--drawing-config", str(self.drawing_config),
                 "--control-config", str(self.control_config), *extra]
 
-    def test_default_dry_run_never_loads_runtime_or_opens_devices(self):
+    def test_all_modes_share_one_no_device_dry_run(self):
         original = RUNNER.load_runtime_config
         RUNNER.load_runtime_config = lambda *_: self.fail("dry-run loaded runtime")
         try:
-            output = io.StringIO()
-            with redirect_stdout(output):
-                result = RUNNER.main(self.command())
-            self.assertEqual(result, 0)
-            self.assertIn('"mode": "localized_baseline"', output.getvalue())
-            self.assertIn("DRY_RUN no device connection or motion", output.getvalue())
+            for mode in ("baseline", "localized_baseline", "advanced"):
+                output = io.StringIO()
+                with redirect_stdout(output):
+                    result = RUNNER.main(self.command("--mode", mode))
+                self.assertEqual(result, 0)
+                self.assertIn('"mode": "%s"' % mode, output.getvalue())
+                self.assertIn('"json_origin_user_y_mm": -50.0', output.getvalue())
+                self.assertIn("DRY_RUN no device connection or motion", output.getvalue())
         finally:
             RUNNER.load_runtime_config = original
 
-    def test_execute_requires_exact_hash_before_runtime_access(self):
+    def test_execute_rejects_before_runtime_without_exact_hash(self):
+        original = RUNNER.load_runtime_config
+        RUNNER.load_runtime_config = lambda *_: self.fail("loaded runtime before hash gate")
+        try:
+            error = io.StringIO()
+            with redirect_stderr(error), redirect_stdout(io.StringIO()):
+                result = RUNNER.main(self.command("--execute"))
+            self.assertEqual(result, 2)
+            self.assertIn("job_hash_confirmation_required", error.getvalue())
+        finally:
+            RUNNER.load_runtime_config = original
+
+    def test_execute_requires_mode_to_match_reviewed_local_config(self):
         error = io.StringIO()
         with redirect_stderr(error), redirect_stdout(io.StringIO()):
-            result = RUNNER.main(self.command("--execute"))
+            result = RUNNER.main(self.command("--mode", "baseline", "--execute"))
         self.assertEqual(result, 2)
-        self.assertIn("job_hash_confirmation_required", error.getvalue())
+        self.assertIn("selected_mode_config_mismatch", error.getvalue())
 
 
 if __name__ == "__main__":

@@ -115,6 +115,15 @@ class GuardedChassisSession:
     def ping(self):
         return self._call("ping")
 
+    def line_follow_start(self, *args):
+        return self._call("line_follow_start", *args)
+
+    def line_follow_status(self):
+        return self._call("line_follow_status")
+
+    def line_follow_stop(self):
+        return self._call("line_follow_stop")
+
     def close(self):
         self._stop.set()
         if self._thread is not None:

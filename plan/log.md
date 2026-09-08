@@ -1732,6 +1732,29 @@ entry format:
 - No hardware connection, deployment, service action, device configuration write
   or motion occurred. Commit status was pending at log-entry time on `main`.
 
+## 2026-09-08 - Add unified image-to-drawing PC runner
+
+- Added one dry-run-first PC command for image or reviewed JSON input and
+  explicit Baseline, Localized Baseline or Advanced selection. All modes reuse
+  the existing ESP32, MaixCam and robot-arm deployment; no fallback is automatic.
+- Added loopback StrokeReview ingestion with immutable ignored artifacts, input
+  hash/parameters, audit output and an extra real-motion acceptance gate for
+  automatically reviewed images.
+- Generalized multi-window checkpoint execution across all three strategies.
+  Baseline now has a configurable initial JSON-axis offset and accumulates
+  commanded open-loop offsets; both localized modes require fresh AprilTag
+  generations.
+- Enforced physical drawing-board dimensions. Exact size is the default;
+  deliberate legacy resizing must be uniform and explicitly requested, while
+  non-uniform stretching is rejected.
+- L1 passed Python compilation, `git diff --check`, all 385 repository tests and
+  three-mode dry runs of the 439-stroke sample. StrokeReview was not running, so
+  its HTTP path used an injected fake loopback response.
+- No hardware connection, deployment, runtime service action, local device
+  configuration write or motion occurred. AprilTag coordinates, rail origin,
+  rail scale and L4 validation remain outstanding. Commit status was pending at
+  log-entry time on `main`.
+
 ## 2026-09-08 - Rehearse Localized Baseline with independent physical errors
 
 - Replaced the simulator's exact-target relocation assumption with separate

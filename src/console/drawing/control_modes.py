@@ -11,7 +11,13 @@ from .models import DrawingError
 
 _V1_TOP_FIELDS = {"version", "production_ready", "selected_mode", "json_mm_per_rail_mm", "baseline", "advanced"}
 _V2_TOP_FIELDS = _V1_TOP_FIELDS | {"localized_baseline"}
-_BASELINE_FIELDS = {"speed_mm_s", "refresh_ms", "hold_ms", "max_distance_mm", "settle_ms"}
+_BASELINE_FIELDS_V1 = {
+    "speed_mm_s", "refresh_ms", "hold_ms", "max_distance_mm", "settle_ms",
+}
+_BASELINE_FIELDS = {
+    "initial_json_axis_offset_mm", "speed_mm_s", "refresh_ms", "hold_ms",
+    "max_distance_mm", "settle_ms",
+}
 _LOCALIZED_BASELINE_FIELDS = {"poll_ms", "localization_timeout_ms"}
 _ADVANCED_FIELDS = {"poll_ms", "station_timeout_ms", "localization_timeout_ms"}
 
@@ -44,6 +50,7 @@ def _exact(document, fields, label):
 
 @dataclass(frozen=True)
 class BaselineRelocationConfig:
+    initial_json_axis_offset_mm: float
     speed_mm_s: int
     refresh_ms: int
     hold_ms: int
@@ -127,8 +134,15 @@ def parse_drawing_control_config(document):
         raise DrawingError("json_mm_per_rail_mm must not be zero")
 
     baseline = document["baseline"]
-    _exact(baseline, _BASELINE_FIELDS, "baseline")
+    if not isinstance(baseline, dict) or set(baseline) not in (
+        _BASELINE_FIELDS_V1, _BASELINE_FIELDS,
+    ):
+        raise DrawingError("baseline has unexpected or missing fields")
     baseline_config = BaselineRelocationConfig(
+        initial_json_axis_offset_mm=_number(
+            baseline.get("initial_json_axis_offset_mm", 0.0),
+            "baseline.initial_json_axis_offset_mm", -1_000_000.0, 1_000_000.0,
+        ),
         speed_mm_s=_integer(baseline["speed_mm_s"], "baseline.speed_mm_s", 1, 600),
         refresh_ms=_integer(baseline["refresh_ms"], "baseline.refresh_ms", 20, 400),
         hold_ms=_integer(baseline["hold_ms"], "baseline.hold_ms", 100, 500),

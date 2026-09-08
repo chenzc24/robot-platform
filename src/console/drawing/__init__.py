@@ -14,7 +14,8 @@ from .control_modes import (
     relocate_reposition_plan,
 )
 from .loader import load_drawing_job, parse_drawing_document
-from .coordinator import execute_localized_drawing
+from .image_input import process_image_to_artifacts, validate_job_canvas
+from .coordinator import execute_drawing, execute_localized_drawing
 from .executor import (
     DrawingExecutionAdmission,
     DrawingExecutionError,
@@ -46,6 +47,7 @@ __all__ = (
     "build_drawing_plan",
     "create_relocator",
     "execute_drawing_plan",
+    "execute_drawing",
     "execute_drawing_window",
     "execute_localized_drawing",
     "flatten_plan_steps",
@@ -53,9 +55,11 @@ __all__ = (
     "load_drawing_config",
     "load_drawing_control_config",
     "load_drawing_job",
+    "process_image_to_artifacts",
     "parse_drawing_document",
     "parse_drawing_control_config",
     "relocate_reposition_plan",
     "require_ready_arm",
     "simulate_localized_baseline",
+    "validate_job_canvas",
 )

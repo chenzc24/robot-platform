@@ -4,6 +4,7 @@
   "selected_mode": "localized_baseline",
   "json_mm_per_rail_mm": -1.0,
   "baseline": {
+    "initial_json_axis_offset_mm": 0.0,
     "speed_mm_s": 50,
     "refresh_ms": 100,
     "hold_ms": 250,

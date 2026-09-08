@@ -68,6 +68,19 @@ uv run --project apps/strokereview/backend python apps/strokereview/examples/cli
 
 会生成 `strokes.json`、`audit.json` 和完整响应。自定义端口时增加 `--base-url http://127.0.0.1:8100`。
 
+机器人侧统一入口也可以直接接收图片，并调用同一个本机 API：
+
+```powershell
+python app/run_drawing.py path/to/image.png --mode localized_baseline
+```
+
+它从 `drawing.local.json` 读取实体画布宽高并强制传入 StrokeReview，随后
+把正式笔触、审核文档、完整响应和输入哈希保存在忽略的
+`dataset/generated/`。默认只做预演且不连接设备。若要让自动审核结果进入
+真实运动，除任务哈希和现场安全门禁外还必须显式提供
+`--confirm-auto-review`；也可以先在网页中人工修改并导出 JSON，再把 JSON
+交给同一入口。
+
 ## 本地验证
 
 ```powershell

@@ -25,6 +25,7 @@ def config_document(mode="baseline", ready=True, version=1):
         "selected_mode": mode,
         "json_mm_per_rail_mm": -1.0,
         "baseline": {
+            "initial_json_axis_offset_mm": 0,
             "speed_mm_s": 50,
             "refresh_ms": 100,
             "hold_ms": 250,
@@ -168,6 +169,12 @@ class DrawingControlConfigTests(unittest.TestCase):
         self.assertEqual(config.localized_baseline.poll_ms, 100)
         with self.assertRaisesRegex(DrawingError, "not available"):
             parse_drawing_control_config(config_document("localized_baseline"))
+
+    def test_legacy_baseline_defaults_initial_offset_to_zero(self):
+        document = config_document()
+        del document["baseline"]["initial_json_axis_offset_mm"]
+        config = parse_drawing_control_config(document)
+        self.assertEqual(config.baseline.initial_json_axis_offset_mm, 0)
 
 
 class BaselineRelocatorTests(unittest.TestCase):

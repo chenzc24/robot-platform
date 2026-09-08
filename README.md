@@ -108,8 +108,10 @@ line-art review and normalized stroke JSON export on the computer. Run
 The imported application lives under `apps/strokereview/`; robot execution and
 paper-to-arm calibration remain separate from image processing.
 
-For production drawing orchestration, `localized_baseline` is the only exposed
-candidate: direct bounded chassis movement followed by a fresh one-dimensional
-AprilTag lock and exact checkpoint resume. Baseline and Advanced remain internal
-diagnostic/future strategies. Before hardware use, rehearse the coordinate and
-window sequence with `app/localized_baseline_sim.py`.
+`app/run_drawing.py` is the unified PC entry point for image or reviewed JSON
+input and explicit Baseline, Localized Baseline, or Advanced strategy selection.
+Localized Baseline remains the only production candidate: direct bounded
+chassis movement followed by a fresh one-dimensional AprilTag lock and exact
+checkpoint resume. Baseline is open-loop and Advanced remains physically
+unvalidated; neither is an automatic fallback. Before hardware use, rehearse
+the coordinate and window sequence with `app/localized_baseline_sim.py`.

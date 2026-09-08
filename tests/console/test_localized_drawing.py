@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT / "src/console"))
 from drawing import (
     DrawingExecutionAdmission,
     RelocationAdmission,
+    execute_drawing,
     execute_localized_drawing,
 )
 from drawing.config import parse_drawing_config
@@ -164,19 +165,47 @@ def drawing_config():
     })
 
 
-def control_config():
-    return parse_drawing_control_config({
+def control_config(mode="localized_baseline", initial_offset=0):
+    document = {
         "version": 2, "production_ready": True,
-        "selected_mode": "localized_baseline", "json_mm_per_rail_mm": -1.0,
-        "baseline": {"speed_mm_s": 50, "refresh_ms": 100, "hold_ms": 250,
+        "selected_mode": mode, "json_mm_per_rail_mm": -1.0,
+        "baseline": {"initial_json_axis_offset_mm": initial_offset,
+                     "speed_mm_s": 50, "refresh_ms": 100, "hold_ms": 250,
                      "max_distance_mm": 300, "settle_ms": 0},
         "localized_baseline": {"poll_ms": 100, "localization_timeout_ms": 1000},
         "advanced": {"poll_ms": 100, "station_timeout_ms": 1000,
                      "localization_timeout_ms": 1000},
-    })
+    }
+    return parse_drawing_control_config(document)
 
 
 class LocalizedDrawingTests(unittest.TestCase):
+    def test_baseline_uses_configured_initial_offset_and_resumes_checkpoint(self):
+        job = parse_drawing_document({
+            "version": "1.0", "coordinate_space": "normalized",
+            "axis": {"origin": "top-left", "x_positive": "right", "y_positive": "down"},
+            "canvas": {"width": 1, "height": 1, "source_width": 10,
+                       "source_height": 10, "source_aspect_ratio": 1,
+                       "target_width_mm": 100, "target_height_mm": 80},
+            "strokes": [{"id": "s1", "order": 1,
+                         "points": [[0, 0.25], [0.5, 0.5], [1, 0.75]],
+                         "closed": False}],
+        }, "red")
+        clock, arm, chassis = Clock(), Arm(), Chassis()
+        result = execute_drawing(
+            arm, chassis, None, job, drawing_config(), control_config("baseline", 5),
+            DrawingExecutionAdmission(True, True, True, True),
+            RelocationAdmission(True, True, True, "enabled_stopped"),
+            sleep_func=clock.sleep, clock=clock,
+        )
+        self.assertEqual(result["mode"], "baseline")
+        self.assertEqual(result["windows"], 2)
+        self.assertEqual(result["final_generation"], None)
+        self.assertEqual(result["final_json_axis_offset_mm"], -35.0)
+        self.assertEqual(result["relocations"][0]["offset_source"], "commanded_open_loop")
+        self.assertEqual(result["relocations"][0]["json_axis_offset_delta_mm"], -40.0)
+        self.assertIn("velocity", chassis.calls)
+
     def test_window_relocation_and_exact_checkpoint_resume(self):
         job = parse_drawing_document({
             "version": "1.0", "coordinate_space": "normalized",

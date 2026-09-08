@@ -1,4 +1,4 @@
-"""Checkpoint-aware orchestration for the AprilTag/direct-drive mode."""
+"""Checkpoint-aware orchestration for every explicit drawing mode."""
 
 from .control_modes import create_relocator, relocate_reposition_plan
 from .executor import execute_drawing_window
@@ -19,7 +19,7 @@ def _checkpoint(document):
         raise DrawingError("invalid_resume_checkpoint")
 
 
-def execute_localized_drawing(
+def execute_drawing(
     arm,
     chassis,
     localization,
@@ -28,17 +28,21 @@ def execute_localized_drawing(
     control_config,
     execution_admission,
     relocation_admission,
-    task_id,
+    task_id=None,
     event_sink=None,
     sleep_func=None,
     clock=None,
     max_windows=100,
 ):
-    """Execute windows and relocate without retrying or silently changing mode."""
-    if control_config.selected_mode != "localized_baseline":
-        raise DrawingError("localized_baseline_mode_required")
-    if not isinstance(task_id, str) or not task_id.strip():
-        raise DrawingError("localized_task_id_required")
+    """Execute windows and relocate without retrying or changing mode."""
+    mode = control_config.selected_mode
+    uses_localization = mode in ("localized_baseline", "advanced")
+    event_prefix = "localized" if mode == "localized_baseline" else mode
+    if uses_localization:
+        if localization is None:
+            raise DrawingError("%s_mode_requires_localization" % mode)
+        if not isinstance(task_id, str) or not task_id.strip():
+            raise DrawingError("localized_task_id_required")
     if isinstance(max_windows, bool) or not isinstance(max_windows, int) or max_windows < 1:
         raise DrawingError("invalid_max_windows")
     emit = event_sink or (lambda _event: None)
@@ -52,23 +56,29 @@ def execute_localized_drawing(
     )
 
     checkpoint = None
+    offset = control_config.baseline.initial_json_axis_offset_mm
     completed_commands = 0
     relocations = []
     previous_resume = None
     for window_index in range(1, max_windows + 1):
-        snapshot = localization.snapshot()
-        context = snapshot.get("context") or {}
-        generation = snapshot.get("generation")
-        if snapshot.get("state") != "locked" or not context:
-            raise DrawingError("initial_localization_not_locked")
-        if context.get("json_mm_per_rail_mm") != control_config.json_mm_per_rail_mm:
-            raise DrawingError("localized_baseline_localization_scale_mismatch")
-        offset = context.get("json_axis_offset_mm")
+        generation = None
+        if uses_localization:
+            snapshot = localization.snapshot()
+            context = snapshot.get("context") or {}
+            generation = snapshot.get("generation")
+            if snapshot.get("state") != "locked" or not context:
+                raise DrawingError("initial_localization_not_locked")
+            if context.get("json_mm_per_rail_mm") != control_config.json_mm_per_rail_mm:
+                raise DrawingError("%s_localization_scale_mismatch" % mode)
+            offset = context.get("json_axis_offset_mm")
         plan = build_drawing_plan(job, drawing_config, offset, checkpoint)
-        window_task = "%s-w%d" % (task_id.strip()[:70], window_index)
-        localization.begin_task(window_task, generation)
+        window_task = None
+        if uses_localization:
+            window_task = "%s-w%d" % (task_id.strip()[:70], window_index)
+            localization.begin_task(window_task, generation)
         emit({
-            "event": "localized_window_start",
+            "event": "%s_window_start" % event_prefix,
+            "mode": mode,
             "window": window_index,
             "generation": generation,
             "json_axis_offset_mm": offset,
@@ -80,24 +90,27 @@ def execute_localized_drawing(
                 **({} if sleep_func is None else {"sleep_func": sleep_func}),
             )
         except Exception as error:
-            try:
-                localization.finish_task(
-                    window_task, "UNKNOWN", getattr(error, "code", type(error).__name__)
-                )
-            except Exception:
-                pass
+            if uses_localization:
+                try:
+                    localization.finish_task(
+                        window_task, "UNKNOWN", getattr(error, "code", type(error).__name__)
+                    )
+                except Exception:
+                    pass
             raise
-        localization.finish_task(window_task, "DONE", "window_complete")
+        if uses_localization:
+            localization.finish_task(window_task, "DONE", "window_complete")
         completed_commands += result["completed_commands"]
         emit({
-            "event": "localized_window_done",
+            "event": "%s_window_done" % event_prefix,
+            "mode": mode,
             "window": window_index,
             "complete": plan.complete,
             "completed_commands": result["completed_commands"],
         })
         if plan.complete:
             return {
-                "mode": "localized_baseline",
+                "mode": mode,
                 "windows": window_index,
                 "relocations": relocations,
                 "completed_commands": completed_commands,
@@ -111,13 +124,23 @@ def execute_localized_drawing(
             resume["json_axis_offset_mm"],
         )
         if current_resume == previous_resume:
-            raise DrawingError("localized_baseline_no_checkpoint_progress")
+            raise DrawingError("%s_no_checkpoint_progress" % mode)
         previous_resume = current_resume
         checkpoint = _checkpoint(resume["checkpoint"])
+        offset = resume["json_axis_offset_mm"]
         relocations.append(resume["relocation"])
         emit({
-            "event": "localized_relocation_done",
+            "event": "%s_relocation_done" % event_prefix,
+            "mode": mode,
             "window": window_index,
             **resume["relocation"],
         })
-    raise DrawingError("localized_baseline_window_limit")
+    raise DrawingError("%s_window_limit" % mode)
+
+
+def execute_localized_drawing(*args, **kwargs):
+    """Compatibility wrapper for the Localized Baseline entry point."""
+    control_config = args[5] if len(args) > 5 else kwargs.get("control_config")
+    if control_config is None or control_config.selected_mode != "localized_baseline":
+        raise DrawingError("localized_baseline_mode_required")
+    return execute_drawing(*args, **kwargs)

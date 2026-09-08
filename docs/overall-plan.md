@@ -108,13 +108,15 @@ chassis arrives → confirmed stop → vision detection → target validation
 → arm pick → result → arm safe pose → chassis may continue
 ```
 
-Production drawing exposes only `localized_baseline`: the PC commands a bounded
-direct chassis displacement, confirms logical stop, and accepts only a fresh
-one-dimensional AprilTag localization generation before resuming the exact
-drawing checkpoint. `baseline` remains an internal open-loop chassis diagnostic;
-`advanced` remains a future line-following strategy. All share the same deployed
-ESP32, MaixCam and robot-arm services, and a failed run never falls back to
-another strategy. ESP32 owns every strategy's motor watchdog and stop behavior.
+The unified PC drawing entry point accepts image or reviewed JSON input and
+requires explicit selection of `baseline`, `localized_baseline`, or `advanced`.
+`localized_baseline` remains the only production candidate: the PC commands a
+bounded direct chassis displacement, confirms logical stop, and accepts only a
+fresh one-dimensional AprilTag localization generation before resuming the
+exact drawing checkpoint. `baseline` is an open-loop diagnostic and `advanced`
+remains physically unvalidated. All share the same deployed ESP32, MaixCam and
+robot-arm services, and a failed run never falls back to another strategy.
+ESP32 owns every strategy's motor watchdog and stop behavior.
 
 ## 6. Shared Message Contract
 

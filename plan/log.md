@@ -1365,3 +1365,13 @@ entry format:
   arm orientation/workspace checks and L4 task execution remain unverified.
   Commit/push only the scoped state-machine goal and this appended section on
   `target/localization-lock-state-machine`; preserve all prior dirty work.
+
+## 2026-09-08 — StrokeReview source migration
+
+- Goal: import image/SVG processing, line-art review and normalized stroke export into `apps/strokereview/`, with root `stroke-review.cmd` and integration documentation. Old drawing demo and device runtime are outside scope.
+- Isolation: new worktree `E:/Device Network-strokereview`, branch `target/strokereview-migration`, base `0eec878`. Original checkout dirty paths belong to another worker and were not modified, staged or copied.
+- Scope: imported application source/locks/tests/docs, root README/launcher, `docs/console/strokereview.md`, goal plan and this log. Corrected custom backend port propagation to Vite proxy; dependency bootstrap uses locked installation. Four verified model weights remain local and ignored.
+- Validation: L1, backend 48 tests, frontend 33 tests plus production build, model-interface 7 tests and desktop-launcher 5 tests passed. Model-interface tests used the backend Python 3.13 environment; full Python 3.12 model runtime/inference and desktop binary builds were not run. Original 95-entry ZIP manifest and weight hashes verified. Synthetic non-square PNG processed through custom-port frontend proxy and HTTP client, exported two strokes and validated canvas/bounds/order. Dependency deprecation warnings remain.
+- Hardware: no device connection, deployment or movement; no paid cloud calls. Loopback backend/frontend launched for smoke testing and stopped afterward using this worktree's lifecycle state.
+- Review: staged file audit excludes secrets, weights, environments and generated output; imported source adaptations reviewed against the verified archive; `git diff --cached --check` passed.
+- Commit status: prepared for `feat(strokereview): import image-to-stroke review workflow`; separate branch push and review PR to follow. Full robot execution, paper calibration and reconciliation with the other worker remain outside this migration.

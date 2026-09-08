@@ -1,0 +1,26 @@
+{
+  "repository": "lllyasviel/Annotators",
+  "purpose": "Offline Lineart, PiDiNet and HED inference",
+  "files": [
+    {
+      "name": "ControlNetHED.pth",
+      "size": 29444406,
+      "sha256": "5ca93762ffd68a29fee1af9d495bf6aab80ae86f08905fb35472a083a4c7a8fa"
+    },
+    {
+      "name": "table5_pidinet.pth",
+      "size": 2871148,
+      "sha256": "80860ac267258b5f27486e0ef152a211d0b08120f62aeb185a050acc30da486c"
+    },
+    {
+      "name": "sk_model.pth",
+      "size": 17173511,
+      "sha256": "c686ced2a666b4850b4bb6ccf0748031c3eda9f822de73a34b8979970d90f0c6"
+    },
+    {
+      "name": "sk_model2.pth",
+      "size": 17173511,
+      "sha256": "30a534781061f34e83bb9406b4335da4ff2616c95d22a585c1245aa8363e74e0"
+    }
+  ]
+}

@@ -1628,3 +1628,5 @@ entry format:
   device configuration write or motion occurred. The current primitive gateway
   still blocks `cp=100`; this configuration change does not claim runtime blend
   parity.
+- Implementation commit `459d44a` was merged through PR #14 into `main` as
+  `ae8eeab`.

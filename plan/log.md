@@ -1500,3 +1500,29 @@ entry format:
 - No hardware, service, endpoint, deployment, device write or motion occurred.
   Physical rack geometry and guarded runtime execution remain unverified.
 - Commit `0511a72` was pushed to the open PR #9 branch. No merge was performed.
+
+## 2026-09-08 — Add one-dimensional line-following core
+
+- Added a transport-neutral, non-blocking ESP32 `LineFollower` that converts
+  four injected digital samples into bounded rail-axis `vx` and yaw correction
+  while keeping `vy` zero. Its explicit lifecycle is available for a later
+  coordinated task scheduler without changing the current TCP protocol.
+- Required explicit electrical active level, centered sensor pattern and
+  steering sign instead of inheriting contradictory legacy assumptions.
+  Direction, speeds, station debounce, line-loss timeout and maximum step gap
+  are also validated configuration.
+- Line loss and station candidates stop immediately; confirmed station,
+  sustained loss, stale scheduling, invalid input, inactive chassis state and
+  command failures have observable terminal or fault states. A normal stop does
+  not silently clear a latched fault.
+- L1 passed 14 focused line-following tests, all 69 ESP32 tests and the 16-file
+  ESP32 source check. `git diff --check` passed. The first relative-venv command
+  found no environment in the isolated worktree and ran no code; validation was
+  rerun successfully with the primary workspace environment.
+- No GPIO/CAN access, device connection, deployment, service start or motion
+  occurred. Pin mapping, polarity, sensor geometry, steering direction, reverse
+  operation, tuning and stop distance remain unverified. GPIO/runtime/protocol
+  integration and attended L3 validation are separate goals.
+- Work used `target/line-following-core` from current `origin/main` in an
+  isolated worktree, preserving all dirty files in the primary checkout. Commit
+  and push only the declared goal files and this appended section.

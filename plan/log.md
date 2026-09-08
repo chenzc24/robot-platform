@@ -1559,3 +1559,28 @@ entry format:
 - Implementation commit `9fb9291` was pushed and PR #10 was opened against
   `main`: https://github.com/chenzc24/robot-platform/pull/10. No merge or
   deployment was performed.
+
+## 2026-09-08 — Freeze the Baseline deployment candidate
+
+- Merged PR #10 into remote `main` as `301320c`, then built a hash-addressed
+  deployment candidate from that exact commit for ESP32, MaixCam and the robot
+  arm. The candidate is preparation evidence and was not uploaded or started.
+- The manifest covers 14 ESP32 runtime files, 15 MaixCam arm/video files and 7
+  robot-arm source/build inputs. Every repository hash matched. Two independent
+  YOLO-mode DobotStudio builds were byte-identical across `main.py`, `var.py`,
+  `prj.json` and `point.json`; the retained ignored output is
+  `build/baseline-301320c-arm-yolo`.
+- L1 passed 209 relevant tests, the 40-file Python source check, four MaixCam
+  shell syntax checks, candidate/generated JSON parsing and diff check.
+- Removed the fully merged `target/drawing-job-planner`,
+  `target/line-following-core` and `target/drawing-control-modes` branches both
+  locally and remotely, plus their two clean obsolete worktrees. Preserved the
+  dirty primary worktree and draft PR #2's `target/chassis-hold-release-fix`
+  and `target/arm-fault-foundation` dependency chain.
+- The existing arm-only `app/demo.py` and the new Baseline chassis relocator are
+  independently usable layers. They are not yet a guarded full grouped
+  arm/chassis executor; a two-window L4 Baseline drawing must not be claimed or
+  attempted until that PC orchestration boundary is implemented and reviewed.
+- No device connection, upload, controller import, reset, service operation,
+  configuration write or movement occurred. Deployment must begin with backups
+  and L2 checks; any later movement needs a fresh current-test safety gate.

@@ -1,0 +1,62 @@
+{
+  "candidate_id": "baseline-20260908-301320c",
+  "source_commit": "301320c9f1338f5cb12374466f133a1dcc431252",
+  "deployed": false,
+  "esp32": {
+    "mode": "tcp_v3_l3",
+    "line_follow_enabled": false,
+    "files": {
+      "protocol/chassis_tcp_v3.py": "232937833a8cc0e4ad5509f1e02044ea03b66be20b00f6421b7bea6a816fee36",
+      "src/esp32/app/application.py": "4a0eb9b7846dc47075cf8c69f56d9db409f9ec3d70588cd6bd8cb3fb5065ad05",
+      "src/esp32/app/boot.py": "60daf8080021ea4a04cc1748d13a42b847d2b13cfbd902b8a810e201181e73c1",
+      "src/esp32/app/can_runtime.py": "7e8a5188466e6116dcc376a33a9dfc9dc08027b86460d743a0e3b558c8c6bdb4",
+      "src/esp32/app/chassis_control.py": "79bb9c9036b2de347b1e7ff1bb38ab730d97ccbcce8b90c3529c2902d65bc9c2",
+      "src/esp32/app/chassis_motion_tcp_server.py": "1f7606ac3646fab530549b95fa4cba9a00f98427123cf4ba0b8c8baeb37da3bd",
+      "src/esp32/app/chassis_motion_tcp_service.py": "10025ab16a6a9cc4329de112bf83a1ee44869262b90ef4c9e8dae8900ac1b45a",
+      "src/esp32/app/chassis_runtime_factory.py": "c84da1554e72260af2b51d61f135096a378c4c26750862ef74756537d09e8eec",
+      "src/esp32/app/esp_runtime_status.py": "b95309bb1c7c9d1cb7ef8dc6d6e31bb19feec2204ec14638693409a3fcf34ed8",
+      "src/esp32/app/line_follow_runtime.py": "e5a4478f918bed1d7b4b478f06e94df93fba6b1a97153e8eb78857e60b4062e2",
+      "src/esp32/app/line_following.py": "1ce4687f218446b550741eb65970da593bf7a56d8bb9d2965678f322d131aa17",
+      "src/esp32/app/main.py": "394e699e1e5e363791b66722659c6466fbb76335b090899843b4a043b4ddbbcb",
+      "src/esp32/app/motor_bus.py": "5aa4e0ff1083f9c14dbc803a0b44afa371e5add9304b84b96b5c7b8a6f9ce3b4",
+      "src/esp32/app/network_boot.py": "45c1d0e3b577bfc23f8ca47b6e80987e5ba1b3625e236a6454365534ef348fed"
+    }
+  },
+  "maixcam": {
+    "files": {
+      "protocol/control_envelope.py": "c6408047819f2b6d02c7fc795acbd9d8f3760ca5b50d03ff7b179628949729b7",
+      "protocol/motion_link.py": "6f42500980dada915376ef679c8d8780b236c0c009bd436fd568b627d231f395",
+      "src/maixcam/arm/arm_command_server.py": "c22a553e6526392338a6a3848856a9b3e1927965ca883df916ca45da4bf4249b",
+      "src/maixcam/arm/arm_motion_gateway.py": "84cfeb81af60478698b8f736333affb30faf3b48282f7566480b88bfbb9cf3ae",
+      "src/maixcam/arm/command_runtime.py": "8afb699863df984f74f8a6fc4b356732d0d7740984568a21ca759bd29e6778e5",
+      "src/maixcam/arm/command_service.py": "d063629abb494a719d0180da2dcad513cc4badc3063b6b5c8013036f249d4437",
+      "src/maixcam/arm/posix_uart.py": "a8a130df0421c8a9171cc90482a109ba033c562064c7cc747d383008d0b5b749",
+      "src/maixcam/arm/run_arm_command_service.sh": "4ff834826f3cc646c70a2148a42c79043468cb36bee1828c8786e9d422c4c078",
+      "src/maixcam/video/maix_runtime_status.py": "bc0a1d4438942d38e3febd7ede9b879537f86f5d540317eef44aa375977b7fb8",
+      "src/maixcam/video/resource_guard.py": "27bc173c39bc290a41086b418786d4ea8088d69e20906a534ed2ac7552e4e280",
+      "src/maixcam/video/rtsp_server.py": "a3a28902470e8d8fc600a8a7cc44d88cd6ab11b0bb0fa730d5a4fb02c98d9bbb",
+      "src/maixcam/video/start.sh": "3537be992e516206bcda5f4a8a5ddbd844309f5213f3be4ee448d81348b7db40",
+      "src/maixcam/video/status.sh": "311e33c6e2dfcacf96426c2d6d49fbb6658023e2fef694c183e2fef16f824725",
+      "src/maixcam/video/stop.sh": "8057a4716b4b302445420175d6f89be5ca760a9d0ead61816a2cc8341672ad18",
+      "src/maixcam/video/video_service.py": "402e5ac76c2b26053e825ba5a0b8a9ca993df9c35e902e3b306faf4f8c3f6e90"
+    }
+  },
+  "robot_arm": {
+    "build_mode": "yolo",
+    "generated_files": {
+      "main.py": "700dc58d9cb2dcf97762f59b8a3c346d7fd2f4c140b9378c06323e55692dc8b4",
+      "point.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "prj.json": "c95b07f45676116ab8ac1a45cf2fc50c2e471e0c917e6affcdf2d809a0d67527",
+      "var.py": "d7a1f40f680429fc165d33b63d011f428054c557f7c4d36d5ff2bd0b6ed6f6bb"
+    },
+    "source_files": {
+      "protocol/motion_link.py": "6f42500980dada915376ef679c8d8780b236c0c009bd436fd568b627d231f395",
+      "src/robot_arm/runtime/arm_motion_service.py": "7a32bc6cc98e9ee75bde83ddf8eadcaf95660692a73a04294e79fcb7b5e3f69a",
+      "src/robot_arm/runtime/main.py": "a060f759ff9cd581c05f259d5a120f5dfc1e432ed8a866628ab65345601ff70d",
+      "src/robot_arm/runtime/point.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "src/robot_arm/runtime/prj.json": "c95b07f45676116ab8ac1a45cf2fc50c2e471e0c917e6affcdf2d809a0d67527",
+      "src/robot_arm/runtime/var.py": "7e679b7fa9c932c6e0b08b530f8e72bef61dea6b11e579302327e06ce6d0b674",
+      "tools/robot_arm/build_dobotstudio_project.py": "d396a9a2bc028ebc2da17693d8980ab29f22a14e60f22c30ebe680f5ff595640"
+    }
+  }
+}

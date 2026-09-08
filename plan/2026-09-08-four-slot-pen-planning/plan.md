@@ -104,3 +104,8 @@ is read-only for this goal.
 ```text
 feat(console): preserve four-slot pen rack plan
 ```
+
+## Submission
+
+- Implementation commit: `0511a72`
+- Pushed to existing PR #9 targeting `main`; no merge performed.

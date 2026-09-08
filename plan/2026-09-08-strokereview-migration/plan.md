@@ -1,6 +1,6 @@
 # StrokeReview migration
 
-- Status: in-progress
+- Status: completed
 - Owner: Codex, isolated worktree
 - Highest validation: L1; medium software integration risk, no hardware
 
@@ -52,3 +52,11 @@ feat(strokereview): import image-to-stroke review workflow
 
 ## Review boundary
 PR targets the committed source branch target/localization-lock-state-machine to avoid mixing its pre-existing commits into this migration. No merge is performed. Another worker may later change README/log; reconcile additive documentation during review. Full robot orchestration and paper-to-arm calibration are follow-up work outside this migration.
+
+## Publication and final checks
+- Implementation commit `92bfe36` pushed to origin/target/strokereview-migration.
+- Initial staged whitespace check reported inherited trailing spaces/EOF blank lines in seven upstream files. The first commit retained these; a follow-up removes them and corrects the validation record. No semantic changes.
+- Project-scoped stop command succeeded and released the smoke-test ports.
+- Final aggregate diff check is required against base 0eec878, not just the clean working tree.
+- Final aggregate `git diff 0eec878 --check` passed after whitespace cleanup.
+- Draft review PR: https://github.com/chenzc24/robot-platform/pull/6. No merge performed.

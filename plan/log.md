@@ -1661,3 +1661,30 @@ entry format:
   configuration write or motion occurred. Device deployment source was unchanged;
   real camera/rail calibration and attended L4 execution remain outstanding.
 - Commit status: pending at log entry time on `target/localized-baseline`.
+
+## 2026-09-08 - Converge repository to the latest single main
+
+- Made `origin/main` authoritative and fast-forwarded the primary worktree by
+  30 commits from `791e27a` to PR #17 merge commit `e748c4a`. The obsolete
+  `app/demo.py`, including its uncommitted 60% speed experiment, was removed by
+  that upstream history.
+- Before cleanup, created a verified repository-external Git bundle containing
+  all refs and copied every dirty file with matching hashes to
+  `E:\Device Network-backups\2026-09-08-single-main-precleanup`.
+- Closed draft PR #2, removed all auxiliary Git worktree registrations, and
+  deleted `target/arm-fault-foundation`, `target/chassis-hold-release-fix`, and
+  `target/deploy-baseline-devices-20260908` locally and remotely. The unique
+  unmerged commits remain recoverable from the bundle and were not silently
+  merged into the current architecture.
+- Moved the unrelated SVG and four pre-existing untracked diagnosis/planning
+  directories into the recovery backup. Restored dirty editor settings and the
+  earlier local log hunk to committed state before synchronization.
+- Windows could not delete the in-use physical directory
+  `E:\Device Network-deploy-baseline`; Git successfully unregistered it, so it
+  is no longer an active worktree or branch. This filesystem residue remains.
+- L1 passed all 369 tests discovered per test subdirectory: app 7, console 153,
+  development 28, ESP32 76, MaixCam 58, protocol 28, and robot arm 19. No
+  hardware connection, deployment, configuration write, service action or
+  motion occurred.
+- Commit intent: commit and push only this cleanup plan and factual log entry
+  directly on `main`.

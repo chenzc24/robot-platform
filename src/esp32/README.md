@@ -18,8 +18,10 @@ The existing device program is preserved byte-for-byte under `legacy/chassis_202
 `chassis_tcp_service.py` and `chassis_tcp_probe.py` provide an isolated non-motion RCP1/TCP proof. They are not yet a resident startup service and deliberately do not connect to CAN or the safety state machine.
 
 `line_following.py` provides an injected, non-blocking line-following control
-core for a one-dimensional rail. It is not wired into a runtime mode or TCP
-command yet; see the [line-following boundary](../../docs/esp32/line-following.md).
+core for a one-dimensional rail. `line_follow_runtime.py` optionally binds
+explicit local GPIO/tuning, and RCP/TCP v3 exposes start/stop/status without
+removing direct velocity control. Committed configuration keeps it disabled;
+see the [line-following boundary](../../docs/esp32/line-following.md).
 
 Run the local source check from VS Code (`ESP32: Check Python sources`) or PowerShell:
 

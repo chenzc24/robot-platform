@@ -25,6 +25,28 @@
         "hold_ms": 250
       },
       "frame": "{\"version\":3,\"sequence\":7,\"type\":\"VELOCITY\",\"ttl_ms\":500,\"payload\":{\"vx_mm_s\":100,\"vy_mm_s\":0,\"omega_mrad_s\":0,\"hold_ms\":250}}\n"
+    },
+    {
+      "name": "line_follow_start_forward",
+      "type": "LINE_FOLLOW_START",
+      "sequence": 8,
+      "ttl_ms": 1000,
+      "payload": {
+        "direction": 1
+      },
+      "frame": "{\"version\":3,\"sequence\":8,\"type\":\"LINE_FOLLOW_START\",\"ttl_ms\":1000,\"payload\":{\"direction\":1}}\n"
+    },
+    {
+      "name": "line_follow_station",
+      "type": "LINE_FOLLOW_STATE",
+      "sequence": 9,
+      "ttl_ms": 0,
+      "payload": {
+        "state": "station",
+        "reason": "station_confirmed",
+        "direction": 1
+      },
+      "frame": "{\"version\":3,\"sequence\":9,\"type\":\"LINE_FOLLOW_STATE\",\"ttl_ms\":0,\"payload\":{\"state\":\"station\",\"reason\":\"station_confirmed\",\"direction\":1}}\n"
     }
   ]
 }

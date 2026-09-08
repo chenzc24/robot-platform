@@ -69,6 +69,8 @@ class ChassisTcpV3ContractTests(unittest.TestCase):
             ("RELEASE", 1, 1000, {}),
             ("VELOCITY", 1, 500, {"vx_mm_s": 601, "vy_mm_s": 0, "omega_mrad_s": 0, "hold_ms": 250}),
             ("VELOCITY", 1, 500, {"vx_mm_s": 0, "vy_mm_s": 0, "omega_mrad_s": 0, "hold_ms": 99}),
+            ("LINE_FOLLOW_START", 1, 1000, {"direction": 0}),
+            ("LINE_FOLLOW_START", 1, 1000, {"direction": 1, "extra": 0}),
             ("STOP", 1, 1000, {"extra": True}),
             ("PING", 0, 1000, {}),
             ("PING", 1, 99, {}),
@@ -95,6 +97,16 @@ class ChassisTcpV3ContractTests(unittest.TestCase):
         )
         with self.assertRaises(ChassisTcpV3FrameError):
             encode_message("DONE", 5, 0, {"command": "PING", "state": "ready"})
+
+        line_state = {
+            "state": "following",
+            "reason": "centered",
+            "direction": -1,
+        }
+        self.assertEqual(
+            decode_message(encode_message("LINE_FOLLOW_STATE", 6, 0, line_state))["payload"],
+            line_state,
+        )
 
     def test_invalid_json_ascii_and_terminator_are_rejected(self):
         for frame in (b"not-json\n", b'{"version":3}\n', b"\xff\n", b"{}\r\n"):

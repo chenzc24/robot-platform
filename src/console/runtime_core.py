@@ -116,6 +116,9 @@ def dispatch_chassis(client, command, payload=None):
             payload["omega_mrad_s"],
             payload.get("hold_ms", 250),
         ),
+        "line_follow_start": lambda: client.line_follow_start(payload["direction"]),
+        "line_follow_status": lambda: client.line_follow_status(),
+        "line_follow_stop": lambda: client.line_follow_stop(),
         "stop": client.stop,
         "disable": client.disable,
     }

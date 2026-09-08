@@ -7,6 +7,9 @@ COMMAND_PAYLOAD_KEYS = {
     "chassis.status": (),
     "chassis.enable": (),
     "chassis.velocity": ("vx_mm_s", "vy_mm_s", "omega_mrad_s", "hold_ms"),
+    "chassis.line_follow_start": ("direction",),
+    "chassis.line_follow_status": (),
+    "chassis.line_follow_stop": (),
     "chassis.stop": (),
     "chassis.disable": (),
     "arm.ping": (),
@@ -18,6 +21,7 @@ COMMAND_PAYLOAD_KEYS = {
 ADMISSION_REQUIRED = {
     "chassis.enable",
     "chassis.velocity",
+    "chassis.line_follow_start",
     "arm.move_joint",
     "arm.move_linear",
     "arm.gripper",
@@ -98,6 +102,14 @@ class DualSessionMotionRouter:
                     payload["hold_ms"],
                     min(ttl_ms, 5000),
                 )
+            elif name == "chassis.line_follow_start":
+                result = self.chassis.line_follow_start(
+                    payload["direction"], min(ttl_ms, 5000)
+                )
+            elif name == "chassis.line_follow_status":
+                result = self.chassis.line_follow_status(min(ttl_ms, 5000))
+            elif name == "chassis.line_follow_stop":
+                result = self.chassis.line_follow_stop(min(ttl_ms, 5000))
             elif name == "chassis.stop":
                 result = self.chassis.stop(min(ttl_ms, 5000))
             elif name == "chassis.disable":

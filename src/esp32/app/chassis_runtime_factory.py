@@ -65,6 +65,7 @@ def make_l3_service_factory():
     """
     from can_runtime import create_can
     from chassis_control import SafeMecanumChassis
+    from line_follow_runtime import create_line_follower
     from motor_bus import MotorBus
 
     config = _local_config()
@@ -81,6 +82,7 @@ def make_l3_service_factory():
     max_linear_mm_s = _positive_int(config, "L3_MAX_LINEAR_SPEED_MM_S", 600)
     max_omega_mrad_s = _positive_int(config, "L3_MAX_OMEGA_MRAD_S", 800)
     max_hold_ms = _positive_int(config, "L3_MAX_HOLD_MS", 500)
+    line_follower = create_line_follower(config, chassis)
 
     def make_service(transport):
         service = ChassisMotionTcpService(
@@ -92,6 +94,7 @@ def make_l3_service_factory():
             max_linear_mm_s=max_linear_mm_s,
             max_omega_mrad_s=max_omega_mrad_s,
             max_hold_ms=max_hold_ms,
+            line_follower=line_follower,
         )
         if startup_fault is not None:
             service.service_state = "fault"

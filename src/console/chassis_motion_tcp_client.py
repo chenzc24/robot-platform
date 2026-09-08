@@ -70,9 +70,12 @@ class ChassisMotionTcpClient:
 
     @staticmethod
     def _query_response(request_type):
-        return {"HELLO": "WELCOME", "PING": "PONG", "STATUS": "STATE"}.get(
-            request_type
-        )
+        return {
+            "HELLO": "WELCOME",
+            "PING": "PONG",
+            "STATUS": "STATE",
+            "LINE_FOLLOW_STATUS": "LINE_FOLLOW_STATE",
+        }.get(request_type)
 
     def _receive_terminal(self, request_type, sequence):
         expected_query = self._query_response(request_type)
@@ -152,6 +155,17 @@ class ChassisMotionTcpClient:
             },
             ttl_ms,
         )
+
+    def line_follow_start(self, direction, ttl_ms=1000):
+        return self.exchange(
+            "LINE_FOLLOW_START", {"direction": direction}, ttl_ms
+        )
+
+    def line_follow_status(self, ttl_ms=1000):
+        return self.exchange("LINE_FOLLOW_STATUS", {}, ttl_ms)
+
+    def line_follow_stop(self, ttl_ms=1000):
+        return self.exchange("LINE_FOLLOW_STOP", {}, ttl_ms)
 
     def stop(self, ttl_ms=1000):
         return self.exchange("STOP", {}, ttl_ms)

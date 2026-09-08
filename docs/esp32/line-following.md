@@ -1,9 +1,10 @@
 # ESP32 one-dimensional line-following core
 
 `src/esp32/app/line_following.py` is a transport-neutral control layer between
-digital line sensors and `SafeMecanumChassis`. It is intentionally not a
-complete runtime mode: it does not initialize GPIO, create a loop, acquire a
-TCP session, enable motors, or deploy itself.
+digital line sensors and `SafeMecanumChassis`. The optional
+`line_follow_runtime.py` adapter constructs four inputs only when ignored local
+configuration explicitly enables it. The existing chassis TCP scheduler steps
+the follower; no second loop or motor owner is created.
 
 ## Boundary
 
@@ -55,8 +56,8 @@ while follower.status_snapshot()["state"] == "following":
 follower.stop("task_cancelled")
 ```
 
-The production scheduler should call `step()` faster than `max_step_gap_ms` and
-continue polling the existing TCP connection-health safety path. This module
+The production scheduler calls `step()` faster than `max_step_gap_ms` while
+continuing the existing TCP connection-health safety path. The controller
 contains no blocking sleep. Its states are:
 
 - `idle`: no line-following command owner;
@@ -86,9 +87,15 @@ arm safe pose confirmed
 → arm task may begin
 ```
 
-No RCP/TCP command starts this sequence yet. Adding one changes the shared
-protocol and requires coordinated ESP32, PC client, simulator, console, and
-documentation work.
+The PC may request `LINE_FOLLOW_START(direction)`, poll `LINE_FOLLOW_STATUS`,
+and issue `LINE_FOLLOW_STOP`. A service without enabled local GPIO configuration
+rejects those commands. `VELOCITY` remains the independent baseline mode and is
+not removed; the service prevents both owners from being active simultaneously.
+
+Required ignored device settings when enabled include four unique GPIO pins,
+input pull, active level, centered pattern, steering sign, forward/correction
+speeds, station debounce, line-loss timeout and maximum scheduler gap. Committed
+configuration keeps `LINE_FOLLOW_ENABLED = False`.
 
 ## Validation boundary
 

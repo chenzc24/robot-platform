@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "production_ready": false,
+  "selected_mode": "baseline",
+  "json_mm_per_rail_mm": -1.0,
+  "baseline": {
+    "speed_mm_s": 50,
+    "refresh_ms": 100,
+    "hold_ms": 250,
+    "max_distance_mm": 300.0,
+    "settle_ms": 2000
+  },
+  "advanced": {
+    "poll_ms": 100,
+    "station_timeout_ms": 30000,
+    "localization_timeout_ms": 10000
+  }
+}

@@ -51,7 +51,7 @@ class FakeChassis:
 
 
 class LoopbackConnection:
-    def __init__(self, motion_permitted=True):
+    def __init__(self, motion_permitted=True, line_follower=None):
         self.responses = []
         self.sent = []
         self.chassis = FakeChassis()
@@ -60,6 +60,7 @@ class LoopbackConnection:
             self.chassis,
             authorize=fixed_credential_verifier(CREDENTIAL),
             motion_permitted=motion_permitted,
+            line_follower=line_follower,
         )
 
     def write(self, data):
@@ -85,6 +86,41 @@ class ChassisMotionTcpClientTests(unittest.TestCase):
         self.assertEqual(result["type"], "DONE")
         self.assertEqual(result["payload"]["command"], "VELOCITY")
         self.assertEqual(len(connection.sent), 3)
+
+    def test_line_follow_commands_use_explicit_optional_service(self):
+        class Follower:
+            def __init__(self, chassis):
+                self.chassis = chassis
+                self.state = "idle"
+
+            def start(self, direction):
+                self.state = "following"
+                self.direction = direction
+                return self.status_snapshot()
+
+            def stop(self, _reason):
+                self.chassis.stop()
+                self.state = "idle"
+                self.direction = None
+                return self.status_snapshot()
+
+            def step(self, _now_ms):
+                return self.status_snapshot()
+
+            def status_snapshot(self):
+                return {"state": self.state, "reason": self.state, "direction": getattr(self, "direction", None)}
+
+        connection = LoopbackConnection()
+        follower = Follower(connection.chassis)
+        connection.service.line_follower = follower
+        client = ChassisMotionTcpClient(connection)
+        client.hello("console", CREDENTIAL)
+        client.enable()
+        self.assertEqual(client.line_follow_start(1)["payload"]["state"], "following")
+        status = client.line_follow_status()
+        self.assertEqual(status["payload"]["state"], "following")
+        self.assertEqual(status["payload"]["direction"], 1)
+        self.assertEqual(client.line_follow_stop()["payload"]["state"], "enabled_stopped")
 
     def test_authentication_rejection_is_explicit(self):
         client = ChassisMotionTcpClient(LoopbackConnection())
@@ -188,6 +224,32 @@ class DualSessionMotionRouterTests(unittest.TestCase):
         with self.assertRaisesRegex(MotionRouterError, "admission_unavailable"):
             router.dispatch(velocity)
         self.assertEqual(chassis.calls, [])
+        self.assertEqual(arm.calls, [])
+
+    def test_line_follow_start_is_admitted_and_status_routes_to_esp32(self):
+        chassis = FakeSession("esp32")
+        arm = FakeSession("maixcam")
+        admitted = []
+        router = DualSessionMotionRouter(
+            chassis,
+            arm,
+            admission=lambda target, name, payload: admitted.append(
+                (target, name, payload)
+            ) or True,
+        )
+        router.dispatch(
+            message(
+                "chassis",
+                "chassis.line_follow_start",
+                {"direction": 1},
+            )
+        )
+        router.dispatch(message("chassis", "chassis.line_follow_status"))
+        self.assertEqual(
+            [item[0] for item in chassis.calls],
+            ["line_follow_start", "line_follow_status"],
+        )
+        self.assertEqual(admitted[0][1], "chassis.line_follow_start")
         self.assertEqual(arm.calls, [])
 
     def test_target_and_payload_mismatch_are_rejected_before_downstream(self):

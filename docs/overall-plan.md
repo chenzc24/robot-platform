@@ -108,6 +108,14 @@ chassis arrives → confirmed stop → vision detection → target validation
 → arm pick → result → arm safe pose → chassis may continue
 ```
 
+Drawing relocation uses one PC-selected strategy with the same ownership
+boundary. `baseline` commands a bounded direct chassis displacement and treats
+the commanded distance as an open-loop estimate; it does not use line sensors
+or AprilTag. `advanced` asks ESP32 to perform its local sensor-rate line-follow
+loop to a station, then the computer accepts only a fresh AprilTag localization
+generation. ESP32 owns both strategies' motor watchdog and stop behavior. A
+failed advanced run stops and does not silently fall back to baseline.
+
 ## 6. Shared Message Contract
 
 Replace legacy raw strings with a versioned envelope containing source, target, message type, sequence, timestamp, TTL, payload, and transport framing/CRC where needed. The common envelope does not make device command sets identical; MaixCam must parse and convert them.

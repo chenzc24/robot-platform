@@ -4,6 +4,7 @@ import time
 
 from chassis_tcp_v3 import (
     CONTROL_TYPES,
+    QUERY_TYPES,
     MessageStreamDecoder,
     encode_message,
 )
@@ -46,6 +47,15 @@ def _idle_read_error(error):
     return code in (11, 110, 116, 10035)
 
 
+def _safe_token(value, fallback="unknown"):
+    text = str(value or fallback).lower()
+    allowed = "abcdefghijklmnopqrstuvwxyz0123456789_.-"
+    text = "".join(character if character in allowed else "_" for character in text)
+    if not text or text[0] < "a" or text[0] > "z":
+        text = fallback
+    return text[:64]
+
+
 def fixed_credential_verifier(expected_credential):
     """Build a constant-work local verifier without logging either value."""
     if not isinstance(expected_credential, str) or not expected_credential:
@@ -86,6 +96,7 @@ class ChassisMotionTcpService:
         max_linear_mm_s=None,
         max_omega_mrad_s=None,
         max_hold_ms=None,
+        line_follower=None,
     ):
         self.transport = transport
         self.chassis = chassis
@@ -104,6 +115,7 @@ class ChassisMotionTcpService:
         self.max_hold_ms = self._optional_positive_int(
             max_hold_ms, "max_hold_ms"
         )
+        self.line_follower = line_follower
         self.decoder = MessageStreamDecoder()
         self.service_state = "safe_idle"
         self.error_code = None
@@ -159,6 +171,10 @@ class ChassisMotionTcpService:
     def _stop_and_disable(self):
         failed = False
         try:
+            self._stop_line_follower("force_safe")
+        except Exception:
+            failed = True
+        try:
             self.chassis.stop()
         except Exception:
             failed = True
@@ -182,6 +198,28 @@ class ChassisMotionTcpService:
             "hold_remaining_ms": min(500, hold_remaining_ms),
             "last_error": self.error_code or "none",
         }
+
+    def _line_follow_payload(self):
+        if self.line_follower is None:
+            raise ChassisMotionRequestError("line_follow_unavailable")
+        snapshot = self.line_follower.status_snapshot()
+        direction = snapshot.get("direction")
+        if direction not in (-1, 1):
+            direction = 0
+        return {
+            "state": _safe_token(snapshot.get("state")),
+            "reason": _safe_token(snapshot.get("reason")),
+            "direction": direction,
+        }
+
+    def _stop_line_follower(self, reason):
+        if self.line_follower is None:
+            return
+        state = self.line_follower.status_snapshot().get("state")
+        if state in ("following", "station"):
+            self.line_follower.stop(reason)
+        elif state == "fault":
+            self.line_follower.reset_fault()
 
     def _authenticate(self, request):
         if self.authenticated:
@@ -237,6 +275,14 @@ class ChassisMotionTcpService:
                 return (self._response(request, "PONG", {"protocol": 3}),)
             if request_type == "STATUS":
                 return (self._response(request, "STATE", self._status_payload(now_ms)),)
+            if request_type == "LINE_FOLLOW_STATUS":
+                return (
+                    self._response(
+                        request,
+                        "LINE_FOLLOW_STATE",
+                        self._line_follow_payload(),
+                    ),
+                )
             if request_type == "ENABLE":
                 if not self.motion_permitted:
                     raise ChassisMotionRequestError("motion_disabled")
@@ -253,6 +299,12 @@ class ChassisMotionTcpService:
                     "moving",
                 ):
                     raise ChassisMotionRequestError("invalid_chassis_state")
+                if (
+                    self.line_follower is not None
+                    and self.line_follower.status_snapshot().get("state")
+                    == "following"
+                ):
+                    raise ChassisMotionRequestError("line_follow_active")
                 payload = request["payload"]
                 if payload["hold_ms"] > request["ttl_ms"]:
                     raise ChassisMotionRequestError("hold_exceeds_ttl")
@@ -282,9 +334,30 @@ class ChassisMotionTcpService:
                 self._active_velocity_sequence = request["sequence"]
                 self.error_code = None
                 return self._phases(request, "moving")
+            if request_type == "LINE_FOLLOW_START":
+                if not self.motion_permitted:
+                    raise ChassisMotionRequestError("motion_disabled")
+                if self.line_follower is None:
+                    raise ChassisMotionRequestError("line_follow_unavailable")
+                if self._hold_deadline_ms is not None:
+                    raise ChassisMotionRequestError("direct_velocity_active")
+                snapshot = self.line_follower.start(request["payload"]["direction"])
+                if snapshot.get("state") != "following":
+                    raise ChassisMotionRequestError("line_follow_start_failed")
+                self.error_code = None
+                return self._phases(request, "following")
+            if request_type == "LINE_FOLLOW_STOP":
+                if self.line_follower is None:
+                    raise ChassisMotionRequestError("line_follow_unavailable")
+                self._stop_line_follower("remote_stop")
+                self.error_code = None
+                return self._phases(
+                    request, getattr(self.chassis, "state", "unknown")
+                )
             if request_type in ("STOP", "DISABLE"):
                 self._hold_deadline_ms = None
                 self._active_velocity_sequence = None
+                self._stop_line_follower("chassis_%s" % request_type.lower())
                 if request_type == "STOP":
                     self.chassis.stop()
                 else:
@@ -348,11 +421,7 @@ class ChassisMotionTcpService:
             return (), errors
         responses = []
         for message in messages:
-            if message["type"] not in (
-                "HELLO",
-                "PING",
-                "STATUS",
-            ) + CONTROL_TYPES:
+            if message["type"] not in QUERY_TYPES + CONTROL_TYPES:
                 generated = self._error(message, "unsupported_direction")
                 self._write_responses(generated)
                 responses.extend(generated)
@@ -373,33 +442,47 @@ class ChassisMotionTcpService:
         hold_expired = self._hold_deadline_ms is not None and _ticks_diff(
             now_ms, self._hold_deadline_ms
         ) >= 0
-        if not health_expired and not hold_expired:
-            return None
-        reason = "health_timeout" if health_expired else "velocity_hold_expired"
-        sequence = self._active_velocity_sequence
-        self._hold_deadline_ms = None
-        self._active_velocity_sequence = None
-        try:
-            if health_expired:
-                if not self.force_safe(reason):
-                    raise RuntimeError("safe_output_failed")
-            else:
-                self.chassis.stop()
-                self.error_code = reason
-            return {
-                "sequence": sequence,
-                "event": reason,
-                "state": getattr(self.chassis, "state", "unknown"),
-            }
-        except Exception:
-            self._stop_and_disable()
-            self.service_state = "fault"
-            self.error_code = "watchdog_stop_failed"
-            return {
-                "sequence": sequence,
-                "event": "watchdog_stop_failed",
-                "state": "fault",
-            }
+        if health_expired or hold_expired:
+            reason = "health_timeout" if health_expired else "velocity_hold_expired"
+            sequence = self._active_velocity_sequence
+            self._hold_deadline_ms = None
+            self._active_velocity_sequence = None
+            try:
+                if health_expired:
+                    if not self.force_safe(reason):
+                        raise RuntimeError("safe_output_failed")
+                else:
+                    self.chassis.stop()
+                    self.error_code = reason
+                return {
+                    "sequence": sequence,
+                    "event": reason,
+                    "state": getattr(self.chassis, "state", "unknown"),
+                }
+            except Exception:
+                self._stop_and_disable()
+                self.service_state = "fault"
+                self.error_code = "watchdog_stop_failed"
+                return {
+                    "sequence": sequence,
+                    "event": "watchdog_stop_failed",
+                    "state": "fault",
+                }
+        if self.line_follower is not None:
+            state = self.line_follower.status_snapshot().get("state")
+            if state == "following":
+                try:
+                    snapshot = self.line_follower.step(now_ms)
+                except Exception:
+                    self.force_safe("line_follow_scheduler_failed")
+                    return {
+                        "sequence": None,
+                        "event": "line_follow_scheduler_failed",
+                        "state": "fault",
+                    }
+                if snapshot.get("state") == "fault":
+                    self.error_code = "line_follow_fault"
+        return None
 
     def force_safe(self, error_code):
         """Best-effort local stop/disable and require connection replacement."""

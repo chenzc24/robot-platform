@@ -1529,3 +1529,30 @@ entry format:
 - Implementation commit `e382767` is pushed and synchronized on the target
   branch. PR #8 (`https://github.com/chenzc24/robot-platform/pull/8`) targets
   `main`; no merge or deployment was performed.
+
+## 2026-09-08 — Add baseline and advanced drawing relocation modes
+
+- Implemented two explicit PC-selected relocation strategies at the existing
+  drawing planner barrier. Baseline performs bounded refreshed direct velocity,
+  always attempts STOP, and records only a commanded open-loop offset. Advanced
+  requests ESP32-local line following to a station and then requires a fresh
+  locked AprilTag localization generation as the offset source.
+- Extended optional chassis TCP v3 commands, the PC client/router/runtime
+  surface, and the ESP32 service scheduler for line-follow start/status/stop.
+  Direct velocity and line-follow ownership cannot overlap; failed advanced
+  operation never silently falls back to baseline.
+- Added strict local drawing-control configuration. Committed examples keep
+  `production_ready` and `LINE_FOLLOW_ENABLED` false; actual pins, electrical
+  polarity, steering sign and tuning remain ignored local configuration.
+- L1 passed 60 focused tests and 340 applicable regression tests: protocol 28,
+  ESP32 76, app 22, console 111, developer tools 28, MaixCam 57 and robot arm
+  18. Two existing PySide6 GUI modules were excluded because PySide6 is absent.
+  The 19-path source check, both changed JSON parses and diff check passed.
+- The workspace validator still reports pre-existing non-ASCII source lines in
+  `src/console/ui/views.py` and ignored bytecode caches produced by tests; none
+  is in this goal's staged scope.
+- No hardware, service, network endpoint, deployment, GPIO/CAN access, device
+  write or movement occurred. Attended L3/L4 validation is still required for
+  both open-loop distance calibration and the advanced sensor/station path.
+- Submit only the declared files on `target/drawing-control-modes`, preserving
+  the dirty primary worktree and its unrelated user/collaborator changes.

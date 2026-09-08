@@ -70,6 +70,40 @@ class FakeChassis:
         self.state = "disabled"
 
 
+class FakeFollower:
+    def __init__(self, chassis):
+        self.chassis = chassis
+        self.state = "idle"
+        self.reason = "not_started"
+        self.direction = None
+        self.steps = 0
+
+    def start(self, direction):
+        self.state = "following"
+        self.reason = "awaiting_sensor_sample"
+        self.direction = direction
+        return self.status_snapshot()
+
+    def step(self, _now_ms):
+        self.steps += 1
+        self.reason = "centered"
+        return self.status_snapshot()
+
+    def stop(self, reason):
+        self.chassis.stop()
+        self.state = "idle"
+        self.reason = reason
+        self.direction = None
+        return self.status_snapshot()
+
+    def status_snapshot(self):
+        return {
+            "state": self.state,
+            "reason": self.reason,
+            "direction": self.direction,
+        }
+
+
 class ServiceHarness:
     def __init__(
         self,
@@ -159,6 +193,68 @@ class ChassisMotionTcpServiceTests(unittest.TestCase):
         self.assertNotEqual(harness.chassis.events[-2:], ["stop", "disable"])
         self.assertEqual(harness.chassis.state, "enabled_stopped")
         self.assertTrue(harness.service.authenticated)
+
+    def test_optional_line_follower_is_started_polled_reported_and_stopped(self):
+        harness = ServiceHarness(motion_permitted=True)
+        follower = FakeFollower(harness.chassis)
+        harness.service.line_follower = follower
+        harness.authenticate()
+        harness.feed("ENABLE", {})
+        start = harness.feed("LINE_FOLLOW_START", {"direction": 1})[-1]
+        self.assertEqual(start["payload"], {"command": "LINE_FOLLOW_START", "state": "following"})
+        harness.service.poll_safety(harness.clock.now)
+        self.assertEqual(follower.steps, 1)
+        state = harness.feed("LINE_FOLLOW_STATUS", {})[-1]
+        self.assertEqual(state["type"], "LINE_FOLLOW_STATE")
+        self.assertEqual(state["payload"]["direction"], 1)
+        blocked = harness.feed(
+            "VELOCITY",
+            {"vx_mm_s": 10, "vy_mm_s": 0, "omega_mrad_s": 0, "hold_ms": 250},
+            500,
+        )[-1]
+        self.assertEqual(blocked["payload"]["code"], "line_follow_active")
+        stopped = harness.feed("LINE_FOLLOW_STOP", {})[-1]
+        self.assertEqual(stopped["payload"]["state"], "enabled_stopped")
+
+    def test_line_follow_requests_reject_when_local_runtime_is_unavailable(self):
+        harness = ServiceHarness(motion_permitted=True)
+        harness.authenticate()
+        harness.feed("ENABLE", {})
+        for request_type, payload in (
+            ("LINE_FOLLOW_START", {"direction": 1}),
+            ("LINE_FOLLOW_STATUS", {}),
+            ("LINE_FOLLOW_STOP", {}),
+        ):
+            response = harness.feed(request_type, payload)[-1]
+            self.assertEqual(response["payload"]["code"], "line_follow_unavailable")
+
+    def test_line_follow_scheduler_exception_forces_stop_disable_and_close(self):
+        class BrokenFollower(FakeFollower):
+            def step(self, _now_ms):
+                raise RuntimeError("broken")
+
+        harness = ServiceHarness(motion_permitted=True)
+        harness.service.line_follower = BrokenFollower(harness.chassis)
+        harness.authenticate()
+        harness.feed("ENABLE", {})
+        harness.feed("LINE_FOLLOW_START", {"direction": 1})
+        event = harness.service.poll_safety(harness.clock.now)
+        self.assertEqual(event["event"], "line_follow_scheduler_failed")
+        self.assertEqual(harness.chassis.events[-2:], ["stop", "disable"])
+        self.assertTrue(harness.service.close_required)
+
+    def test_health_timeout_precedes_any_new_line_follow_drive_decision(self):
+        harness = ServiceHarness(motion_permitted=True, health_timeout_ms=300)
+        follower = FakeFollower(harness.chassis)
+        harness.service.line_follower = follower
+        harness.authenticate()
+        harness.feed("ENABLE", {})
+        harness.feed("LINE_FOLLOW_START", {"direction": 1})
+        harness.clock.advance(300)
+        event = harness.service.poll_safety(harness.clock.now)
+        self.assertEqual(event["event"], "health_timeout")
+        self.assertEqual(follower.steps, 0)
+        self.assertEqual(harness.chassis.events[-2:], ["stop", "disable"])
 
     def test_runtime_velocity_limits_reject_before_any_drive(self):
         harness = ServiceHarness(motion_permitted=True)

@@ -18,15 +18,25 @@ MAX_OMEGA_MRAD_S = 800
 MIN_CREDENTIAL_BYTES = 16
 MAX_CREDENTIAL_BYTES = 64
 
-QUERY_TYPES = ("HELLO", "PING", "STATUS")
+QUERY_TYPES = ("HELLO", "PING", "STATUS", "LINE_FOLLOW_STATUS")
 CONTROL_TYPES = (
     "ENABLE",
     "VELOCITY",
+    "LINE_FOLLOW_START",
+    "LINE_FOLLOW_STOP",
     "STOP",
     "DISABLE",
 )
 REQUEST_TYPES = QUERY_TYPES + CONTROL_TYPES
-RESPONSE_TYPES = ("WELCOME", "PONG", "STATE", "ACK", "DONE", "ERROR")
+RESPONSE_TYPES = (
+    "WELCOME",
+    "PONG",
+    "STATE",
+    "LINE_FOLLOW_STATE",
+    "ACK",
+    "DONE",
+    "ERROR",
+)
 VALID_TYPES = REQUEST_TYPES + RESPONSE_TYPES
 
 
@@ -98,9 +108,23 @@ def _validate_payload(message_type, payload):
             "client": _token(payload["client"], "invalid_client", 32),
             "credential": _credential(payload["credential"]),
         }
-    if message_type in ("PING", "STATUS", "ENABLE", "STOP", "DISABLE"):
+    if message_type in (
+        "PING",
+        "STATUS",
+        "LINE_FOLLOW_STATUS",
+        "ENABLE",
+        "LINE_FOLLOW_STOP",
+        "STOP",
+        "DISABLE",
+    ):
         _exact(payload, ())
         return {}
+    if message_type == "LINE_FOLLOW_START":
+        _exact(payload, ("direction",))
+        direction = _integer(payload["direction"], -1, 1, "invalid_direction")
+        if direction == 0:
+            raise ChassisTcpV3FrameError("invalid_direction")
+        return {"direction": direction}
     if message_type == "VELOCITY":
         _exact(payload, ("vx_mm_s", "vy_mm_s", "omega_mrad_s", "hold_ms"))
         return {
@@ -156,6 +180,15 @@ def _validate_payload(message_type, payload):
             ),
             "last_error": _token(payload["last_error"], "invalid_state", 64, True),
         }
+    if message_type == "LINE_FOLLOW_STATE":
+        _exact(payload, ("state", "reason", "direction"))
+        return {
+            "state": _token(payload["state"], "invalid_state", 32),
+            "reason": _token(payload["reason"], "invalid_state", 64),
+            "direction": _integer(
+                payload["direction"], -1, 1, "invalid_direction"
+            ),
+        }
     if message_type in ("ACK", "DONE"):
         _exact(payload, ("command", "state"))
         command = payload["command"]
@@ -209,8 +242,18 @@ def _payload_text(message_type, payload):
             payload["client"],
             payload["credential"],
         )
-    if message_type in ("PING", "STATUS", "ENABLE", "STOP", "DISABLE"):
+    if message_type in (
+        "PING",
+        "STATUS",
+        "LINE_FOLLOW_STATUS",
+        "ENABLE",
+        "LINE_FOLLOW_STOP",
+        "STOP",
+        "DISABLE",
+    ):
         return "{}"
+    if message_type == "LINE_FOLLOW_START":
+        return '{"direction":%d}' % payload["direction"]
     if message_type == "VELOCITY":
         return (
             '{"vx_mm_s":%d,"vy_mm_s":%d,"omega_mrad_s":%d,"hold_ms":%d}'
@@ -240,6 +283,12 @@ def _payload_text(message_type, payload):
                 payload["hold_remaining_ms"],
                 payload["last_error"],
             )
+        )
+    if message_type == "LINE_FOLLOW_STATE":
+        return '{"state":"%s","reason":"%s","direction":%d}' % (
+            payload["state"],
+            payload["reason"],
+            payload["direction"],
         )
     if message_type in ("ACK", "DONE"):
         return '{"command":"%s","state":"%s"}' % (

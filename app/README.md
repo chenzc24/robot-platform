@@ -1,5 +1,9 @@
 # PC drawing demo
 
+For the newer grouped Dobot delivery, use the separate preview-only importer and
+planner documented in [PC grouped drawing planning](../docs/robot-arm/pc-drawing-task.md).
+`drawing_task.py` has no execution path and does not replace this attended demo.
+
 `demo.py` reads `dataset/strokes_railway_new.json` and sends existing
 `MaixCamArmClient` commands through PC -> MaixCam -> TCP232 -> Dobot LAN1.
 It does not deploy a new controller project or use LAN2 as a runtime route.

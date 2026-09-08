@@ -1449,3 +1449,31 @@ entry format:
   migration worktree and local migration/cleanup refs. Local main cannot be
   fast-forwarded safely while another worker has an overlapping uncommitted
   `plan/log.md`; its files remain untouched.
+
+## 2026-09-08 — Offline grouped Dobot drawing importer and planner
+
+- Audited `E:\Downloads\机械臂代码——1代.zip` as read-only input and implemented a
+  literal-only `var.py` importer, strict grouped/flat drawing loaders, explicit
+  local geometry and pen mapping, and a deterministic preview/checkpoint
+  planner. The CLI has no execute, host or port option and imports no device
+  client.
+- Converted the supplied 5-group, 439-stroke, 3,903-point drawing into ignored
+  `dataset/dobot-generation-1.json`. The importer rejects executable Python,
+  ambiguous ZIP contents and accidental output overwrite. No dataset or archive
+  is included in Git.
+- The planner applies the configured normalized-to-User-Y/Z mapping plus a
+  scalar JSON-axis offset, prechecks endpoints, and emits an explicit safe-home
+  reposition barrier with a resumable checkpoint. Pen selection remains an
+  abstract slot operation; it is not a rack-motion implementation.
+- L1 passed 307 applicable Python tests and the repository source checker for 7
+  changed Python files. Two existing PySide6 GUI test modules were not run
+  because PySide6 is absent in this worktree; root discovery found zero tests
+  due to the repository layout and was not counted. JSON and source-boundary
+  checks passed.
+- No hardware, service, network endpoint, deployment, device write or motion was
+  used. Physical pen mappings/poses, User/Tool geometry, reachability, DI wait,
+  buffered motion and the 210 mm metadata versus 150 mm runtime discrepancy
+  remain blocked for later reviewed goals and L3/L4 validation.
+- Submit only the declared files on `target/drawing-job-planner`; preserve the
+  primary worktree's existing dirty files and leave its uncommitted master
+  migration plan for user review.

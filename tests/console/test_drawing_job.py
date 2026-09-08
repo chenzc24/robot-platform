@@ -1,0 +1,243 @@
+"""Pure tests for grouped drawing validation, geometry, and checkpoints."""
+
+import copy
+import json
+import pathlib
+import sys
+import tempfile
+import unittest
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "src" / "console"))
+
+from drawing.config import parse_drawing_config
+from drawing.loader import canonical_document, parse_drawing_document
+from drawing.models import DrawingError, PlanCheckpoint
+from drawing.planner import build_drawing_plan
+
+
+def canvas():
+    return {
+        "width": 1,
+        "height": 1,
+        "source_width": 100,
+        "source_height": 100,
+        "source_aspect_ratio": 1,
+        "target_width_mm": 210,
+        "target_height_mm": 210,
+    }
+
+
+def stroke(stroke_id="s1", order=1, points=None):
+    return {
+        "id": stroke_id,
+        "order": order,
+        "points": points or [[0, 0.25], [0.5, 0.5], [1, 0.75]],
+        "closed": False,
+    }
+
+
+def grouped_document():
+    return {
+        "version": "1.0",
+        "coordinate_space": "normalized",
+        "axis": {
+            "origin": "top-left",
+            "x_positive": "right",
+            "y_positive": "down",
+        },
+        "canvas": canvas(),
+        "groups": [
+            {"name": "red", "strokes": [stroke()]},
+            {
+                "name": "blue",
+                "strokes": [stroke("s2", 2, [[0.2, 0.2], [0.3, 0.3]])],
+            },
+        ],
+    }
+
+
+def config_document(**geometry_overrides):
+    geometry = {
+        "canvas_width_mm": 100,
+        "canvas_height_mm": 80,
+        "user_y_offset_mm": -50,
+        "user_z_offset_mm": -40,
+        "home_pose_user_y_mm": 0,
+        "reachable_user_y_min_mm": -60,
+        "reachable_user_y_max_mm": 60,
+        "pen_travel_x_mm": 20,
+        "home_joints_deg": [-120, 0, -90, -90, -30, 90],
+        "user": 0,
+        "tool": 0,
+        "draw_speed_pct": 12,
+        "travel_speed_pct": 5,
+        "accel_pct": 5,
+    }
+    geometry.update(geometry_overrides)
+    return {
+        "production_ready": False,
+        "flat_group_name": "default",
+        "group_pen_slots": {"default": "P0", "red": "P1", "blue": "P2"},
+        "geometry": geometry,
+    }
+
+
+class DrawingLoaderTests(unittest.TestCase):
+    def test_grouped_and_flat_shapes_normalize_deterministically(self):
+        grouped = grouped_document()
+        grouped["groups"][0]["strokes"] = [
+            stroke("later", 2),
+            stroke("earlier", 1),
+        ]
+        job = parse_drawing_document(grouped)
+        self.assertEqual(job.source_shape, "grouped")
+        self.assertEqual([item.id for item in job.groups[0].strokes], ["earlier", "later"])
+        self.assertEqual(job.stroke_count, 3)
+        self.assertEqual(job.point_count, 8)
+
+        flat = {key: value for key, value in grouped.items() if key != "groups"}
+        flat["strokes"] = [stroke()]
+        flat_job = parse_drawing_document(flat, flat_group_name="ink")
+        self.assertEqual(flat_job.source_shape, "flat")
+        self.assertEqual(flat_job.groups[0].name, "ink")
+        self.assertEqual(flat_job.canonical_sha256, parse_drawing_document(flat, "ink").canonical_sha256)
+
+    def test_canonical_output_is_grouped_and_json_serializable(self):
+        job = parse_drawing_document(grouped_document())
+        output = canonical_document(job)
+        self.assertIn("groups", output)
+        self.assertNotIn("strokes", output)
+        json.dumps(output, ensure_ascii=False)
+
+    def test_rejects_unknown_fields_bad_axes_points_and_duplicate_ids(self):
+        cases = []
+        extra = grouped_document()
+        extra["unexpected"] = True
+        cases.append(extra)
+        bad_axis = grouped_document()
+        bad_axis["axis"]["y_positive"] = "up"
+        cases.append(bad_axis)
+        bad_point = grouped_document()
+        bad_point["groups"][0]["strokes"][0]["points"][0] = [1.1, 0]
+        cases.append(bad_point)
+        duplicate = grouped_document()
+        duplicate["groups"][1]["strokes"][0]["id"] = "s1"
+        cases.append(duplicate)
+        for document in cases:
+            with self.subTest(document=document), self.assertRaises(DrawingError):
+                parse_drawing_document(document)
+
+
+class DrawingConfigTests(unittest.TestCase):
+    def test_requires_complete_geometry_and_explicit_nonempty_pen_slots(self):
+        config = parse_drawing_config(config_document())
+        self.assertEqual(config.pen_slot("red"), "P1")
+        self.assertFalse(config.production_ready)
+        for mutation in ("missing", "blank", "range", "speed"):
+            document = config_document()
+            if mutation == "missing":
+                del document["geometry"]["home_pose_user_y_mm"]
+            elif mutation == "blank":
+                document["group_pen_slots"]["red"] = ""
+            elif mutation == "range":
+                document["geometry"]["reachable_user_y_min_mm"] = 60
+            else:
+                document["geometry"]["draw_speed_pct"] = 101
+            with self.subTest(mutation=mutation), self.assertRaises(DrawingError):
+                parse_drawing_config(document)
+
+
+class DrawingPlannerTests(unittest.TestCase):
+    def setUp(self):
+        self.job = parse_drawing_document(grouped_document())
+        self.config = parse_drawing_config(config_document())
+
+    def test_geometry_matches_explicit_user_yz_mapping_and_counts(self):
+        plan = build_drawing_plan(self.job, self.config)
+        self.assertTrue(plan.complete)
+        self.assertEqual(plan.statistics["planned_strokes"], 2)
+        self.assertEqual(plan.statistics["planned_points"], 5)
+        self.assertEqual(plan.statistics["arm_commands"], 11)
+        self.assertEqual(plan.statistics["pen_changes"], 2)
+        self.assertEqual(plan.statistics["job_bounds"]["relative_user_y_mm"], [-50.0, 50.0])
+        self.assertEqual(plan.statistics["job_bounds"]["relative_user_z_mm"], [-20.0, 24.0])
+        moves = [step for step in plan.steps if step.kind == "arm.relative"]
+        self.assertEqual(moves[0].payload["translation_mm"], [0.0, -50.0, 20.0])
+        self.assertEqual(moves[1].payload["translation_mm"], [-20.0, 0.0, 0.0])
+        self.assertEqual(moves[2].payload["translation_mm"], [0.0, 50.0, -20.0])
+        self.assertEqual(moves[3].payload["translation_mm"], [0.0, 50.0, -20.0])
+        self.assertEqual(moves[4].payload["translation_mm"], [20.0, 0.0, 0.0])
+
+    def test_json_axis_offset_changes_anchor_not_segment_delta(self):
+        plan = build_drawing_plan(self.job, self.config, json_axis_offset_mm=10)
+        moves = [step for step in plan.steps if step.kind == "arm.relative"]
+        self.assertEqual(moves[0].payload["translation_mm"][1], -40.0)
+        self.assertEqual(moves[2].payload["translation_mm"][1], 50.0)
+
+    def test_first_point_outside_range_blocks_before_pen_or_arm_steps(self):
+        config = parse_drawing_config(
+            config_document(home_pose_user_y_mm=200)
+        )
+        plan = build_drawing_plan(self.job, config)
+        self.assertFalse(plan.complete)
+        self.assertEqual([step.kind for step in plan.steps], ["reposition.required"])
+        self.assertEqual(plan.next_checkpoint, PlanCheckpoint(0, 0, 0))
+
+    def test_midstroke_barrier_lifts_homes_and_resumes_from_anchor(self):
+        config = parse_drawing_config(
+            config_document(
+                reachable_user_y_min_mm=-60,
+                reachable_user_y_max_mm=40,
+            )
+        )
+        plan = build_drawing_plan(self.job, config)
+        self.assertFalse(plan.complete)
+        self.assertEqual(plan.next_checkpoint, PlanCheckpoint(0, 0, 2))
+        self.assertEqual(plan.steps[-3].payload["purpose"], "pen_up")
+        self.assertEqual(plan.steps[-2].payload["purpose"], "reposition_safe_pose")
+        barrier = plan.steps[-1].payload
+        self.assertEqual(barrier["required_json_axis_offset_delta_range_mm"], [-60.0, -10.0])
+        self.assertEqual(barrier["suggested_json_axis_offset_delta_mm"], -35.0)
+
+        resumed = build_drawing_plan(
+            self.job,
+            config,
+            json_axis_offset_mm=-10,
+            checkpoint=plan.next_checkpoint,
+        )
+        first_anchor = next(
+            step for step in resumed.steps if step.payload.get("purpose") == "stroke_anchor"
+        )
+        self.assertIn("anchor point 1", first_anchor.label)
+        self.assertEqual(first_anchor.payload["translation_mm"][1], -10.0)
+
+    def test_segment_wider_than_range_is_rejected(self):
+        document = grouped_document()
+        document["groups"] = [
+            {
+                "name": "red",
+                "strokes": [stroke("wide", 1, [[0, 0.25], [1, 0.75]])],
+            }
+        ]
+        job = parse_drawing_document(document)
+        config = parse_drawing_config(
+            config_document(
+                reachable_user_y_min_mm=-60,
+                reachable_user_y_max_mm=20,
+            )
+        )
+        with self.assertRaisesRegex(DrawingError, "segment is wider"):
+            build_drawing_plan(job, config)
+
+    def test_missing_group_mapping_rejects_before_plan(self):
+        document = config_document()
+        del document["group_pen_slots"]["blue"]
+        config = parse_drawing_config(document)
+        with self.assertRaisesRegex(DrawingError, "no pen-slot mapping"):
+            build_drawing_plan(self.job, config)
+
+
+if __name__ == "__main__":
+    unittest.main()

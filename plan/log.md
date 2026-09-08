@@ -1387,3 +1387,24 @@ entry format:
   JSON-origin position and physical L4 behavior remain unverified.
 - Submit only this simplification and appended log section to the existing
   `target/localization-lock-state-machine` PR; preserve all unrelated dirty work.
+
+## 2026-09-08 - Merge rail localization and prune merged branches
+
+- Merged PR #5 normally into `main`; merge commit `383d9c3` contains tested
+  head `e5fbdd5` and has the same final tree. Local main was aligned, selected
+  and confirmed synchronized 0/0 with `origin/main`.
+- Git protected the unstaged log hunk from an intermediate checkout through the
+  older local main. The target pointer was advanced to the identical merged
+  tree, main was aligned without checking out an older tree, and all protected
+  root content remained intact.
+- Removed 10 fully merged local branch names and 23 fully merged remote branch
+  names, including the localization target. Preserved the merged
+  `target/chassis-hold-release-fix` because open draft PR #2 still uses it as
+  its base.
+- Preserved both extra worktrees. `arm-fault-foundation` belongs to open draft
+  PR #2; `strokereview-migration` advanced during the audit to unmerged commit
+  `403ef7d`. Both are clean, so neither qualified for removal. Worktree prune
+  completed with three valid registrations remaining.
+- No runtime source, device state, deployment, service or motion changed. User
+  settings, drawing demo, XYZ log hunk, SVG and diagnostic directories remain
+  present and unstaged. Commit/push only the merge-cleanup record on main.

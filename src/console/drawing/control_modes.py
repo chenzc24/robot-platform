@@ -1,4 +1,4 @@
-"""Explicit baseline and advanced relocation strategies for drawing tasks."""
+"""Explicit baseline, localized-baseline and advanced drawing relocation."""
 
 import json
 import math
@@ -9,8 +9,10 @@ from pathlib import Path
 from .models import DrawingError
 
 
-_TOP_FIELDS = {"version", "production_ready", "selected_mode", "json_mm_per_rail_mm", "baseline", "advanced"}
+_V1_TOP_FIELDS = {"version", "production_ready", "selected_mode", "json_mm_per_rail_mm", "baseline", "advanced"}
+_V2_TOP_FIELDS = _V1_TOP_FIELDS | {"localized_baseline"}
 _BASELINE_FIELDS = {"speed_mm_s", "refresh_ms", "hold_ms", "max_distance_mm", "settle_ms"}
+_LOCALIZED_BASELINE_FIELDS = {"poll_ms", "localization_timeout_ms"}
 _ADVANCED_FIELDS = {"poll_ms", "station_timeout_ms", "localization_timeout_ms"}
 
 
@@ -57,11 +59,18 @@ class AdvancedRelocationConfig:
 
 
 @dataclass(frozen=True)
+class LocalizedBaselineRelocationConfig:
+    poll_ms: int
+    localization_timeout_ms: int
+
+
+@dataclass(frozen=True)
 class DrawingControlConfig:
     production_ready: bool
     selected_mode: str
     json_mm_per_rail_mm: float
     baseline: BaselineRelocationConfig
+    localized_baseline: object
     advanced: AdvancedRelocationConfig
 
 
@@ -99,14 +108,20 @@ class RelocationResult:
 
 
 def parse_drawing_control_config(document):
-    _exact(document, _TOP_FIELDS, "drawing control config")
-    if document["version"] != 1 or isinstance(document["version"], bool):
-        raise DrawingError("drawing control version must be 1")
+    if not isinstance(document, dict):
+        raise DrawingError("drawing control config has unexpected or missing fields")
+    version = document.get("version")
+    if isinstance(version, bool) or version not in (1, 2):
+        raise DrawingError("drawing control version must be 1 or 2")
+    _exact(document, _V1_TOP_FIELDS if version == 1 else _V2_TOP_FIELDS, "drawing control config")
     if type(document["production_ready"]) is not bool:
         raise DrawingError("production_ready must be boolean")
     mode = document["selected_mode"]
-    if mode not in ("baseline", "advanced"):
-        raise DrawingError("selected_mode must be baseline or advanced")
+    allowed_modes = ("baseline", "advanced") if version == 1 else (
+        "baseline", "localized_baseline", "advanced"
+    )
+    if mode not in allowed_modes:
+        raise DrawingError("selected_mode is not available in this config version")
     scale = _number(document["json_mm_per_rail_mm"], "json_mm_per_rail_mm", -10.0, 10.0)
     if scale == 0:
         raise DrawingError("json_mm_per_rail_mm must not be zero")
@@ -123,6 +138,20 @@ def parse_drawing_control_config(document):
     if baseline_config.refresh_ms >= baseline_config.hold_ms:
         raise DrawingError("baseline.refresh_ms must be less than hold_ms")
 
+    localized_config = None
+    if version == 2:
+        localized = document["localized_baseline"]
+        _exact(localized, _LOCALIZED_BASELINE_FIELDS, "localized_baseline")
+        localized_config = LocalizedBaselineRelocationConfig(
+            poll_ms=_integer(
+                localized["poll_ms"], "localized_baseline.poll_ms", 20, 1000
+            ),
+            localization_timeout_ms=_integer(
+                localized["localization_timeout_ms"],
+                "localized_baseline.localization_timeout_ms", 100, 120000,
+            ),
+        )
+
     advanced = document["advanced"]
     _exact(advanced, _ADVANCED_FIELDS, "advanced")
     advanced_config = AdvancedRelocationConfig(
@@ -130,7 +159,10 @@ def parse_drawing_control_config(document):
         station_timeout_ms=_integer(advanced["station_timeout_ms"], "advanced.station_timeout_ms", 100, 120000),
         localization_timeout_ms=_integer(advanced["localization_timeout_ms"], "advanced.localization_timeout_ms", 100, 120000),
     )
-    return DrawingControlConfig(document["production_ready"], mode, scale, baseline_config, advanced_config)
+    return DrawingControlConfig(
+        document["production_ready"], mode, scale, baseline_config,
+        localized_config, advanced_config,
+    )
 
 
 def load_drawing_control_config(path):
@@ -204,6 +236,126 @@ class BaselineRelocator(_Relocator):
         return RelocationResult("baseline", "commanded_open_loop", round(new_offset, 6), round(json_delta_mm, 6), round(rail_distance, 6), None, None, None)
 
 
+def _localized_scale(localization, expected, mode):
+    snapshot = localization.snapshot()
+    context = snapshot.get("context") or {}
+    if snapshot.get("state") != "locked" or not context:
+        raise DrawingError("%s_localization_not_locked" % mode)
+    if "json_mm_per_rail_mm" in context:
+        actual = _number(
+            context["json_mm_per_rail_mm"],
+            "localized json_mm_per_rail_mm",
+        )
+        if actual != expected:
+            raise DrawingError("%s_localization_scale_mismatch" % mode)
+    return snapshot
+
+
+def _await_fresh_lock(relocator, old_generation, settings, mode):
+    deadline = relocator.clock() + settings.localization_timeout_ms / 1000.0
+    relocator._emit("%s_localization_start" % mode, previous_generation=old_generation)
+    while relocator.clock() < deadline:
+        relocator.chassis.ping()
+        snapshot = relocator.localization.snapshot()
+        if snapshot.get("state") == "locked" and snapshot.get("generation", 0) > old_generation:
+            context = snapshot.get("context") or {}
+            source = context.get("source") or {}
+            locked_scale = _number(
+                context.get("json_mm_per_rail_mm"),
+                "localized json_mm_per_rail_mm",
+            )
+            if locked_scale != relocator.config.json_mm_per_rail_mm:
+                raise DrawingError("%s_localization_scale_mismatch" % mode)
+            new_offset = _number(
+                context.get("json_axis_offset_mm"), "localized json offset"
+            )
+            relocator._emit(
+                "%s_done" % mode,
+                generation=context.get("generation"),
+                json_axis_offset_mm=new_offset,
+            )
+            return context, source, new_offset
+        if snapshot.get("state") in ("blocked", "invalid", "disabled"):
+            raise DrawingError("%s_localization_%s" % (mode, snapshot.get("state")))
+        relocator.sleep(settings.poll_ms / 1000.0)
+    raise DrawingError("%s_localization_timeout" % mode)
+
+
+class LocalizedBaselineRelocator(BaselineRelocator):
+    """Move directly, confirm logical stop, then replace offset from AprilTag."""
+
+    def __init__(self, chassis, localization, config, **kwargs):
+        super().__init__(chassis, config, **kwargs)
+        self.localization = localization
+
+    def relocate(self, offset_before_mm, json_delta_mm, admission):
+        self._admit(admission)
+        offset_before_mm = _number(offset_before_mm, "offset_before_mm")
+        before = _localized_scale(
+            self.localization, self.config.json_mm_per_rail_mm,
+            "localized_baseline",
+        )
+        old_generation = before.get("generation", 0)
+        rail_distance = self._rail_distance(json_delta_mm)
+        settings = self.config.baseline
+        if abs(rail_distance) > settings.max_distance_mm:
+            raise DrawingError("localized_baseline_distance_exceeds_limit")
+        direction = 1 if rail_distance > 0 else -1
+        deadline = self.clock() + abs(rail_distance) / settings.speed_mm_s
+        motion_error = None
+        refresh_count = 0
+        self.localization.on_motion_intent("localized_baseline_motion")
+        self._emit(
+            "localized_baseline_start",
+            commanded_rail_distance_mm=rail_distance,
+            speed_mm_s=direction * settings.speed_mm_s,
+        )
+        try:
+            while self.clock() < deadline:
+                self.chassis.velocity(
+                    direction * settings.speed_mm_s, 0, 0,
+                    settings.hold_ms, max(500, settings.hold_ms),
+                )
+                refresh_count += 1
+                remaining = max(0.0, deadline - self.clock())
+                self.sleep(min(settings.refresh_ms / 1000.0, remaining))
+        except Exception as error:
+            motion_error = error
+        try:
+            self.chassis.stop()
+        except Exception as error:
+            raise DrawingError("localized_baseline_stop_unconfirmed") from error
+        if motion_error is not None:
+            raise DrawingError("localized_baseline_motion_failed") from motion_error
+
+        try:
+            from status_mapping import parse_chassis_status
+
+            stopped = parse_chassis_status(self.chassis.status())
+        except Exception as error:
+            raise DrawingError("localized_baseline_stop_status_invalid") from error
+        if (
+            stopped.service_state != "ready"
+            or stopped.chassis_state != "enabled_stopped"
+            or not stopped.authenticated
+            or not stopped.motion_permitted
+            or stopped.last_error != "none"
+        ):
+            raise DrawingError("localized_baseline_not_stopped")
+        self.localization.on_chassis_status(stopped.chassis_state)
+        self.localization.request_relocalization()
+        context, source, new_offset = _await_fresh_lock(
+            self, old_generation, self.config.localized_baseline,
+            "localized_baseline",
+        )
+        return RelocationResult(
+            "localized_baseline", "apriltag_locked", round(new_offset, 6),
+            round(new_offset - offset_before_mm, 6), round(rail_distance, 6),
+            context.get("rail_position_mm"), context.get("generation"),
+            source.get("min_confidence"),
+        )
+
+
 class AdvancedRelocator(_Relocator):
     """Follow locally to one station, then require a fresh AprilTag lock."""
 
@@ -224,16 +376,10 @@ class AdvancedRelocator(_Relocator):
         rail_distance = self._rail_distance(json_delta_mm)
         direction = 1 if rail_distance > 0 else -1
         settings = self.config.advanced
-        before = self.localization.snapshot()
+        before = _localized_scale(
+            self.localization, self.config.json_mm_per_rail_mm, "advanced"
+        )
         old_generation = before.get("generation", 0)
-        before_context = before.get("context") or {}
-        if "json_mm_per_rail_mm" in before_context:
-            before_scale = _number(
-                before_context["json_mm_per_rail_mm"],
-                "localized json_mm_per_rail_mm",
-            )
-            if before_scale != self.config.json_mm_per_rail_mm:
-                raise DrawingError("advanced_localization_scale_mismatch")
         station_deadline = self.clock() + settings.station_timeout_ms / 1000.0
         station_confirmed = False
         self._emit("advanced_line_follow_start", direction=direction)
@@ -256,34 +402,26 @@ class AdvancedRelocator(_Relocator):
             raise DrawingError("advanced_station_timeout")
 
         self.localization.request_relocalization()
-        lock_deadline = self.clock() + settings.localization_timeout_ms / 1000.0
-        self._emit("advanced_localization_start", previous_generation=old_generation)
-        while self.clock() < lock_deadline:
-            self.chassis.ping()
-            snapshot = self.localization.snapshot()
-            if snapshot.get("state") == "locked" and snapshot.get("generation", 0) > old_generation:
-                context = snapshot.get("context") or {}
-                source = context.get("source") or {}
-                locked_scale = _number(
-                    context.get("json_mm_per_rail_mm"),
-                    "localized json_mm_per_rail_mm",
-                )
-                if locked_scale != self.config.json_mm_per_rail_mm:
-                    raise DrawingError("advanced_localization_scale_mismatch")
-                new_offset = _number(context.get("json_axis_offset_mm"), "localized json offset")
-                self._emit("advanced_done", generation=context.get("generation"), json_axis_offset_mm=new_offset)
-                return RelocationResult("advanced", "apriltag_locked", round(new_offset, 6), round(new_offset - offset_before_mm, 6), None, context.get("rail_position_mm"), context.get("generation"), source.get("min_confidence"))
-            if snapshot.get("state") in ("blocked", "invalid", "disabled"):
-                raise DrawingError("advanced_localization_%s" % snapshot.get("state"))
-            self.sleep(settings.poll_ms / 1000.0)
-        raise DrawingError("advanced_localization_timeout")
+        context, source, new_offset = _await_fresh_lock(
+            self, old_generation, settings, "advanced"
+        )
+        return RelocationResult(
+            "advanced", "apriltag_locked", round(new_offset, 6),
+            round(new_offset - offset_before_mm, 6), None,
+            context.get("rail_position_mm"), context.get("generation"),
+            source.get("min_confidence"),
+        )
 
 
 def create_relocator(config, chassis, localization=None, **kwargs):
     if config.selected_mode == "baseline":
         return BaselineRelocator(chassis, config, **kwargs)
     if localization is None:
-        raise DrawingError("advanced_mode_requires_localization")
+        raise DrawingError("%s_mode_requires_localization" % config.selected_mode)
+    if config.selected_mode == "localized_baseline":
+        return LocalizedBaselineRelocator(
+            chassis, localization, config, **kwargs
+        )
     return AdvancedRelocator(chassis, localization, config, **kwargs)
 
 

@@ -19,6 +19,20 @@ rail position, localization generation, or confidence. Speed multiplied by PC
 elapsed time ignores wheel slip, acceleration, network delay and stop distance.
 It is a temporary baseline, not absolute positioning.
 
+## Localized Baseline
+
+`selected_mode: localized_baseline` is the intermediate mode. It uses the same
+bounded, refreshed direct `VELOCITY` movement as Baseline and never starts line
+following. Once `STOP` returns, it also requires an exact `STATUS` report of
+`enabled_stopped`, invalidates the old localization on motion intent, waits the
+localization settling interval, and accepts only a newer stable AprilTag lock.
+
+The planner's requested delta chooses the coarse direct distance, but that
+open-loop estimate is never used as the resumed drawing offset. The replacement
+offset, rail position, generation and confidence all come from the new AprilTag
+context. `baseline.settle_ms` belongs only to Baseline; Localized Baseline uses
+the localization state's configured settling and sample windows.
+
 ## Advanced
 
 `selected_mode: advanced` sends `LINE_FOLLOW_START` with direction only. ESP32
@@ -35,24 +49,45 @@ station; station placement determines the coarse distance.
 
 ## Admission and failure
 
-Both strategies require explicit structured admission stating that an operator
-is present, the physical emergency stop is ready, the arm is safe and the
-chassis is `enabled_stopped`. The local control configuration must also be
+All three strategies require explicit structured admission stating that an
+operator is present, the physical emergency stop is ready, the arm is safe and
+the chassis is `enabled_stopped`. The local control configuration must also be
 `production_ready: true`. These software checks supplement rather than replace
 the physical L3/L4 gate.
 
-Mode selection occurs before movement. Advanced sensor or AprilTag failure
-stops and returns an error; it never silently falls back to baseline. A new
-operator/task decision may explicitly start a baseline relocation afterward.
-State-changing requests are not retried after an unknown outcome.
+Mode selection occurs before movement. Localized Baseline or Advanced sensor /
+AprilTag failure stops and returns an error; neither silently falls back to
+another mode. A new operator/task decision may explicitly start a different
+mode afterward. State-changing requests are not retried after an unknown
+outcome.
 
 The relocation strategies are implemented in
 `src/console/drawing/control_modes.py` with injected chassis and localization
-interfaces. The coordinated drawing executor should consume a
-`reposition.required` checkpoint, invoke the selected relocator, pass the
-resulting `json_axis_offset_mm` into the existing planner, and resume. No UI or
-automatic full drawing execution route is enabled by this change.
+interfaces. Schema 2 adds the `localized_baseline` selection and its bounded
+polling and lock timeout. Schema 1 remains accepted for existing Baseline and
+Advanced configuration, but cannot select the new mode.
 
-`relocate_reposition_plan` provides that exact boundary: it accepts only an
-incomplete plan whose final step is `reposition.required` and returns the same
-checkpoint plus the new offset and structured relocation evidence.
+`relocate_reposition_plan` accepts only an incomplete plan whose final step is
+`reposition.required` and returns the same checkpoint plus the new offset and
+structured relocation evidence.
+
+`app/localized_baseline_run.py` is the guarded PC entry point. Dry-run is the
+default and opens no runtime configuration or device connection. Real execution
+requires the selected mode, production-ready drawing/control/vision/localization
+configuration, exact job hash, a new durable log, arm and chassis profile
+confirmations, current attended safety gates, and an initial AprilTag lock. It
+then repeats:
+
+```text
+lock generation N → reserve localized task → execute one arm window
+→ return pen and arm-safe pose → finish window → direct chassis move
+→ STOP + enabled_stopped → lock generation N+1 → resume exact checkpoint
+```
+
+The runner owns the one ESP32 and one arm session; do not connect the UI's
+manual device sessions at the same time. The UI may remain open for video and
+its independently configured overlay, but the script's localization samples
+and execution log are authoritative for the run. Any failure stops later
+commands without automatic retry or checkpoint recovery. The shutdown path
+attempts chassis `STOP` and `DISABLE`; these software actions do not replace the
+physical emergency stop.

@@ -97,3 +97,11 @@ robot-platform/
 ## Safety Principle
 
 Every real-motion test requires on-site supervision and access to the physical emergency stop. Loss of the computer, Wi-Fi, SSH, WebREPL, or internet connection must lead to a locally defined safe state. Chassis stopping, arm limits, and device interlocks must not depend on a remote link.
+
+## Image-to-stroke workflow
+
+[StrokeReview](docs/console/strokereview.md) provides image/SVG processing,
+line-art review and normalized stroke JSON export on the computer. Run
+`.\stroke-review.cmd -SkipModels` from the repository root for classic mode.
+The imported application lives under `apps/strokereview/`; robot execution and
+paper-to-arm calibration remain separate from image processing.

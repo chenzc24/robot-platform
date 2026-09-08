@@ -79,7 +79,19 @@ def config_document(**geometry_overrides):
     return {
         "production_ready": False,
         "flat_group_name": "default",
-        "group_pen_slots": {"default": "P0", "red": "P1", "blue": "P2"},
+        "group_pen_slots": {"default": "P1", "red": "P1", "blue": "P2"},
+        "pen_rack": {
+            "change_depth_mm": 60,
+            "final_return_depth_mm": 30,
+            "gripper_open_mm": 60,
+            "gripper_closed_mm": 1,
+            "slots": {
+                "P1": {"joint_deg": [1, 2, 3, 4, 5, 6]},
+                "P2": {"joint_deg": [2, 3, 4, 5, 6, 7]},
+                "P3": {"joint_deg": [3, 4, 5, 6, 7, 8]},
+                "P4": {"joint_deg": [4, 5, 6, 7, 8, 9]},
+            },
+        },
         "geometry": geometry,
     }
 
@@ -133,7 +145,7 @@ class DrawingLoaderTests(unittest.TestCase):
 class DrawingConfigTests(unittest.TestCase):
     def test_requires_complete_geometry_and_explicit_nonempty_pen_slots(self):
         config = parse_drawing_config(config_document())
-        self.assertEqual(config.pen_slot("red"), "P1")
+        self.assertEqual(config.pen_slot("red").name, "P1")
         self.assertFalse(config.production_ready)
         for mutation in ("missing", "blank", "range", "speed"):
             document = config_document()
@@ -147,6 +159,18 @@ class DrawingConfigTests(unittest.TestCase):
                 document["geometry"]["draw_speed_pct"] = 101
             with self.subTest(mutation=mutation), self.assertRaises(DrawingError):
                 parse_drawing_config(document)
+
+    def test_requires_exactly_four_slots_and_known_group_mappings(self):
+        document = config_document()
+        del document["group_pen_slots"]["default"]
+        del document["pen_rack"]["slots"]["P4"]
+        with self.assertRaisesRegex(DrawingError, "exactly P1, P2, P3 and P4"):
+            parse_drawing_config(document)
+
+        document = config_document()
+        document["group_pen_slots"]["red"] = "P5"
+        with self.assertRaisesRegex(DrawingError, "must be one of P1..P4"):
+            parse_drawing_config(document)
 
 
 class DrawingPlannerTests(unittest.TestCase):
@@ -169,6 +193,25 @@ class DrawingPlannerTests(unittest.TestCase):
         self.assertEqual(moves[2].payload["translation_mm"], [0.0, 50.0, -20.0])
         self.assertEqual(moves[3].payload["translation_mm"], [0.0, 50.0, -20.0])
         self.assertEqual(moves[4].payload["translation_mm"], [20.0, 0.0, 0.0])
+        pen_steps = [step for step in plan.steps if step.kind.startswith("pen.")]
+        self.assertEqual(
+            [step.kind for step in pen_steps],
+            ["pen.select", "pen.return", "pen.select", "pen.return"],
+        )
+        self.assertEqual(pen_steps[0].payload["slot"], "P1")
+        self.assertEqual(pen_steps[0].payload["steps"][0]["joint_deg"], [1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+        self.assertEqual(pen_steps[1].payload["depth_mm"], 60.0)
+        self.assertEqual(pen_steps[-1].payload["depth_mm"], 30.0)
+        self.assertEqual(pen_steps[-1].payload["purpose"], "final_return")
+
+    def test_adjacent_groups_mapped_to_same_slot_do_not_change_pen(self):
+        document = config_document()
+        document["group_pen_slots"]["blue"] = "P1"
+        config = parse_drawing_config(document)
+        plan = build_drawing_plan(self.job, config)
+        pen_steps = [step for step in plan.steps if step.kind.startswith("pen.")]
+        self.assertEqual([step.kind for step in pen_steps], ["pen.select", "pen.return"])
+        self.assertEqual(plan.statistics["pen_changes"], 1)
 
     def test_json_axis_offset_changes_anchor_not_segment_delta(self):
         plan = build_drawing_plan(self.job, self.config, json_axis_offset_mm=10)

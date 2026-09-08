@@ -9,7 +9,21 @@ from pathlib import Path
 from .models import DrawingError
 
 
-_TOP_FIELDS = {"production_ready", "flat_group_name", "group_pen_slots", "geometry"}
+_TOP_FIELDS = {
+    "production_ready",
+    "flat_group_name",
+    "group_pen_slots",
+    "pen_rack",
+    "geometry",
+}
+_PEN_RACK_FIELDS = {
+    "slots",
+    "change_depth_mm",
+    "final_return_depth_mm",
+    "gripper_open_mm",
+    "gripper_closed_mm",
+}
+_PEN_SLOT_NAMES = {"P1", "P2", "P3", "P4"}
 _GEOMETRY_FIELDS = {
     "canvas_width_mm",
     "canvas_height_mm",
@@ -62,18 +76,81 @@ class DrawingGeometry:
 
 
 @dataclass(frozen=True)
+class PenSlot:
+    name: str
+    joint_deg: tuple
+
+
+@dataclass(frozen=True)
+class PenRack:
+    slots: tuple
+    change_depth_mm: float
+    final_return_depth_mm: float
+    gripper_open_mm: float
+    gripper_closed_mm: float
+
+    def slot(self, name):
+        for slot in self.slots:
+            if slot.name == name:
+                return slot
+        raise DrawingError("unknown pen slot %r" % name)
+
+
+@dataclass(frozen=True)
 class DrawingConfig:
     production_ready: bool
     flat_group_name: str
     group_pen_slots: tuple
+    pen_rack: PenRack
     geometry: DrawingGeometry
     canonical_sha256: str
 
     def pen_slot(self, group_name):
         for name, slot in self.group_pen_slots:
             if name == group_name:
-                return slot
+                return self.pen_rack.slot(slot)
         raise DrawingError("group %r has no pen-slot mapping" % group_name)
+
+
+def _parse_pen_rack(document):
+    if not isinstance(document, dict) or set(document) != _PEN_RACK_FIELDS:
+        raise DrawingError("pen_rack has unexpected or missing fields")
+    raw_slots = document["slots"]
+    if not isinstance(raw_slots, dict) or set(raw_slots) != _PEN_SLOT_NAMES:
+        raise DrawingError("pen_rack.slots must contain exactly P1, P2, P3 and P4")
+    slots = []
+    for name in sorted(raw_slots):
+        raw_slot = raw_slots[name]
+        if not isinstance(raw_slot, dict) or set(raw_slot) != {"joint_deg"}:
+            raise DrawingError("pen slot %s must contain exactly joint_deg" % name)
+        joints = raw_slot["joint_deg"]
+        if not isinstance(joints, list) or len(joints) != 6:
+            raise DrawingError("pen slot %s joint_deg must contain six numbers" % name)
+        slots.append(
+            PenSlot(
+                name=name,
+                joint_deg=tuple(
+                    _finite(value, "pen_rack.slots.%s.joint_deg" % name)
+                    for value in joints
+                ),
+            )
+        )
+    values = {
+        name: _finite(document[name], "pen_rack.%s" % name)
+        for name in (
+            "change_depth_mm",
+            "final_return_depth_mm",
+            "gripper_open_mm",
+            "gripper_closed_mm",
+        )
+    }
+    if values["change_depth_mm"] <= 0 or values["final_return_depth_mm"] <= 0:
+        raise DrawingError("pen rack depths must be positive")
+    if values["gripper_closed_mm"] < 0:
+        raise DrawingError("gripper_closed_mm must not be negative")
+    if values["gripper_open_mm"] <= values["gripper_closed_mm"]:
+        raise DrawingError("gripper_open_mm must exceed gripper_closed_mm")
+    return PenRack(slots=tuple(slots), **values)
 
 
 def parse_drawing_config(document):
@@ -94,6 +171,13 @@ def parse_drawing_config(document):
         if not isinstance(slot, str) or not slot.strip():
             raise DrawingError("pen slot for %r must be configured" % name)
         slots.append((name, slot))
+
+    pen_rack = _parse_pen_rack(document["pen_rack"])
+    for name, slot in slots:
+        try:
+            pen_rack.slot(slot)
+        except DrawingError:
+            raise DrawingError("pen slot for group %r must be one of P1..P4" % name)
 
     raw = document["geometry"]
     if not isinstance(raw, dict) or set(raw) != _GEOMETRY_FIELDS:
@@ -137,6 +221,7 @@ def parse_drawing_config(document):
         production_ready=document["production_ready"],
         flat_group_name=flat_group_name,
         group_pen_slots=tuple(sorted(slots)),
+        pen_rack=pen_rack,
         geometry=geometry,
         canonical_sha256=hashlib.sha256(canonical).hexdigest(),
     )

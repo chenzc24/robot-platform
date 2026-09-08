@@ -51,7 +51,19 @@ class DrawingTaskCliTests(unittest.TestCase):
                 {
                     "production_ready": False,
                     "flat_group_name": "default",
-                    "group_pen_slots": {"default": "P0"},
+                    "group_pen_slots": {"default": "P1"},
+                    "pen_rack": {
+                        "change_depth_mm": 60,
+                        "final_return_depth_mm": 30,
+                        "gripper_open_mm": 60,
+                        "gripper_closed_mm": 1,
+                        "slots": {
+                            "P1": {"joint_deg": [1, 2, 3, 4, 5, 6]},
+                            "P2": {"joint_deg": [2, 3, 4, 5, 6, 7]},
+                            "P3": {"joint_deg": [3, 4, 5, 6, 7, 8]},
+                            "P4": {"joint_deg": [4, 5, 6, 7, 8, 9]}
+                        }
+                    },
                     "geometry": {
                         "canvas_width_mm": 100,
                         "canvas_height_mm": 100,

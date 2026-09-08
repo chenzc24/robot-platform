@@ -1480,3 +1480,22 @@ entry format:
 - Implementation commit `3aa32f8` was pushed and PR #9 was opened against
   `main`: https://github.com/chenzc24/robot-platform/pull/9. No merge was
   performed.
+
+## 2026-09-08 — Preserve four-slot pen rack planning
+
+- Extended PR #9's offline planner with exactly four configured P1-P4 slots,
+  using the joint vectors from the supplied controller `point.json`. The five
+  drawing groups explicitly map to four pens; pink and black share P3, matching
+  the delivered program's effective behavior without inventing a fifth slot.
+- Preserved normal pickup/change depth 60 mm, final return depth 30 mm, gripper
+  open 60 and closed 1 as configuration. Pen select/return steps now carry the
+  future joint, relative-Z and gripper recipe; adjacent groups sharing one slot
+  skip redundant exchange motion.
+- The real 5-group preview completed with 439 strokes, 3,903 points, 5,220
+  drawing-arm commands, 4 selections and no barrier. It remained preview-only
+  and production-not-ready.
+- L1 passed 126 applicable tests (22 app, 101 console, 3 importer), the 7-file
+  Python source check, example JSON parse and diff check. Two existing PySide6
+  GUI suites remain excluded because PySide6 is absent.
+- No hardware, service, endpoint, deployment, device write or motion occurred.
+  Physical rack geometry and guarded runtime execution remain unverified.

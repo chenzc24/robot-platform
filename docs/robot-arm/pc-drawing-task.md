@@ -49,10 +49,24 @@ flag is retained but does not synthesize an extra closing segment.
 ## Local configuration
 
 Copy [the safe example](../../config/drawing.example.json) to the ignored
-`config/drawing.local.json`, then replace every placeholder with reviewed local
-values. In particular, the delivered project has five colors but only four
-taught rack points and no black-handling branch. Every input group must have an
-explicit logical pen-slot mapping before planning succeeds.
+`config/drawing.local.json`, then review its local values. The four P1-P4 joint
+vectors are transcribed from the delivered `point.json` and remain data, not
+Python constants. The delivered five drawing groups use four physical pens:
+yellow maps to P1, purple to P2, pink and black both map to P3, and green maps to
+P4. Every input group must have an explicit mapping to one of exactly these four
+slots before planning succeeds.
+
+The rack configuration also preserves the delivered controller operations:
+
+- normal pickup and between-color return depth: 60 mm;
+- final `guiwei` return depth: 30 mm;
+- gripper open width: 60 mm;
+- gripper closed width: 1 mm.
+
+All four values remain configurable because the original 60/30 difference is
+intentional project behavior, not something the PC planner should silently
+normalize. P1-P4 were taught with User 0 / Tool 0; physical validity still
+requires confirmation before motion.
 
 `production_ready` remains false during offline planning. A future executor must
 require a separately reviewed true value; this stage never consumes it as
@@ -86,9 +100,13 @@ write a review artifact. An existing output is never overwritten. The summary
 shows both canvas metadata and configured executed size so the archive's
 210-versus-150 mm discrepancy remains visible.
 
-The plan contains abstract `pen.select`, `pen.return`, `arm.home`, `arm.relative`,
-`sleep`, and `reposition.required` steps. Pen actions are not expanded to rack
-motions in this stage.
+The plan contains `pen.select`, `pen.return`, `arm.home`, `arm.relative`, `sleep`,
+and `reposition.required` steps. Each pen step now carries the configured rack
+joint target, relative Z descent/retract and gripper recipe for a future guarded
+executor. A change between different slots returns the current pen at 60 mm and
+picks the next at 60 mm; the final return uses 30 mm and ends at the configured
+home joints. Adjacent groups mapped to the same slot do not trigger a redundant
+return/pick cycle.
 
 ## Reachability and checkpoints
 
@@ -114,9 +132,9 @@ and wait for physical inspection and a new explicit task decision.
 
 ## Remaining boundary
 
-This stage does not implement rack poses, gripper actions, arm status gates,
-network execution, chassis commands, AprilTag collection, buffered strokes or
-the coordinated L4 state machine. Those remain separately reviewed goals. The
-current primitive route would require at least 5,220 sequential arm commands
-for the supplied drawing before pen and chassis actions, so full-job performance
+This stage records rack poses and gripper recipes but does not execute them. Arm
+status gates, network execution, chassis commands, AprilTag collection, buffered
+strokes and the coordinated L4 state machine remain separately reviewed goals.
+The current drawing route requires 5,220 sequential drawing-arm primitives for
+the supplied job, in addition to pen and chassis actions, so full-job performance
 must be measured rather than hidden by increasing motion speed.

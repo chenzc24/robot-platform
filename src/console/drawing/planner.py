@@ -64,6 +64,97 @@ def _move_payload(geometry, translation, speed_pct, purpose):
     }
 
 
+def _pen_select_payload(group_name, slot, config):
+    rack = config.pen_rack
+    depth = rack.change_depth_mm
+    geometry = config.geometry
+    return {
+        "group": group_name,
+        "slot": slot.name,
+        "purpose": "pick_pen",
+        "depth_mm": depth,
+        "steps": [
+            {
+                "kind": "arm.move_joint",
+                "joint_deg": list(slot.joint_deg),
+                "accel_pct": geometry.accel_pct,
+                "speed_pct": geometry.travel_speed_pct,
+            },
+            {"kind": "arm.gripper", "width_mm": rack.gripper_open_mm},
+            {
+                "kind": "arm.relative",
+                **_move_payload(
+                    geometry,
+                    (0.0, 0.0, -depth),
+                    geometry.travel_speed_pct,
+                    "pen_rack_descend",
+                ),
+            },
+            {"kind": "arm.gripper", "width_mm": rack.gripper_closed_mm},
+            {
+                "kind": "arm.relative",
+                **_move_payload(
+                    geometry,
+                    (0.0, 0.0, depth),
+                    geometry.travel_speed_pct,
+                    "pen_rack_ascend",
+                ),
+            },
+        ],
+    }
+
+
+def _pen_return_payload(group_name, slot, config, final_return):
+    rack = config.pen_rack
+    geometry = config.geometry
+    depth = (
+        rack.final_return_depth_mm if final_return else rack.change_depth_mm
+    )
+    steps = [
+        {
+            "kind": "arm.move_joint",
+            "joint_deg": list(slot.joint_deg),
+            "accel_pct": geometry.accel_pct,
+            "speed_pct": geometry.travel_speed_pct,
+        },
+        {
+            "kind": "arm.relative",
+            **_move_payload(
+                geometry,
+                (0.0, 0.0, -depth),
+                geometry.travel_speed_pct,
+                "pen_rack_descend",
+            ),
+        },
+        {"kind": "arm.gripper", "width_mm": rack.gripper_open_mm},
+        {
+            "kind": "arm.relative",
+            **_move_payload(
+                geometry,
+                (0.0, 0.0, depth),
+                geometry.travel_speed_pct,
+                "pen_rack_ascend",
+            ),
+        },
+    ]
+    if final_return:
+        steps.append(
+            {
+                "kind": "arm.move_joint",
+                "joint_deg": list(geometry.home_joints_deg),
+                "accel_pct": geometry.accel_pct,
+                "speed_pct": geometry.travel_speed_pct,
+            }
+        )
+    return {
+        "group": group_name,
+        "slot": slot.name,
+        "purpose": "final_return" if final_return else "group_change_return",
+        "depth_mm": depth,
+        "steps": steps,
+    }
+
+
 def _inside(geometry, absolute_user_y):
     return (
         geometry.reachable_user_y_min_mm
@@ -148,6 +239,8 @@ def build_drawing_plan(job, config, json_axis_offset_mm=0.0, checkpoint=None):
     planned_points = 0
     arm_commands = 0
     pen_changes = 0
+    active_slot = None
+    active_group_name = None
 
     def add(kind, label, payload):
         nonlocal arm_commands, pen_changes
@@ -199,11 +292,34 @@ def build_drawing_plan(job, config, json_axis_offset_mm=0.0, checkpoint=None):
                 )
 
             if not pen_selected:
-                add(
-                    "pen.select",
-                    "select pen for %s" % group.name,
-                    {"group": group.name, "slot": slot},
-                )
+                if active_slot is None:
+                    add(
+                        "pen.select",
+                        "select pen for %s" % group.name,
+                        _pen_select_payload(group.name, slot, config),
+                    )
+                    active_slot = slot
+                    active_group_name = group.name
+                elif active_slot.name != slot.name:
+                    add(
+                        "pen.return",
+                        "return pen before %s" % group.name,
+                        _pen_return_payload(
+                            active_group_name,
+                            active_slot,
+                            config,
+                            final_return=False,
+                        ),
+                    )
+                    add(
+                        "pen.select",
+                        "select pen for %s" % group.name,
+                        _pen_select_payload(group.name, slot, config),
+                    )
+                    active_slot = slot
+                    active_group_name = group.name
+                else:
+                    active_group_name = group.name
                 pen_selected = True
             prefix = "%s/%s" % (group.name, stroke.id)
             add(
@@ -321,10 +437,16 @@ def build_drawing_plan(job, config, json_axis_offset_mm=0.0, checkpoint=None):
             )
             add("sleep", "%s: end pause" % prefix, {"seconds": 0.3})
             planned_strokes += 1
+    if active_slot is not None:
         add(
             "pen.return",
-            "return pen for %s" % group.name,
-            {"group": group.name, "slot": slot},
+            "final pen return for %s" % active_group_name,
+            _pen_return_payload(
+                active_group_name,
+                active_slot,
+                config,
+                final_return=True,
+            ),
         )
 
     return DrawingPlan(

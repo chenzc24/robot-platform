@@ -113,6 +113,11 @@ class MediaRelayConfigurationTests(unittest.TestCase):
         self.assertIn('$path.ready -and $path.online', wrapper)
         self.assertIn("VIDEO_RELAY_NOT_READY", wrapper)
 
+    def test_relay_accepts_an_ipv4_literal_without_dns_lookup(self):
+        wrapper = (ROOT / "tools/maixcam/mediamtx.ps1").read_text(encoding="utf-8")
+        self.assertIn("[System.Net.IPAddress]::TryParse", wrapper)
+        self.assertIn("AddressFamily]::InterNetwork", wrapper)
+
 
 class DeviceLifecycleScriptTests(unittest.TestCase):
     def _script(self, name):

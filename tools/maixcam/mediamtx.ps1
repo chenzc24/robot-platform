@@ -156,8 +156,17 @@ switch ($Action) {
             throw "Video relay is only partially running; run -Action stop before starting it again"
         }
 
-        $cameraAddress = Resolve-DnsName $MaixCamHost -Type A -ErrorAction Stop |
-            Select-Object -ExpandProperty IPAddress -First 1
+        $parsedAddress = $null
+        if (
+            [System.Net.IPAddress]::TryParse($MaixCamHost, [ref]$parsedAddress) -and
+            $parsedAddress.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetwork
+        ) {
+            $cameraAddress = $parsedAddress.ToString()
+        }
+        else {
+            $cameraAddress = Resolve-DnsName $MaixCamHost -Type A -ErrorAction Stop |
+                Select-Object -ExpandProperty IPAddress -First 1
+        }
         if (-not $cameraAddress) {
             throw "No IPv4 address found for $MaixCamHost"
         }

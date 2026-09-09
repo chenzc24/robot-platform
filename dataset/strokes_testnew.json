@@ -1,0 +1,88 @@
+{
+  "version": "1.0",
+  "coordinate_space": "normalized",
+  "axis": {
+    "origin": "top-left",
+    "x_positive": "right",
+    "y_positive": "down"
+  },
+  "canvas": {
+    "width": 1,
+    "height": 1,
+    "source_width": 960,
+    "source_height": 1280,
+    "source_aspect_ratio": 0.75,
+    "target_width_mm": 700,
+    "target_height_mm": 200
+  },
+  "groups": [
+    {
+      "name": "黄色",
+      "strokes": [
+        {
+          "id": "stroke_manual_02ba75c0_1",
+          "order": 1,
+          "points": [[0, 0], [0, 0.3]],
+          "closed": false
+        },
+        {
+          "id": "stroke_manual_42aa6199_1",
+          "order": 2,
+          "points": [[0.6, 0], [0.6, 0.3]],
+          "closed": false
+        }
+      ]
+    },
+    {
+      "name": "粉色",
+      "strokes": [
+        {
+          "id": "stroke_manual_5cb2c430_1",
+          "order": 1,
+          "points": [[0, 0], [0.3, 0]],
+          "closed": false
+        },
+        {
+          "id": "stroke_manual_dd06da8f_1",
+          "order": 2,
+          "points": [[0.6, 0], [0.9, 0]],
+          "closed": false
+        }
+      ]
+    },
+    {
+      "name": "绿色",
+      "strokes": [
+        {
+          "id": "stroke_manual_666843e1_1",
+          "order": 1,
+          "points": [[0.3, 0], [0.3, 0.3]],
+          "closed": false
+        },
+        {
+          "id": "stroke_manual_dbadaeb7_1",
+          "order": 2,
+          "points": [[0.9, 0], [0.9, 0]],
+          "closed": false
+        }
+      ]
+    },
+    {
+      "name": "紫色",
+      "strokes": [
+        {
+          "id": "stroke_manual_97bc39a1_1",
+          "order": 1,
+          "points": [[0, 0.3], [0.3, 0.3]],
+          "closed": false
+        },
+        {
+          "id": "stroke_manual_b9839329_1",
+          "order": 2,
+          "points": [[0.6, 0.3], [0.9, 0.3]],
+          "closed": false
+        }
+      ]
+    }
+  ]
+}

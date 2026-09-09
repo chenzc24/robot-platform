@@ -136,6 +136,12 @@ confidence and reprojection diagnostics as JSON. It never opens arm or chassis
 command routes. See
 [PC AprilTag board localization](../docs/console/apriltag-localization.md).
 
+`apriltag_board_calibration.py` is the separate one-time layout builder. Its
+`capture` command records decoded pixel corners at manually selected stopped
+positions; its `solve` command holds measured anchor corners fixed and expands
+them into one connected planar board. See
+[AprilTag planar board calibration](../docs/console/apriltag-board-calibration.md).
+
 ## Local validation
 
 ```powershell

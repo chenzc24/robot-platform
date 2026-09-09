@@ -90,6 +90,12 @@ The same layout schema may instead contain eight or more unique tags distributed
 along a longer rail. They share one board frame and need not all be visible in
 the same image; overlapping adjacent tag groups are preferred.
 
+For the eight-tag rail layout, the observation-only
+[board calibration tool](apriltag-board-calibration.md) can hold four measured
+outer anchors fixed and infer the four middle tags from multiple stopped,
+overlapping views. It outputs a separate review-required board and residual
+report; it does not change runtime configuration or replace camera calibration.
+
 ## Console configuration
 
 Use schema version 5 in ignored `config/console.local.json`, copy the `vision`

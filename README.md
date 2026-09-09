@@ -23,6 +23,7 @@ Subsystem and operating documentation:
 - [Shared runtime foundation](docs/runtime-foundation.md)
 - [Robot-arm YOLO manual control](docs/robot-arm/yolo-manual-control.md)
 - [One-dimensional AprilTag rail lock and task interface](docs/console/localization-state-machine.md)
+- [AprilTag planar board calibration](docs/console/apriltag-board-calibration.md)
 - [Baseline and advanced drawing relocation modes](docs/console/drawing-control-modes.md)
 - [Localized Baseline coordinate rehearsal](docs/console/localized-baseline-simulator.md)
 - [PC grouped drawing tools](app/README.md)

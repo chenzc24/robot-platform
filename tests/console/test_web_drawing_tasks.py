@@ -321,6 +321,48 @@ class WebDrawingOwnershipTests(unittest.TestCase):
                 "attended": True,
             })
 
+    def test_out_of_tolerance_start_fails_before_arm_connection(self):
+        site = json.loads(self.drawing.read_text(encoding="utf-8"))
+        site["relocation"]["selected_mode"] = "localized_baseline"
+        self.drawing.write_text(json.dumps(site), encoding="utf-8")
+        runtime_config = replace(
+            config(),
+            vision=VisionConfig(
+                True, "board.json", "camera.json", "DICT_APRILTAG_36H11",
+            ),
+            localization=LocalizationConfig(
+                enabled=True, json_mm_per_rail_mm=-1.0,
+            ),
+        )
+        localization = FakeDrawingLocalization()
+        localization.offset = 0.0  # rail position 0; configured r0 is -100 mm.
+        arm_connections = []
+        runtime = WebConsoleRuntime(
+            runtime_config,
+            lambda _config: FakeChassis(),
+            lambda _config: arm_connections.append(True) or FakeArm(),
+            start_workers=False,
+            localization_machine=localization,
+        )
+        try:
+            runtime.configure_drawing_tasks(
+                self.root, self.drawing, self.policy,
+            )
+            prepared = runtime.drawing_task({
+                "action": "prepare", "job_id": "sample",
+                "mode": "localized_baseline",
+            })["drawing"]
+            runtime.drawing_task({
+                "action": "start", "task_id": prepared["task_id"],
+                "job_sha256": prepared["job_sha256"], "attended": True,
+            })
+            final = runtime._drawing_tasks.wait(2)
+            self.assertEqual(final["state"], "failed")
+            self.assertIn("drawing_start_outside_tolerance", final["error"])
+            self.assertEqual(arm_connections, [])
+        finally:
+            runtime.close()
+
     def test_runtime_executes_one_small_window_through_shared_fake_sessions(self):
         document = json.loads((self.root / "job.json").read_text(encoding="utf-8"))
         document["groups"] = [{

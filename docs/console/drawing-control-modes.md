@@ -100,10 +100,12 @@ another mode. A new operator/task decision may explicitly start a different
 mode afterward. State-changing requests are not retried after an unknown
 outcome.
 
-For localized operation, the first stable lock directly computes offset from
-`rail.json_origin_rail_position_mm`; it need not start near that reference
-position. Baseline has no position sensor and relies on its configured initial
-offset.
+For localized operation, the first stable lock must satisfy
+`abs(rail_position_mm - rail.json_origin_rail_position_mm) <=
+rail.start_tolerance_mm`. This makes the fixed standard parking position a
+measured gate before the first arm command. Baseline has no position sensor and
+therefore relies on the same repeatable mechanical parking position plus its
+configured initial offset without claiming that the position was measured.
 
 The relocation strategies are implemented in
 `src/console/drawing/control_modes.py` with injected chassis and localization

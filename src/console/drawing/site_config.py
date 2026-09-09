@@ -22,7 +22,7 @@ _IMAGE_FIELDS = {"fit_mode", "short_edge_margin_mm"}
 _DRAWING_FIELDS = {"flat_group_name", "group_pen_slots", "pen_rack", "geometry"}
 _RAIL_FIELDS = {
     "physical_start_mm", "physical_travel_mm", "json_origin_rail_position_mm",
-    "json_mm_per_rail_mm",
+    "json_mm_per_rail_mm", "start_tolerance_mm",
 }
 _RELOCATION_FIELDS = {"selected_mode", "baseline", "localized_baseline", "advanced"}
 _LOCALIZATION_FIELDS = {
@@ -77,6 +77,7 @@ class RailSiteConfig:
     physical_travel_mm: object
     json_origin_rail_position_mm: float
     json_mm_per_rail_mm: float
+    start_tolerance_mm: float
 
 
 @dataclass(frozen=True)
@@ -94,6 +95,20 @@ class DrawingSiteConfig:
 
     def apply_runtime(self, runtime):
         return replace(runtime, vision=self.vision, localization=self.localization)
+
+    def require_standard_start(self, context):
+        if not isinstance(context, dict):
+            raise DrawingError("initial_localization_context_missing")
+        position = _number(
+            context.get("rail_position_mm"), "initial rail position"
+        )
+        delta = position - self.rail.json_origin_rail_position_mm
+        if abs(delta) > self.rail.start_tolerance_mm:
+            raise DrawingError(
+                "drawing_start_outside_tolerance:delta_mm=%g,tolerance_mm=%g"
+                % (delta, self.rail.start_tolerance_mm)
+            )
+        return delta
 
 def parse_drawing_site_config(document):
     _exact(document, _TOP_FIELDS, "drawing site config")
@@ -132,6 +147,9 @@ def parse_drawing_site_config(document):
         ),
         json_mm_per_rail_mm=_number(
             rail_raw["json_mm_per_rail_mm"], "rail.json_mm_per_rail_mm", -10.0, 10.0
+        ),
+        start_tolerance_mm=_number(
+            rail_raw["start_tolerance_mm"], "rail.start_tolerance_mm", 0.001
         ),
     )
     if rail.json_mm_per_rail_mm == 0:

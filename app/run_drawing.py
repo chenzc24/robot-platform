@@ -149,6 +149,12 @@ def main(argv=None):
             site.image_to_json,
         )
         summary = _summary(job, drawing_config, control_config, board, artifact)
+        summary["standard_start"] = {
+            "physical_start_mm": site.rail.physical_start_mm,
+            "json_origin_rail_position_mm": site.rail.json_origin_rail_position_mm,
+            "start_tolerance_mm": site.rail.start_tolerance_mm,
+            "measured": control_config.selected_mode != "baseline",
+        }
         if not args.execute:
             print(json.dumps({**summary, "execute": False}, ensure_ascii=False, indent=2, sort_keys=True))
             print("DRY_RUN no device connection or motion")
@@ -205,10 +211,11 @@ def main(argv=None):
                 if control_config.selected_mode == "localized_baseline"
                 else control_config.advanced
             )
-            _wait_for_initial_lock(
+            initial_context = _wait_for_initial_lock(
                 localization, chassis, settings.localization_timeout_ms,
                 settings.poll_ms, log.emit,
             )
+            site.require_standard_start(initial_context)
 
         arm = default_arm_factory(runtime_config.arm)
         result = execute_drawing(

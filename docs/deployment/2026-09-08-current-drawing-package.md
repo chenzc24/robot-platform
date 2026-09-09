@@ -79,7 +79,10 @@ request whose outcome is unknown.
 - `baseline`: keep line following disabled. Establish drawing-board dimensions,
   User0 JSON origin, starting offset, and verify command-distance sign/scale.
 - `localized_baseline`: additionally calibrate the camera, measured AprilTag
-  corners, `json_origin_rail_position_mm`, and `json_mm_per_rail_mm`.
+  corners, `physical_start_mm`, `json_origin_rail_position_mm`,
+  `json_mm_per_rail_mm`, and `start_tolerance_mm`. Verify that every run begins
+  at the repeatable standard parking position and that its first stable lock is
+  inside the configured tolerance before allowing arm motion.
 - `advanced`: additionally enable and review all ESP32 line-sensor GPIO,
   polarity, steering and station parameters and pass separate L3 validation.
 

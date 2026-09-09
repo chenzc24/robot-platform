@@ -206,6 +206,12 @@ def main(argv=None):
         )
         first_plan = build_drawing_plan(job, drawing_config)
         summary = _summary(job, drawing_config, control_config, first_plan)
+        summary["standard_start"] = {
+            "physical_start_mm": site.rail.physical_start_mm,
+            "json_origin_rail_position_mm": site.rail.json_origin_rail_position_mm,
+            "start_tolerance_mm": site.rail.start_tolerance_mm,
+            "measured": True,
+        }
         if not args.execute:
             print(json.dumps({**summary, "execute": False}, ensure_ascii=False, indent=2, sort_keys=True))
             print("DRY_RUN no device connection or motion")
@@ -250,10 +256,11 @@ def main(argv=None):
         vision = create_vision_worker(runtime_config, localization.observe_vision)
         vision.start()
         settings = control_config.localized_baseline
-        _wait_for_initial_lock(
+        initial_context = _wait_for_initial_lock(
             localization, chassis, settings.localization_timeout_ms,
             settings.poll_ms, log.emit,
         )
+        site.require_standard_start(initial_context)
         arm = default_arm_factory(runtime_config.arm)
         result = execute_localized_drawing(
             ArmWithChassisGuard(arm, chassis), chassis, localization,

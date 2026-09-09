@@ -48,11 +48,16 @@ class DrawingSiteConfigTests(unittest.TestCase):
         self.assertIs(merged.vision.board_layout, site.apriltag_board)
         self.assertIs(merged.vision.camera_calibration, site.camera_calibration)
 
-    def test_localized_start_uses_r0_without_a_second_start_gate(self):
+    def test_localized_start_requires_the_standard_r0_position(self):
         raw = example_document()
         raw["rail"]["json_origin_rail_position_mm"] = 320.0
+        raw["rail"]["start_tolerance_mm"] = 3.0
         site = parse_drawing_site_config(raw)
-        self.assertEqual(site.localization.json_origin_rail_position_mm, 320.0)
+        self.assertAlmostEqual(
+            site.require_standard_start({"rail_position_mm": 322.5}), 2.5
+        )
+        with self.assertRaisesRegex(DrawingError, "drawing_start_outside_tolerance"):
+            site.require_standard_start({"rail_position_mm": 323.1})
 
     def test_physical_start_is_not_assumed_to_equal_apriltag_r0(self):
         raw = example_document()
@@ -68,7 +73,7 @@ class DrawingSiteConfigTests(unittest.TestCase):
         margin["image_to_json"]["short_edge_margin_mm"] = 100.0
         cases.append(margin)
         missing = example_document()
-        del missing["rail"]["json_mm_per_rail_mm"]
+        del missing["rail"]["start_tolerance_mm"]
         cases.append(missing)
         no_vision = example_document()
         no_vision["localization"]["enabled"] = True

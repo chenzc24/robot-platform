@@ -533,6 +533,7 @@ class WebConsoleRuntime:
                     "generation": snapshot.get("generation"),
                     "json_axis_offset_mm": context.get("json_axis_offset_mm"),
                 })
+                prepared.site_config.require_standard_start(context)
                 return
             if snapshot.get("state") in ("blocked", "disabled"):
                 raise DrawingTaskError("initial_localization_" + snapshot.get("state"))
@@ -563,11 +564,11 @@ class WebConsoleRuntime:
             ):
                 raise DrawingTaskError("chassis_preflight_rejected")
             self._localization.on_chassis_status(status.chassis_state)
+            if prepared.mode != "baseline":
+                self._wait_for_drawing_lock(prepared, emit)
             with self._arm_io:
                 if self._arm is None:
                     self._connect_arm_locked()
-            if prepared.mode != "baseline":
-                self._wait_for_drawing_lock(prepared, emit)
             result = execute_drawing(
                 _DrawingArmAdapter(self),
                 _DrawingChassisAdapter(self),

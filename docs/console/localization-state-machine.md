@@ -86,7 +86,8 @@ localization sampling policy:
     "physical_start_mm": 0.0,
     "physical_travel_mm": null,
     "json_origin_rail_position_mm": 0.0,
-    "json_mm_per_rail_mm": -1.0
+    "json_mm_per_rail_mm": -1.0,
+    "start_tolerance_mm": 3.0
   },
   "localization": {
     "enabled": false,

@@ -1886,3 +1886,19 @@ entry format:
   PING/STATUS, arm motion, gripper, chassis ENABLE/VELOCITY/STOP/DISABLE or
   line-follow command was sent. Baseline offset and any motion remain separately
   gated L3/L4 work. Commit status was pending at log-entry time on `main`.
+
+## 2026-09-09 - Write the PC Baseline local configuration
+
+- Created ignored `config/drawing.local.json` and
+  `config/drawing-control.local.json` for the 700 x 200 mm canvas and retained
+  User-Y reach window `[-200,180]` mm.
+- Selected `baseline`, initial JSON-axis offset 0 mm and rail-to-JSON scale
+  -1.0 mm/mm. Both `production_ready` flags remain false, so the values are
+  available for rehearsal but do not admit real execution.
+- Both local files passed the production configuration parsers. The unified
+  runner dry-run accepted the real 439-stroke / 3,903-point repository sample
+  and explicitly made no device connection or motion.
+- Highest validation was L1. No hardware discovery, connection, command,
+  configuration write, deployment, service action or motion occurred. The
+  separate chassis direction observation remains outstanding before Baseline
+  can be armed. Commit status was pending at log-entry time on `main`.

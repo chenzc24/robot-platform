@@ -33,14 +33,17 @@ python app/localized_baseline_sim.py dataset/dobot-generation-1.json `
   --control-config config/drawing-control.example.json `
   --motion-gain 0.96 `
   --stop-overshoot-mm 1.5 `
-  --localization-errors-mm 0.4,-0.3,0.8,-0.6,0.2,-0.1,0.5,-0.2,0.3,-0.4,0.1,0.0 `
+  --localization-errors-mm 0.4 `
   --rail-min-mm -500 `
   --rail-max-mm 500 `
   --force --open
 ```
 
 The deterministic gain, overshoot and localization errors are simulator inputs,
-not production calibration. Omit them for the simulator's ideal-motion defaults.
+not production calibration. A single localization-error value repeats at every
+fresh AprilTag generation; a sequence instead supplies one value per generation
+and deliberately fails if it is exhausted. Omit them for the simulator's
+ideal-motion defaults.
 
 The default report is written to ignored temporary output:
 
@@ -68,11 +71,11 @@ measured_json_axis_offset_mm = json_mm_per_rail_mm
                                   - measured_reference_position_mm)
 ```
 
-The production relocator converts the planner's requested JSON-axis delta to an
-open-loop chassis command using the loaded drawing-control speed, refresh,
-hold, maximum-distance, scale and localization timeout. The fake chassis
-integrates those actual production `VELOCITY` calls, then applies the fixed
-motion gain and signed stop overshoot:
+The production relocator first caps the planner's requested center shift to its
+normal window target (160 mm in the template), then withholds the configured
+approach reserve (20 mm) from its coarse move. The fake chassis integrates that
+actual production `VELOCITY` call, then applies the fixed motion gain and signed
+stop overshoot:
 
 ```text
 commanded_rail_move_mm = requested_json_delta_mm / json_mm_per_rail_mm
@@ -82,11 +85,12 @@ actual_rail_move_mm = commanded_rail_move_mm * motion_gain
 
 Only after the production relocator calls logical `STOP`, parses the returned
 status and requests a new generation does the fake localization adapter add the
-next declared error. The coordinator receives that measured offset and calls
-the production planner again from the exact checkpoint. It does not replace the
-measured result with the planner target. Rail bounds, zero progress, exhausted
-error samples and the production window limit fail the run instead of being
-corrected for presentation.
+next declared error. It then performs bounded micro-moves toward the same target
+until its new measured offset is within tolerance. The coordinator receives only
+that final measured offset and calls the production planner again from the exact
+checkpoint. Rail bounds, failed residual progress, exhausted adjustment attempts,
+exhausted error samples and the production window limit fail the run instead of
+being corrected for presentation.
 
 The report also totals absolute rail travel and flags direction reversals. A
 reversal is not automatically a planner defect: group/pen order and a narrow

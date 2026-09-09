@@ -11,6 +11,7 @@ from .models import DrawingError
 
 _V1_TOP_FIELDS = {"version", "production_ready", "selected_mode", "json_mm_per_rail_mm", "baseline", "advanced"}
 _V2_TOP_FIELDS = _V1_TOP_FIELDS | {"localized_baseline"}
+_V3_TOP_FIELDS = _V2_TOP_FIELDS
 _BASELINE_FIELDS_V1 = {
     "speed_mm_s", "refresh_ms", "hold_ms", "max_distance_mm", "settle_ms",
 }
@@ -18,7 +19,14 @@ _BASELINE_FIELDS = {
     "initial_json_axis_offset_mm", "speed_mm_s", "refresh_ms", "hold_ms",
     "max_distance_mm", "settle_ms",
 }
-_LOCALIZED_BASELINE_FIELDS = {"poll_ms", "localization_timeout_ms"}
+_LOCALIZED_BASELINE_FIELDS_V2 = {"poll_ms", "localization_timeout_ms"}
+_LOCALIZED_BASELINE_FIELDS_V3 = _LOCALIZED_BASELINE_FIELDS_V2 | {
+    "normal_window_advance_mm",
+    "coarse_approach_reserve_mm",
+    "micro_adjust_max_step_mm",
+    "micro_adjust_tolerance_mm",
+    "micro_adjust_max_attempts",
+}
 _ADVANCED_FIELDS = {"poll_ms", "station_timeout_ms", "localization_timeout_ms"}
 
 
@@ -69,6 +77,11 @@ class AdvancedRelocationConfig:
 class LocalizedBaselineRelocationConfig:
     poll_ms: int
     localization_timeout_ms: int
+    normal_window_advance_mm: float
+    coarse_approach_reserve_mm: float
+    micro_adjust_max_step_mm: float
+    micro_adjust_tolerance_mm: float
+    micro_adjust_max_attempts: int
 
 
 @dataclass(frozen=True)
@@ -118,9 +131,13 @@ def parse_drawing_control_config(document):
     if not isinstance(document, dict):
         raise DrawingError("drawing control config has unexpected or missing fields")
     version = document.get("version")
-    if isinstance(version, bool) or version not in (1, 2):
-        raise DrawingError("drawing control version must be 1 or 2")
-    _exact(document, _V1_TOP_FIELDS if version == 1 else _V2_TOP_FIELDS, "drawing control config")
+    if isinstance(version, bool) or version not in (1, 2, 3):
+        raise DrawingError("drawing control version must be 1, 2 or 3")
+    _exact(
+        document,
+        _V1_TOP_FIELDS if version == 1 else (_V2_TOP_FIELDS if version == 2 else _V3_TOP_FIELDS),
+        "drawing control config",
+    )
     if type(document["production_ready"]) is not bool:
         raise DrawingError("production_ready must be boolean")
     mode = document["selected_mode"]
@@ -153,16 +170,45 @@ def parse_drawing_control_config(document):
         raise DrawingError("baseline.refresh_ms must be less than hold_ms")
 
     localized_config = None
-    if version == 2:
+    if version in (2, 3):
         localized = document["localized_baseline"]
-        _exact(localized, _LOCALIZED_BASELINE_FIELDS, "localized_baseline")
+        _exact(
+            localized,
+            _LOCALIZED_BASELINE_FIELDS_V2 if version == 2 else _LOCALIZED_BASELINE_FIELDS_V3,
+            "localized_baseline",
+        )
+        normal_target = _number(
+            localized.get("normal_window_advance_mm", min(160.0, baseline_config.max_distance_mm)),
+            "localized_baseline.normal_window_advance_mm", 1.0,
+            baseline_config.max_distance_mm,
+        )
+        reserve = _number(
+            localized.get("coarse_approach_reserve_mm", min(20.0, normal_target / 2.0)),
+            "localized_baseline.coarse_approach_reserve_mm", 0.1, normal_target,
+        )
+        micro_step = _number(
+            localized.get("micro_adjust_max_step_mm", min(20.0, normal_target)),
+            "localized_baseline.micro_adjust_max_step_mm", 0.1, normal_target,
+        )
+        tolerance = _number(
+            localized.get("micro_adjust_tolerance_mm", min(3.0, micro_step)),
+            "localized_baseline.micro_adjust_tolerance_mm", 0.0, micro_step,
+        )
         localized_config = LocalizedBaselineRelocationConfig(
-            poll_ms=_integer(
+            _integer(
                 localized["poll_ms"], "localized_baseline.poll_ms", 20, 1000
             ),
-            localization_timeout_ms=_integer(
+            _integer(
                 localized["localization_timeout_ms"],
                 "localized_baseline.localization_timeout_ms", 100, 120000,
+            ),
+            normal_target,
+            reserve,
+            micro_step,
+            tolerance,
+            _integer(
+                localized.get("micro_adjust_max_attempts", 3),
+                "localized_baseline.micro_adjust_max_attempts", 1, 10,
             ),
         )
 
@@ -309,21 +355,23 @@ def _await_fresh_lock(relocator, old_generation, settings, mode):
 
 
 class LocalizedBaselineRelocator(BaselineRelocator):
-    """Move directly, confirm logical stop, then replace offset from AprilTag."""
+    """Approach a bounded window target, then close it with AprilTag locks."""
 
     def __init__(self, chassis, localization, config, **kwargs):
         super().__init__(chassis, config, **kwargs)
         self.localization = localization
 
-    def relocate(self, offset_before_mm, json_delta_mm, admission):
-        self._admit(admission)
-        offset_before_mm = _number(offset_before_mm, "offset_before_mm")
-        before = _localized_scale(
-            self.localization, self.config.json_mm_per_rail_mm,
-            "localized_baseline",
-        )
-        old_generation = before.get("generation", 0)
+    def barrier_delta(self, json_delta_mm):
+        """Use a normal, non-edge window advance rather than full centering."""
         rail_distance = self._rail_distance(json_delta_mm)
+        limit = self.config.localized_baseline.normal_window_advance_mm
+        if abs(rail_distance) <= limit:
+            return _number(json_delta_mm, "json offset delta")
+        return (limit if rail_distance > 0 else -limit) * self.config.json_mm_per_rail_mm
+
+    def _move_then_lock(self, old_generation, rail_distance, phase, target_offset_mm):
+        if rail_distance == 0:
+            raise DrawingError("localized_baseline_zero_motion")
         settings = self.config.baseline
         if abs(rail_distance) > settings.max_distance_mm:
             raise DrawingError("localized_baseline_distance_exceeds_limit")
@@ -331,11 +379,13 @@ class LocalizedBaselineRelocator(BaselineRelocator):
         deadline = self.clock() + abs(rail_distance) / settings.speed_mm_s
         motion_error = None
         refresh_count = 0
-        self.localization.on_motion_intent("localized_baseline_motion")
+        self.localization.on_motion_intent("localized_baseline_%s_motion" % phase)
         self._emit(
-            "localized_baseline_start",
+            "localized_baseline_start" if phase == "coarse" else "localized_baseline_micro_adjust_start",
+            phase=phase,
             commanded_rail_distance_mm=rail_distance,
             speed_mm_s=direction * settings.speed_mm_s,
+            target_json_axis_offset_mm=target_offset_mm,
         )
         try:
             while self.clock() < deadline:
@@ -375,12 +425,78 @@ class LocalizedBaselineRelocator(BaselineRelocator):
             self, old_generation, self.config.localized_baseline,
             "localized_baseline",
         )
-        return RelocationResult(
-            "localized_baseline", "apriltag_locked", round(new_offset, 6),
-            round(new_offset - offset_before_mm, 6), round(rail_distance, 6),
-            context.get("rail_position_mm"), context.get("generation"),
-            source.get("min_confidence"),
+        self._emit(
+            "localized_baseline_coarse_locked" if phase == "coarse" else "localized_baseline_micro_adjust_locked",
+            phase=phase,
+            commanded_rail_distance_mm=rail_distance,
+            target_json_axis_offset_mm=target_offset_mm,
+            json_axis_offset_mm=new_offset,
+            localization_generation=context.get("generation"),
         )
+        return context, source, new_offset
+
+    def relocate(self, offset_before_mm, json_delta_mm, admission):
+        self._admit(admission)
+        offset_before_mm = _number(offset_before_mm, "offset_before_mm")
+        before = _localized_scale(
+            self.localization, self.config.json_mm_per_rail_mm,
+            "localized_baseline",
+        )
+        context = before.get("context") or {}
+        current_offset = _number(
+            context.get("json_axis_offset_mm"), "localized json offset"
+        )
+        if not math.isclose(current_offset, offset_before_mm, abs_tol=1e-6):
+            raise DrawingError("localized_baseline_offset_stale")
+        generation = before.get("generation", 0)
+        target_offset = current_offset + _number(json_delta_mm, "json offset delta")
+        target_rail_distance = self._rail_distance(target_offset - current_offset)
+        approach = max(
+            0.0,
+            abs(target_rail_distance)
+            - self.config.localized_baseline.coarse_approach_reserve_mm,
+        )
+        coarse_distance = (
+            0.0 if approach == 0 else (approach if target_rail_distance > 0 else -approach)
+        )
+        commanded_total = 0.0
+        source = (context.get("source") or {})
+        if coarse_distance:
+            context, source, current_offset = self._move_then_lock(
+                generation, coarse_distance, "coarse", target_offset
+            )
+            generation = context.get("generation")
+            commanded_total += coarse_distance
+
+        settings = self.config.localized_baseline
+        residual_rail = (
+            target_offset - current_offset
+        ) / self.config.json_mm_per_rail_mm
+        for attempt in range(settings.micro_adjust_max_attempts + 1):
+            if abs(residual_rail) <= settings.micro_adjust_tolerance_mm:
+                return RelocationResult(
+                    "localized_baseline", "apriltag_micro_adjusted",
+                    round(current_offset, 6),
+                    round(current_offset - offset_before_mm, 6),
+                    round(commanded_total, 6),
+                    context.get("rail_position_mm"), generation,
+                    source.get("min_confidence"),
+                )
+            if attempt == settings.micro_adjust_max_attempts:
+                raise DrawingError("localized_baseline_micro_adjust_exhausted")
+            step = min(abs(residual_rail), settings.micro_adjust_max_step_mm)
+            micro_distance = step if residual_rail > 0 else -step
+            previous_residual = abs(residual_rail)
+            context, source, current_offset = self._move_then_lock(
+                generation, micro_distance, "micro_adjust", target_offset
+            )
+            generation = context.get("generation")
+            commanded_total += micro_distance
+            residual_rail = (
+                target_offset - current_offset
+            ) / self.config.json_mm_per_rail_mm
+            if abs(residual_rail) >= previous_residual - 1e-6:
+                raise DrawingError("localized_baseline_micro_adjust_no_progress")
 
 
 class AdvancedRelocator(_Relocator):

@@ -38,11 +38,19 @@ def config_document(mode="baseline", ready=True, version=1):
             "localization_timeout_ms": 1000,
         },
     }
-    if version == 2:
+    if version >= 2:
         document["localized_baseline"] = {
             "poll_ms": 100,
             "localization_timeout_ms": 1000,
         }
+    if version == 3:
+        document["localized_baseline"].update({
+            "normal_window_advance_mm": 160,
+            "coarse_approach_reserve_mm": 20,
+            "micro_adjust_max_step_mm": 20,
+            "micro_adjust_tolerance_mm": 3,
+            "micro_adjust_max_attempts": 3,
+        })
     return document
 
 
@@ -131,6 +139,42 @@ class FakeLocalization:
 
     def on_chassis_status(self, state):
         self.chassis_state = state
+
+
+class ScriptedLocalization:
+    """A new AprilTag generation is available after every commanded stop."""
+
+    def __init__(self, offsets):
+        self.offsets = list(offsets)
+        self.generation = 2
+        self.offset = 0.0
+        self.requested = False
+        self.calls = []
+
+    def snapshot(self):
+        if self.requested:
+            self.generation += 1
+            self.requested = False
+            self.offset = self.offsets.pop(0)
+        return {
+            "state": "locked", "generation": self.generation,
+            "context": {
+                "generation": self.generation,
+                "json_axis_offset_mm": self.offset,
+                "json_mm_per_rail_mm": -1.0,
+                "rail_position_mm": -self.offset,
+                "source": {"min_confidence": 0.91},
+            },
+        }
+
+    def request_relocalization(self):
+        self.requested = True
+
+    def on_motion_intent(self, reason):
+        self.calls.append((reason, 0.0))
+
+    def on_chassis_status(self, _state):
+        pass
 
 
 def admission(**overrides):
@@ -327,27 +371,77 @@ class AdvancedRelocatorTests(unittest.TestCase):
 
 
 class LocalizedBaselineRelocatorTests(unittest.TestCase):
-    def test_direct_motion_then_stop_status_and_fresh_apriltag_offset(self):
-        clock = FakeClock()
-        chassis = FakeChassis()
-        localization = FakeLocalization()
+    def test_v2_localized_config_gets_conservative_compatibility_defaults(self):
         config = parse_drawing_control_config(
             config_document("localized_baseline", version=2)
         )
-        result = create_relocator(
-            config, chassis, localization, clock=clock, sleep=clock.sleep
-        ).relocate(0, -10, admission())
+        settings = config.localized_baseline
+        self.assertEqual(settings.normal_window_advance_mm, 160)
+        self.assertEqual(settings.coarse_approach_reserve_mm, 20)
+        self.assertEqual(settings.micro_adjust_max_step_mm, 20)
+        self.assertEqual(settings.micro_adjust_tolerance_mm, 3)
+        self.assertEqual(settings.micro_adjust_max_attempts, 3)
+
+    def test_target_cap_coarse_approach_and_fresh_micro_adjust_locks(self):
+        clock = FakeClock()
+        chassis = FakeChassis()
+        localization = ScriptedLocalization((-138.0, -158.5))
+        config = parse_drawing_control_config(
+            config_document("localized_baseline", version=3)
+        )
+        events = []
+        relocator = create_relocator(
+            config, chassis, localization, clock=clock, sleep=clock.sleep,
+            event=events.append,
+        )
+        self.assertEqual(relocator.barrier_delta(-180), -160)
+        result = relocator.relocate(0, -160, admission())
         self.assertEqual(result.mode, "localized_baseline")
-        self.assertEqual(result.offset_source, "apriltag_locked")
-        self.assertEqual(result.commanded_rail_distance_mm, 10)
-        self.assertEqual(result.json_axis_offset_mm, -42.5)
-        self.assertEqual(result.localization_generation, 3)
-        names = [name for name, _ in chassis.calls]
-        self.assertIn("velocity", names)
-        self.assertLess(names.index("stop"), names.index("status"))
-        self.assertNotIn("line_follow_start", names)
-        self.assertEqual(localization.motion_reason, "localized_baseline_motion")
-        self.assertEqual(localization.chassis_state, "enabled_stopped")
+        self.assertEqual(result.offset_source, "apriltag_micro_adjusted")
+        self.assertEqual(result.commanded_rail_distance_mm, 160)
+        self.assertEqual(result.json_axis_offset_mm, -158.5)
+        self.assertEqual(result.localization_generation, 4)
+        self.assertEqual(
+            [event["commanded_rail_distance_mm"] for event in events
+             if event["state"] in (
+                 "localized_baseline_start",
+                 "localized_baseline_micro_adjust_start",
+             )],
+            [140, 20],
+        )
+        self.assertEqual(
+            [name for name, _ in chassis.calls].count("stop"), 2
+        )
+        self.assertEqual(
+            [name for name, _ in chassis.calls].count("status"), 2
+        )
+        self.assertEqual(len(localization.calls), 2)
+
+    def test_micro_adjustment_rejects_no_progress_before_resume(self):
+        clock = FakeClock()
+        chassis = FakeChassis()
+        localization = ScriptedLocalization((-138.0, -137.0))
+        config = parse_drawing_control_config(
+            config_document("localized_baseline", version=3)
+        )
+        with self.assertRaisesRegex(DrawingError, "micro_adjust_no_progress"):
+            create_relocator(
+                config, chassis, localization, clock=clock, sleep=clock.sleep
+            ).relocate(0, -160, admission())
+        self.assertEqual([name for name, _ in chassis.calls].count("stop"), 2)
+
+    def test_micro_adjustment_stops_after_configured_attempt_limit(self):
+        clock = FakeClock()
+        chassis = FakeChassis()
+        localization = ScriptedLocalization((-140.0, -150.0))
+        document = config_document("localized_baseline", version=3)
+        document["localized_baseline"]["micro_adjust_max_attempts"] = 1
+        config = parse_drawing_control_config(document)
+        with self.assertRaisesRegex(DrawingError, "micro_adjust_exhausted"):
+            create_relocator(
+                config, chassis, localization, clock=clock, sleep=clock.sleep
+            ).relocate(0, -160, admission())
+        self.assertEqual([name for name, _ in chassis.calls].count("stop"), 2)
 
     def test_unconfirmed_stop_blocks_localization_and_resume(self):
         class MovingAfterStop(FakeChassis):
@@ -360,7 +454,7 @@ class LocalizedBaselineRelocatorTests(unittest.TestCase):
         chassis = MovingAfterStop()
         localization = FakeLocalization()
         config = parse_drawing_control_config(
-            config_document("localized_baseline", version=2)
+            config_document("localized_baseline", version=3)
         )
         with self.assertRaisesRegex(DrawingError, "not_stopped"):
             create_relocator(

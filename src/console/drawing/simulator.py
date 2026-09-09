@@ -83,7 +83,7 @@ def _simulation_drawing_config(config, reachable_min_mm, reachable_max_mm):
 
 def _default_control_config(scale):
     return parse_drawing_control_config({
-        "version": 2,
+        "version": 3,
         "production_ready": True,
         "selected_mode": "localized_baseline",
         "json_mm_per_rail_mm": scale,
@@ -98,6 +98,11 @@ def _default_control_config(scale):
         "localized_baseline": {
             "poll_ms": 100,
             "localization_timeout_ms": 10000,
+            "normal_window_advance_mm": 160.0,
+            "coarse_approach_reserve_mm": 20.0,
+            "micro_adjust_max_step_mm": 20.0,
+            "micro_adjust_tolerance_mm": 3.0,
+            "micro_adjust_max_attempts": 3,
         },
         "advanced": {
             "poll_ms": 100,
@@ -112,7 +117,7 @@ def _simulation_control_config(config, scale_override):
         scale = -1.0 if scale_override is None else scale_override
         return _default_control_config(scale)
     if config.localized_baseline is None:
-        raise DrawingError("simulation requires drawing control schema version 2")
+        raise DrawingError("simulation requires drawing control schema version 2 or 3")
     scale = config.json_mm_per_rail_mm if scale_override is None else scale_override
     return replace(
         config,
@@ -421,36 +426,43 @@ class _TraceSink:
                 "statistics": dict(plan.statistics),
                 "relocation": None,
             })
-        elif name == "localized_baseline_start":
+        elif name in (
+            "localized_baseline_start",
+            "localized_baseline_micro_adjust_start",
+        ):
             self.chassis.expect_command(event["commanded_rail_distance_mm"])
-            plan = self._plans[-1]
-            barrier = plan.steps[-1]
-            self.windows[-1]["relocation"] = {
-                "requested_json_axis_offset_delta_mm": _clean(
-                    event["commanded_rail_distance_mm"] * self.scale
-                ),
-                "required_delta_range_mm": list(
-                    barrier.payload["required_json_axis_offset_delta_range_mm"]
-                ),
-                "commanded_open_loop_rail_move_mm": _clean(
-                    event["commanded_rail_distance_mm"]
-                ),
-                "sequence": _safety_sequence(plan) + [
-                    "chassis_direct_move", "stop", "enabled_stopped", "settle",
-                    "apriltag_lock_new_generation", "resume_checkpoint",
-                ],
-            }
+            if self.windows[-1]["relocation"] is None:
+                plan = self._plans[-1]
+                barrier = plan.steps[-1]
+                self.windows[-1]["relocation"] = {
+                    "requested_json_axis_offset_delta_mm": _clean(
+                        event["target_json_axis_offset_mm"]
+                        - self.windows[-1]["json_axis_offset_mm"]
+                    ),
+                    "target_json_axis_offset_mm": event["target_json_axis_offset_mm"],
+                    "required_delta_range_mm": list(
+                        barrier.payload["required_json_axis_offset_delta_range_mm"]
+                    ),
+                    "move_start_index": len(self.chassis.moves),
+                    "sequence": _safety_sequence(plan) + [
+                        "chassis_coarse_move", "stop", "enabled_stopped",
+                        "apriltag_lock_new_generation", "micro_adjust_if_needed",
+                        "resume_checkpoint",
+                    ],
+                }
         elif name == "localized_relocation_done":
-            move = self.chassis.moves[-1]
             relocation = self.windows[-1]["relocation"]
+            moves = self.chassis.moves[relocation.pop("move_start_index"):]
+            commanded = _clean(sum(move["expected_commanded_rail_move_mm"] for move in moves))
+            actual = _clean(sum(move["actual_true_rail_move_mm"] for move in moves))
             relocation.update({
-                "timed_commanded_rail_move_mm": move[
-                    "timed_commanded_rail_move_mm"
-                ],
-                "actual_true_rail_move_mm": move["actual_true_rail_move_mm"],
-                "true_rail_position_after_mm": move[
-                    "true_rail_position_after_mm"
-                ],
+                "commanded_open_loop_rail_move_mm": commanded,
+                "timed_commanded_rail_move_mm": _clean(
+                    sum(move["timed_commanded_rail_move_mm"] for move in moves)
+                ),
+                "actual_true_rail_move_mm": actual,
+                "true_rail_position_after_mm": moves[-1]["true_rail_position_after_mm"],
+                "moves": moves,
                 "localization_error_after_mm": self.localization.error_mm,
                 "measured_rail_position_after_mm": event[
                     "measured_rail_position_mm"
@@ -463,7 +475,9 @@ class _TraceSink:
                 "production_reported_json_axis_offset_delta_mm": event[
                     "json_axis_offset_delta_mm"
                 ],
-                "velocity_refresh_count": move["velocity_refresh_count"],
+                "velocity_refresh_count": sum(
+                    move["velocity_refresh_count"] for move in moves
+                ),
             })
 
 
@@ -556,6 +570,21 @@ def _result(
             "localization_poll_ms": control_config.localized_baseline.poll_ms,
             "localization_timeout_ms": (
                 control_config.localized_baseline.localization_timeout_ms
+            ),
+            "normal_window_advance_mm": (
+                control_config.localized_baseline.normal_window_advance_mm
+            ),
+            "coarse_approach_reserve_mm": (
+                control_config.localized_baseline.coarse_approach_reserve_mm
+            ),
+            "micro_adjust_max_step_mm": (
+                control_config.localized_baseline.micro_adjust_max_step_mm
+            ),
+            "micro_adjust_tolerance_mm": (
+                control_config.localized_baseline.micro_adjust_tolerance_mm
+            ),
+            "micro_adjust_max_attempts": (
+                control_config.localized_baseline.micro_adjust_max_attempts
             ),
         },
         "geometry": {

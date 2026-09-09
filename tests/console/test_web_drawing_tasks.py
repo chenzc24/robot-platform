@@ -67,9 +67,10 @@ def two_window_job(path):
 
 
 class FakeDrawingLocalization:
-    def __init__(self):
+    def __init__(self, offsets=None):
         self.generation = 1
         self.offset = 100.0
+        self.offsets = list(offsets or ())
         self.tasks = []
 
     def snapshot(self, *_args):
@@ -99,7 +100,7 @@ class FakeDrawingLocalization:
 
     def request_relocalization(self):
         self.generation += 1
-        self.offset = -100.0
+        self.offset = self.offsets.pop(0) if self.offsets else -100.0
 
     def begin_task(self, task_id, generation=None):
         self.tasks.append(("begin", task_id, generation))
@@ -403,7 +404,11 @@ class WebDrawingOwnershipTests(unittest.TestCase):
             with self.subTest(mode=mode):
                 chassis = FakeAdvancedChassis()
                 arm = FakeArm()
-                localization = FakeDrawingLocalization()
+                localization = (
+                    FakeDrawingLocalization((-40.0, -60.0, -200.0, -220.0))
+                    if mode == "localized_baseline"
+                    else FakeDrawingLocalization()
+                )
                 runtime = WebConsoleRuntime(
                     runtime_config,
                     lambda _config, value=chassis: value,
@@ -426,9 +431,18 @@ class WebDrawingOwnershipTests(unittest.TestCase):
                     })
                     final = runtime._drawing_tasks.wait(6)
                     self.assertEqual(final["state"], "completed", final)
-                    self.assertEqual(final["result"]["windows"], 2)
-                    self.assertEqual(len(final["result"]["relocations"]), 1)
-                    self.assertEqual(localization.generation, 2)
+                    self.assertEqual(
+                        final["result"]["windows"],
+                        3 if mode == "localized_baseline" else 2,
+                    )
+                    self.assertEqual(
+                        len(final["result"]["relocations"]),
+                        2 if mode == "localized_baseline" else 1,
+                    )
+                    self.assertEqual(
+                        localization.generation,
+                        5 if mode == "localized_baseline" else 2,
+                    )
                     if mode == "localized_baseline":
                         self.assertTrue(any(call[0] == "velocity" for call in chassis.calls))
                     else:

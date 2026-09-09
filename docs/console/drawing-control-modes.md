@@ -49,17 +49,28 @@ following. Once `STOP` returns, it also requires an exact `STATUS` report of
 `enabled_stopped`, invalidates the old localization on motion intent, waits the
 localization settling interval, and accepts only a newer stable AprilTag lock.
 
-The planner's requested delta chooses the coarse direct distance. When its
-centering suggestion exceeds `max_distance_mm`, the coordinator limits that
-single direct hop to `max_distance_mm`, stops, obtains the mode-required fresh
-localization, and replans from the same checkpoint. The relocator's direct-call
-distance guard remains active. The measured result, rather than the unexecuted
-remainder of the centering suggestion, determines whether another hop is
-needed. In Localized Baseline, the corresponding open-loop estimate is never
-used as the resumed drawing offset. The replacement
-offset, rail position, generation and confidence all come from the new AprilTag
-context. `baseline.settle_ms` belongs only to Baseline; Localized Baseline uses
-the localization state's configured settling and sample windows.
+The hard Home-relative drawing boundary remains the planner's first barrier. A
+barrier's centering suggestion is **not** a command to stop at the edge of the
+next arm window. Schema 3 uses five Localized Baseline settings to make each
+new window a measured approach:
+
+- `normal_window_advance_mm` caps one normal rail target (160 mm in the
+  template), even when the planner could center a larger direct hop.
+- `coarse_approach_reserve_mm` is withheld from that target on the first move
+  (20 mm in the template), so a 160 mm target begins with a 140 mm coarse move.
+- `micro_adjust_max_step_mm`, `micro_adjust_tolerance_mm` and
+  `micro_adjust_max_attempts` bound the final PC-directed correction.
+
+After the coarse move, and after every micro-move, the PC requires `STOP`, an
+`enabled_stopped` status and a strictly newer AprilTag generation. It computes
+the next correction from the measured offset to the same target; it never uses
+timed travel as the resume position. Failure to make residual progress, an
+unstable/missing lock or exhausted attempts fails before another drawing window
+can begin. A final measured residual within tolerance is the only resume gate.
+Schema 2 remains accepted with these conservative defaults so existing local
+configuration is not silently allowed to retain the previous one-shot behavior.
+`baseline.settle_ms` belongs only to Baseline; Localized Baseline uses the
+localization state's configured settling and sample windows.
 
 ## Advanced
 

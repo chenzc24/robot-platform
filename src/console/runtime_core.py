@@ -15,6 +15,7 @@ MOTION_ARM_COMMANDS = {
     "jog_joint",
     "jog_xyz",
     "gripper",
+    "draw_stroke",
 }
 
 
@@ -158,6 +159,18 @@ def dispatch_arm(client, command, payload=None):
             blend_pct=payload.get("blend_pct", 0),
         ),
         "gripper": lambda: client.gripper(payload["width_mm"]),
+        "draw_stroke": lambda: client.draw_stroke(
+            payload["anchor_translation_mm"],
+            payload["pen_down_translation_mm"],
+            payload["pen_up_translation_mm"],
+            payload["segments_mm"],
+            user=payload.get("user", 0),
+            tool=payload.get("tool", 0),
+            accel_pct=payload.get("accel_pct", 5),
+            travel_speed_pct=payload.get("travel_speed_pct", 5),
+            draw_speed_pct=payload.get("draw_speed_pct", 5),
+            draw_blend_pct=payload.get("draw_blend_pct", 100),
+        ),
     }
     if command not in handlers:
         raise ValueError("unsupported_arm_command")

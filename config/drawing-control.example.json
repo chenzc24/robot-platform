@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "production_ready": false,
   "selected_mode": "localized_baseline",
   "json_mm_per_rail_mm": -1.0,
@@ -13,7 +13,12 @@
   },
   "localized_baseline": {
     "poll_ms": 100,
-    "localization_timeout_ms": 10000
+    "localization_timeout_ms": 10000,
+    "normal_window_advance_mm": 160.0,
+    "coarse_approach_reserve_mm": 20.0,
+    "micro_adjust_max_step_mm": 20.0,
+    "micro_adjust_tolerance_mm": 3.0,
+    "micro_adjust_max_attempts": 3
   },
   "advanced": {
     "poll_ms": 100,

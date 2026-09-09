@@ -92,9 +92,9 @@ class LocalizedBaselineSimulatorTests(unittest.TestCase):
             "drawing.control_modes.LocalizedBaselineRelocator",
         )
         self.assertGreater(result["production_path"]["velocity_calls"], 0)
-        self.assertEqual(result["production_path"]["stop_calls"], 1)
-        self.assertEqual(result["production_path"]["status_calls"], 1)
-        self.assertEqual(result["production_path"]["relocalization_requests"], 1)
+        self.assertEqual(result["production_path"]["stop_calls"], 2)
+        self.assertEqual(result["production_path"]["status_calls"], 2)
+        self.assertEqual(result["production_path"]["relocalization_requests"], 2)
         first, second = result["windows"]
         self.assertEqual(first["checkpoint_end"], {
             "group_index": 0, "stroke_index": 0, "next_point_index": 2,
@@ -103,8 +103,12 @@ class LocalizedBaselineSimulatorTests(unittest.TestCase):
         self.assertEqual(first["relocation"]["commanded_open_loop_rail_move_mm"], 35)
         self.assertEqual(first["relocation"]["actual_true_rail_move_mm"], 35)
         self.assertEqual(first["relocation"]["timed_commanded_rail_move_mm"], 35)
+        self.assertEqual(
+            [move["expected_commanded_rail_move_mm"] for move in first["relocation"]["moves"]],
+            [15, 20],
+        )
         self.assertEqual(first["relocation"]["logical_stop_state"], "enabled_stopped")
-        self.assertEqual(second["generation"], 2)
+        self.assertEqual(second["generation"], 3)
         self.assertEqual(second["true_rail_position_mm"], 35)
         self.assertEqual(second["measured_rail_position_mm"], 35)
         self.assertEqual(second["json_axis_offset_mm"], -35)
@@ -130,9 +134,9 @@ class LocalizedBaselineSimulatorTests(unittest.TestCase):
             rail_min_mm=-100, rail_max_mm=100,
         )
         first = result["windows"][0]["relocation"]
-        expected_actual = round(
-            first["commanded_open_loop_rail_move_mm"] * 0.9 + 1, 9
-        )
+        expected_actual = round(sum(
+            move["actual_true_rail_move_mm"] for move in first["moves"]
+        ), 9)
         self.assertEqual(first["actual_true_rail_move_mm"], expected_actual)
         self.assertNotEqual(
             first["requested_json_axis_offset_delta_mm"],
@@ -142,7 +146,7 @@ class LocalizedBaselineSimulatorTests(unittest.TestCase):
         self.assertIn("varying_localization_error_enabled", result["summary"]["scenario_warnings"])
 
     def test_physical_non_progress_and_rail_bounds_stop_the_rehearsal(self):
-        with self.assertRaisesRegex(DrawingError, "localized_baseline_no_checkpoint_progress"):
+        with self.assertRaisesRegex(DrawingError, "localized_baseline_micro_adjust_no_progress"):
             simulate_localized_baseline(
                 drawing_job(), drawing_config(), reachable_min_mm=-60,
                 reachable_max_mm=40, motion_gain=0,

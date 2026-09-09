@@ -120,6 +120,24 @@ class _DrawingArmAdapter:
     def gripper(self, width_mm):
         return self._call("gripper", {"width_mm": width_mm})
 
+    def draw_stroke(
+        self, anchor_translation_mm, pen_down_translation_mm,
+        pen_up_translation_mm, segments_mm, user=0, tool=0, accel_pct=5,
+        travel_speed_pct=5, draw_speed_pct=5, draw_blend_pct=100,
+    ):
+        return self._call("draw_stroke", {
+            "anchor_translation_mm": list(anchor_translation_mm),
+            "pen_down_translation_mm": list(pen_down_translation_mm),
+            "pen_up_translation_mm": list(pen_up_translation_mm),
+            "segments_mm": [list(value) for value in segments_mm],
+            "user": user,
+            "tool": tool,
+            "accel_pct": accel_pct,
+            "travel_speed_pct": travel_speed_pct,
+            "draw_speed_pct": draw_speed_pct,
+            "draw_blend_pct": draw_blend_pct,
+        })
+
 
 class WebConsoleRuntime:
     """Own hardware sessions and expose sanitized state to one local browser."""

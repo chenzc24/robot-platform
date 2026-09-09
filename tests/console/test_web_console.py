@@ -144,6 +144,16 @@ class FakeArm:
     def gripper(self, width):
         self.calls.append(("gripper", width)); return [{"lifecycle": "DONE", "payload": {}}]
 
+    def draw_stroke(
+        self, anchor, pen_down, pen_up, segments, *, user, tool, accel_pct,
+        travel_speed_pct, draw_speed_pct, draw_blend_pct,
+    ):
+        self.calls.append((
+            "draw_stroke", anchor, pen_down, pen_up, segments, user, tool,
+            accel_pct, travel_speed_pct, draw_speed_pct, draw_blend_pct,
+        ))
+        return [{"lifecycle": "DONE", "payload": {}}]
+
 
 class ExplicitRejection(RuntimeError):
     explicit_rejection = True

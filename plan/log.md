@@ -1916,6 +1916,26 @@ entry format:
 - The unrelated `.vscode/settings.json` user change was not modified or staged.
   Commit status was pending at log-entry time on `main`.
 
+## 2026-09-09 - Add Localized Baseline approach reserve and AprilTag micro-adjustment
+
+- Added schema-3 Localized Baseline settings that cap a normal target advance
+  at 160 mm, withhold a 20 mm coarse-approach reserve, and bound AprilTag-based
+  micro-adjustment to 20 mm steps, 3 mm residual tolerance and three attempts.
+  Schema-2 configuration remains accepted with those conservative defaults.
+- The relocation path now requires STOP, `enabled_stopped` and a strictly newer
+  AprilTag generation after the coarse move and after every correction. It
+  resumes only from the final measured offset; stale offsets, no residual
+  progress and exhausted adjustments fail before another drawing window.
+- The deterministic production-path rehearsal of the 439-stroke / 3,903-point
+  sample completed with non-ideal gain 0.96, 1.5 mm overshoot and repeated
+  0.4 mm localization error: 15 windows, 14 relocations, final generation 43,
+  2,287.6 mm commanded and 2,259.096 mm simulated actual rail travel.
+- Passed 68 focused local tests, compilation and JSON parsing. No device,
+  credential, configuration, service, network connection or physical motion was
+  accessed. The unrelated `.vscode/settings.json` and concurrent MaixCam
+  deployment work were not modified or staged. Commit status was pending at
+  log-entry time on `main`.
+
 ## 2026-09-09 - Make drawing geometry explicitly Home-relative
 
 - Replaced the drawing planner's implicit Home-zero scalar Y/Z mapping with an

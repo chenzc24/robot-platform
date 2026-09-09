@@ -2006,3 +2006,22 @@ entry format:
   accessed. The unrelated `.vscode/settings.json` and concurrent MaixCam
   deployment work were not modified or staged. Implementation commit `02c1f5a`
   was pushed to `origin/main`.
+
+## 2026-09-09 - Import the attended new-stroke Baseline test
+
+- Imported the supplied `strokes_testnew.json` as a version-controlled test
+  asset. Repaired only invalid JSON punctuation, retained 8 strokes / 16
+  points, and recorded the operator's explicit non-uniform mapping to the
+  configured 700 x 200 mm board. The guarded dry run completed with job hash
+  `34488b57de137444874e37c08225ffb28e1d9e0707432cb3992440553b42d3c6`.
+- With the operator's attended L3 safety confirmation, read-only ESP32 and arm
+  preflight checks passed. A required no-execute staged-stroke capability probe
+  was then indeterminate (`outcome_unknown`), and its follow-up status query
+  timed out downstream. No retry, production-gate change, controller deploy,
+  arm command that executes motion, chassis command or physical motion occurred.
+- The active controller is not proven compatible with the staged-stroke PC and
+  MaixCam release. This Baseline run is blocked until the controller project is
+  restored or deployed through LAN2 and responds to fresh PING/STATUS plus a
+  no-motion staged-protocol check. The unrelated `.vscode/settings.json` user
+  change was not modified or staged. Commit status is pending at log-entry time
+  on `main`.

@@ -258,7 +258,11 @@ class DrawingPlannerTests(unittest.TestCase):
         )
         plan = build_drawing_plan(self.job, config)
         self.assertFalse(plan.complete)
-        self.assertEqual(plan.next_checkpoint, PlanCheckpoint(0, 0, 2))
+        self.assertEqual(
+            plan.next_checkpoint,
+            PlanCheckpoint(0, 0, 2, ((1, 0),)),
+        )
+        self.assertTrue(any("blue/s2" in step.label for step in plan.steps))
         self.assertEqual(plan.steps[-1].kind, "reposition.required")
         self.assertEqual(plan.steps[-2].payload["purpose"], "reposition_safe_pose")
         self.assertTrue(any(
@@ -295,6 +299,42 @@ class DrawingPlannerTests(unittest.TestCase):
         self.assertEqual(len(homes), 1)
         self.assertEqual(len(strokes), 2)
         self.assertEqual(strokes[1].payload["anchor_translation_mm"], [0.0, -25.0, 0.0])
+
+    def test_spatial_window_finishes_all_reachable_colors_before_relocation(self):
+        document = grouped_document()
+        document["groups"] = [
+            {
+                "name": name,
+                "strokes": [
+                    stroke("%s-left" % name, 1, [[0.0, 0.2], [0.2, 0.2]]),
+                    stroke("%s-right" % name, 2, [[0.8, 0.2], [1.0, 0.2]]),
+                ],
+            }
+            for name in ("red", "blue")
+        ]
+        job = parse_drawing_document(document)
+        config = parse_drawing_config(
+            config_document(
+                reachable_user_y_min_mm=-60,
+                reachable_user_y_max_mm=0,
+            )
+        )
+        first = build_drawing_plan(job, config)
+        self.assertFalse(first.complete)
+        self.assertEqual(
+            first.next_checkpoint.completed_strokes,
+            ((0, 0), (1, 0)),
+        )
+        self.assertEqual(first.statistics["planned_strokes"], 2)
+
+        second = build_drawing_plan(
+            job,
+            config,
+            json_axis_offset_mm=-50,
+            checkpoint=first.next_checkpoint,
+        )
+        self.assertTrue(second.complete)
+        self.assertEqual(second.statistics["planned_strokes"], 2)
 
     def test_segment_wider_than_range_is_rejected(self):
         document = grouped_document()

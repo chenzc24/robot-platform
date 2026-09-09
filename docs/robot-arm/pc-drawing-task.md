@@ -143,22 +143,28 @@ return/pick cycle.
 
 ## Reachability and checkpoints
 
-Every point endpoint is checked before its motion step is emitted. If the first
-point is outside the configured User-Y range, the plan contains only a
-reposition barrier. If a later segment would leave the range, the partial plan
-first lifts the pen, returns it to the configured rack slot, and finishes at the
-configured home pose, then emits:
+Every point endpoint is checked before its motion step is emitted. Planning is
+spatial-window-first: one window collects every whole stroke that is currently
+reachable across all color groups, then executes those strokes in group/pen
+order before requesting chassis relocation. An unreachable stroke in an early
+color group therefore no longer prevents later colors in the same physical
+window from being completed.
 
-- the exact group, stroke and next-point checkpoint;
+If no remaining stroke fits, or if a later segment would leave the range, the
+partial plan first lifts the pen, returns it to the configured rack slot, and
+finishes at the configured home pose, then emits:
+
+- the exact current group, stroke and next-point plus the set of already
+  completed strokes;
 - the endpoint range that must fit after relocation;
 - the full feasible JSON-offset delta interval and a midpoint suggestion;
 - explicit requirements for pen-up, arm-safe state and a new localization
   generation.
 
-Resume planning starts at the previous point as a pen-down anchor and continues
-with the checkpointed segment. Input points are immutable. If one segment is
-wider than the configured User-Y workspace, planning rejects it instead of
-creating an endless reposition cycle.
+Resume planning skips the completed-stroke set, starts a partial stroke at the
+previous point as a pen-down anchor, and rescans the new physical window. Input
+points are immutable. If one segment is wider than the configured User-Y
+workspace, planning rejects it instead of creating an endless reposition cycle.
 
 Checkpoints do not authorize automatic recovery. The future executor must stop
 on `FAULT`, `REJECTED`, `UNKNOWN`, timeout or disconnect, record the checkpoint,

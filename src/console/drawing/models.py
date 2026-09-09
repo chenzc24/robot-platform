@@ -58,13 +58,20 @@ class PlanCheckpoint:
     group_index: int
     stroke_index: int
     next_point_index: int
+    completed_strokes: tuple = ()
 
     def to_dict(self):
-        return {
+        result = {
             "group_index": self.group_index,
             "stroke_index": self.stroke_index,
             "next_point_index": self.next_point_index,
         }
+        if self.completed_strokes:
+            result["completed_strokes"] = [
+                [group_index, stroke_index]
+                for group_index, stroke_index in self.completed_strokes
+            ]
+        return result
 
 
 @dataclass(frozen=True)

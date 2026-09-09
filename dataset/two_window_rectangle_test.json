@@ -20,28 +20,91 @@
       "name": "黄色",
       "strokes": [
         {
-          "id": "rectangle_left",
+          "id": "rectangle_left_yellow_edge",
           "order": 1,
           "points": [
             [0.45, 0.15],
-            [0.65, 0.15],
-            [0.65, 0.35],
-            [0.45, 0.35],
-            [0.45, 0.15]
+            [0.45, 0.35]
           ],
-          "closed": true
+          "closed": false
         },
         {
-          "id": "rectangle_right",
+          "id": "rectangle_right_yellow_edge",
           "order": 2,
           "points": [
             [0.75, 0.15],
-            [0.95, 0.15],
-            [0.95, 0.35],
-            [0.75, 0.35],
-            [0.75, 0.15]
+            [0.75, 0.35]
           ],
-          "closed": true
+          "closed": false
+        }
+      ]
+    },
+    {
+      "name": "粉色",
+      "strokes": [
+        {
+          "id": "rectangle_left_pink_edge",
+          "order": 1,
+          "points": [
+            [0.45, 0.15],
+            [0.65, 0.15]
+          ],
+          "closed": false
+        },
+        {
+          "id": "rectangle_right_pink_edge",
+          "order": 2,
+          "points": [
+            [0.75, 0.15],
+            [0.95, 0.15]
+          ],
+          "closed": false
+        }
+      ]
+    },
+    {
+      "name": "绿色",
+      "strokes": [
+        {
+          "id": "rectangle_left_green_edge",
+          "order": 1,
+          "points": [
+            [0.65, 0.15],
+            [0.65, 0.35]
+          ],
+          "closed": false
+        },
+        {
+          "id": "rectangle_right_green_edge",
+          "order": 2,
+          "points": [
+            [0.95, 0.15],
+            [0.95, 0.35]
+          ],
+          "closed": false
+        }
+      ]
+    },
+    {
+      "name": "紫色",
+      "strokes": [
+        {
+          "id": "rectangle_left_purple_edge",
+          "order": 1,
+          "points": [
+            [0.45, 0.35],
+            [0.65, 0.35]
+          ],
+          "closed": false
+        },
+        {
+          "id": "rectangle_right_purple_edge",
+          "order": 2,
+          "points": [
+            [0.75, 0.35],
+            [0.95, 0.35]
+          ],
+          "closed": false
         }
       ]
     }

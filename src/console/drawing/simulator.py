@@ -37,13 +37,28 @@ def _checkpoint(value):
     if value is None:
         return None
     return PlanCheckpoint(
-        value["group_index"], value["stroke_index"], value["next_point_index"]
+        value["group_index"],
+        value["stroke_index"],
+        value["next_point_index"],
+        tuple(tuple(item) for item in value.get("completed_strokes", ())),
     )
 
 
 def _point_rank(job, checkpoint):
     if checkpoint is None:
         return 0
+    if checkpoint.completed_strokes:
+        completed = set(checkpoint.completed_strokes)
+        rank = sum(
+            len(stroke.points)
+            for group_index, group in enumerate(job.groups)
+            for stroke_index, stroke in enumerate(group.strokes)
+            if (group_index, stroke_index) in completed
+        )
+        current = job.groups[checkpoint.group_index].strokes[
+            checkpoint.stroke_index
+        ]
+        return rank + min(checkpoint.next_point_index, len(current.points))
     rank = 0
     for group_index, group in enumerate(job.groups):
         for stroke_index, stroke in enumerate(group.strokes):

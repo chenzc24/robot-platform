@@ -14,8 +14,9 @@ def _checkpoint(document):
             document["group_index"],
             document["stroke_index"],
             document["next_point_index"],
+            tuple(tuple(item) for item in document.get("completed_strokes", ())),
         )
-    except (KeyError, TypeError):
+    except (KeyError, TypeError, ValueError):
         raise DrawingError("invalid_resume_checkpoint")
 
 

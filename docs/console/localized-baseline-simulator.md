@@ -91,10 +91,11 @@ checkpoint. Rail bounds, failed residual progress, exhausted adjustment attempts
 exhausted error samples and the production window limit fail the run instead of
 being corrected for presentation.
 
-The report also totals absolute rail travel and flags direction reversals. A
-reversal is not automatically a planner defect: group/pen order and a narrow
-reachable interval can legitimately require it. It is an operational review
-signal because extra direction changes add settling, backlash and localization
+The report also totals absolute rail travel and flags direction reversals. The
+planner now exhausts all reachable color groups in a physical window and then
+sweeps toward the lowest remaining drawing coordinate, rather than allowing
+group/pen order to cause window ping-pong. A reported reversal remains an
+operational review signal because it adds settling, backlash and localization
 opportunities. The fixed gain/overshoot model exposes first-order errors but is
 not a chassis dynamics model.
 

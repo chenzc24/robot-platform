@@ -46,7 +46,7 @@
   "relocation": {
     "selected_mode": "localized_baseline",
     "baseline": {"initial_json_axis_offset_mm": 0.0, "speed_mm_s": 50, "refresh_ms": 100, "hold_ms": 250, "max_distance_mm": 300.0, "settle_ms": 2000},
-    "localized_baseline": {"poll_ms": 100, "localization_timeout_ms": 10000, "normal_window_advance_mm": 160.0, "coarse_approach_reserve_mm": 20.0, "micro_adjust_max_step_mm": 20.0, "micro_adjust_tolerance_mm": 3.0, "micro_adjust_max_attempts": 3},
+    "localized_baseline": {"poll_ms": 100, "localization_timeout_ms": 10000, "normal_window_advance_mm": 160.0, "coarse_approach_reserve_mm": 20.0, "micro_adjust_max_step_mm": 20.0, "micro_adjust_tolerance_mm": 10.0, "micro_adjust_max_attempts": 3},
     "advanced": {"poll_ms": 100, "station_timeout_ms": 30000, "localization_timeout_ms": 10000}
   },
   "localization": {

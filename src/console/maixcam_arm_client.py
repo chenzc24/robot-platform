@@ -102,7 +102,14 @@ class MaixCamArmClient:
         return self.command("arm.jog_joint", {"joint_delta_deg": list(joint_delta_deg), "accel_pct": accel_pct, "speed_pct": speed_pct}, ttl_ms)
     def jog_xyz(self, translation_mm, user=0, tool=0, accel_pct=5, speed_pct=5, ttl_ms=60000, blend_pct=0):
         return self.command("arm.jog_xyz", {"translation_mm": list(translation_mm), "user": user, "tool": tool, "accel_pct": accel_pct, "speed_pct": speed_pct, "blend_pct": blend_pct}, ttl_ms)
-    def gripper(self, width_mm, ttl_ms=2000): return self.command("arm.gripper", {"width_mm": width_mm}, ttl_ms)
+    def gripper(self, width_mm, ttl_ms=60000):
+        if (
+            isinstance(width_mm, bool)
+            or not isinstance(width_mm, (int, float))
+            or int(width_mm) != width_mm
+        ):
+            raise ValueError("invalid_gripper_width")
+        return self.command("arm.gripper", {"width_mm": int(width_mm)}, ttl_ms)
 
 
 def open_connection(host, port, timeout_seconds=3):

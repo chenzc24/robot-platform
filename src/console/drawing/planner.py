@@ -21,20 +21,20 @@ def _clean(value):
 
 def _point_mm(job, geometry, point, json_axis_offset_mm):
     u, v = point
-    user_y = (
-        u / job.canvas.width * geometry.canvas_width_mm
-        + geometry.user_y_offset_mm
+    u_ratio = u / job.canvas.width
+    v_ratio = v / job.canvas.height
+    target = tuple(
+        geometry.canvas_top_left_from_home_mm[index]
+        + u_ratio * geometry.canvas_u_vector_from_home_mm[index]
+        + v_ratio * geometry.canvas_v_vector_from_home_mm[index]
         + json_axis_offset_mm
+        * geometry.rail_offset_vector_from_home_mm_per_json_mm[index]
+        for index in range(3)
     )
-    user_z = (
-        (1.0 - v / job.canvas.height) * geometry.canvas_height_mm
-        + geometry.user_z_offset_mm
-    )
-    absolute_user_y = geometry.home_pose_user_y_mm + user_y
-    for value in (user_y, user_z, absolute_user_y):
+    for value in target:
         if not math.isfinite(value):
             raise DrawingError("derived drawing coordinate is not finite")
-    return _clean(user_y), _clean(user_z), _clean(absolute_user_y)
+    return tuple(_clean(value) for value in target)
 
 
 def _checkpoint(job, value):
@@ -166,19 +166,19 @@ def _pen_return_payload(group_name, slot, config, final_return):
     }
 
 
-def _inside(geometry, absolute_user_y):
+def _inside(geometry, home_relative_y):
     return (
-        geometry.reachable_user_y_min_mm
-        <= absolute_user_y
-        <= geometry.reachable_user_y_max_mm
+        geometry.reachable_home_relative_y_min_mm
+        <= home_relative_y
+        <= geometry.reachable_home_relative_y_max_mm
     )
 
 
 def _reposition_step(checkpoint, absolute_user_y_values, geometry):
     lowest = min(absolute_user_y_values)
     highest = max(absolute_user_y_values)
-    delta_min = geometry.reachable_user_y_min_mm - lowest
-    delta_max = geometry.reachable_user_y_max_mm - highest
+    delta_min = geometry.reachable_home_relative_y_min_mm - lowest
+    delta_max = geometry.reachable_home_relative_y_max_mm - highest
     if delta_min > delta_max:
         raise DrawingError("drawing segment is wider than the configured User-Y range")
     delta_min = _clean(delta_min)
@@ -190,9 +190,9 @@ def _reposition_step(checkpoint, absolute_user_y_values, geometry):
         {
             "checkpoint": checkpoint.to_dict(),
             "target_user_y_mm": list(absolute_user_y_values),
-            "reachable_user_y_mm": [
-                geometry.reachable_user_y_min_mm,
-                geometry.reachable_user_y_max_mm,
+            "reachable_home_relative_y_mm": [
+                geometry.reachable_home_relative_y_min_mm,
+                geometry.reachable_home_relative_y_max_mm,
             ],
             "required_json_axis_offset_delta_range_mm": [delta_min, delta_max],
             "suggested_json_axis_offset_delta_mm": suggested_delta,
@@ -233,16 +233,20 @@ def build_drawing_plan(job, config, json_axis_offset_mm=0.0, checkpoint=None):
             max(point[1] for point in all_points),
         ],
         "relative_user_y_mm": [
-            min(point[0] for point in converted),
-            max(point[0] for point in converted),
-        ],
-        "relative_user_z_mm": [
             min(point[1] for point in converted),
             max(point[1] for point in converted),
         ],
-        "absolute_user_y_mm": [
+        "relative_user_z_mm": [
             min(point[2] for point in converted),
             max(point[2] for point in converted),
+        ],
+        "absolute_user_y_mm": [
+            min(point[1] for point in converted),
+            max(point[1] for point in converted),
+        ],
+        "home_relative_user_x_mm": [
+            min(point[0] for point in converted),
+            max(point[0] for point in converted),
         ],
     }
     steps = []
@@ -309,14 +313,14 @@ def build_drawing_plan(job, config, json_axis_offset_mm=0.0, checkpoint=None):
                 else 0
             )
             anchor_index = max(0, resume_index - 1)
-            anchor_y, anchor_z, anchor_absolute_y = _point_mm(
+            anchor = _point_mm(
                 job, geometry, stroke.points[anchor_index], json_axis_offset_mm
             )
-            if not _inside(geometry, anchor_absolute_y):
+            if not _inside(geometry, anchor[1]):
                 blocked = PlanCheckpoint(group_index, stroke_index, resume_index)
                 prepare_reposition("%s/%s" % (group.name, stroke.id))
                 steps.append(
-                    _reposition_step(blocked, (anchor_absolute_y,), geometry)
+                    _reposition_step(blocked, (anchor[1],), geometry)
                 )
                 return DrawingPlan(
                     job.canonical_sha256,
@@ -381,7 +385,7 @@ def build_drawing_plan(job, config, json_axis_offset_mm=0.0, checkpoint=None):
                 "%s: anchor point %d" % (prefix, anchor_index),
                 _move_payload(
                     geometry,
-                    (0.0, anchor_y, anchor_z),
+                    anchor,
                     geometry.travel_speed_pct,
                     "stroke_anchor",
                 ),
@@ -391,27 +395,26 @@ def build_drawing_plan(job, config, json_axis_offset_mm=0.0, checkpoint=None):
                 "%s: pen down" % prefix,
                 _move_payload(
                     geometry,
-                    (-geometry.pen_travel_x_mm, 0.0, 0.0),
+                    geometry.pen_down_delta_from_lift_mm,
                     geometry.travel_speed_pct,
                     "pen_down",
                 ),
             )
             planned_points += 1
-            previous_y, previous_z = anchor_y, anchor_z
-            previous_absolute_y = anchor_absolute_y
+            previous = anchor
             for point_index in range(anchor_index + 1, len(stroke.points)):
                 if point_index < resume_index:
                     continue
-                point_y, point_z, absolute_y = _point_mm(
+                point = _point_mm(
                     job, geometry, stroke.points[point_index], json_axis_offset_mm
                 )
-                if not _inside(geometry, absolute_y):
+                if not _inside(geometry, point[1]):
                     add(
                         "arm.relative",
                         "%s: pen up for reposition" % prefix,
                         _move_payload(
                             geometry,
-                            (geometry.pen_travel_x_mm, 0.0, 0.0),
+                            tuple(-value for value in geometry.pen_down_delta_from_lift_mm),
                             geometry.travel_speed_pct,
                             "pen_up",
                         ),
@@ -421,7 +424,7 @@ def build_drawing_plan(job, config, json_axis_offset_mm=0.0, checkpoint=None):
                     steps.append(
                         _reposition_step(
                             blocked,
-                            (previous_absolute_y, absolute_y),
+                            (previous[1], point[1]),
                             geometry,
                         )
                     )
@@ -448,9 +451,9 @@ def build_drawing_plan(job, config, json_axis_offset_mm=0.0, checkpoint=None):
                     _move_payload(
                         geometry,
                         (
-                            0.0,
-                            _clean(point_y - previous_y),
-                            _clean(point_z - previous_z),
+                            _clean(point[0] - previous[0]),
+                            _clean(point[1] - previous[1]),
+                            _clean(point[2] - previous[2]),
                         ),
                         geometry.draw_speed_pct,
                         "draw_segment",
@@ -458,14 +461,13 @@ def build_drawing_plan(job, config, json_axis_offset_mm=0.0, checkpoint=None):
                     ),
                 )
                 planned_points += 1
-                previous_y, previous_z = point_y, point_z
-                previous_absolute_y = absolute_y
+                previous = point
             add(
                 "arm.relative",
                 "%s: pen up" % prefix,
                 _move_payload(
                     geometry,
-                    (geometry.pen_travel_x_mm, 0.0, 0.0),
+                tuple(-value for value in geometry.pen_down_delta_from_lift_mm),
                     geometry.travel_speed_pct,
                     "pen_up",
                 ),

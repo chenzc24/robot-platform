@@ -1915,3 +1915,23 @@ entry format:
   deployment. No retry, reverse test, arm command or drawing command occurred.
 - The unrelated `.vscode/settings.json` user change was not modified or staged.
   Commit status was pending at log-entry time on `main`.
+
+## 2026-09-09 - Make drawing geometry explicitly Home-relative
+
+- Replaced the drawing planner's implicit Home-zero scalar Y/Z mapping with an
+  explicit Home-relative top-left lift vector, U/V canvas vectors, rail-offset
+  vector and pen-down vector. The former 700 x 200 mm configuration maps
+  exactly to `[0,-350,66.666666667]`, `[0,700,0]`, `[0,0,-200]`, `[0,1,0]` and
+  `[-51,0,0]`, respectively.
+- Retained lossless parsing of legacy scalar geometry only for existing inputs;
+  planning and simulation now consume the explicit vector model. Updated the
+  template, ignored local configuration and coordinate documentation. The local
+  production gates remain false.
+- Three full 439-stroke equivalence checks at JSON-axis offsets 0, +137.25 and
+  -80.5 mm produced identical plans, checkpoints and statistics for old and new
+  representations. The no-device simulation completed in six windows and five
+  relocations with 1,215.8966 mm total rail travel.
+- Passed 45 focused Python tests, compilation and `git diff --check`. No device
+  connection, command, deployment, service operation or physical motion
+  occurred. Unrelated web-console and `.vscode/settings.json` work was not
+  modified or staged. Commit status was pending at log-entry time on `main`.

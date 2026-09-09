@@ -24,7 +24,7 @@ _PEN_RACK_FIELDS = {
     "gripper_closed_mm",
 }
 _PEN_SLOT_NAMES = {"P1", "P2", "P3", "P4"}
-_GEOMETRY_FIELDS = {
+_LEGACY_GEOMETRY_FIELDS = {
     "canvas_width_mm",
     "canvas_height_mm",
     "user_y_offset_mm",
@@ -33,6 +33,24 @@ _GEOMETRY_FIELDS = {
     "reachable_user_y_min_mm",
     "reachable_user_y_max_mm",
     "pen_travel_x_mm",
+    "home_joints_deg",
+    "user",
+    "tool",
+    "draw_speed_pct",
+    "draw_blend_pct",
+    "travel_speed_pct",
+    "accel_pct",
+}
+_HOME_RELATIVE_GEOMETRY_FIELDS = {
+    "canvas_width_mm",
+    "canvas_height_mm",
+    "canvas_top_left_from_home_mm",
+    "canvas_u_vector_from_home_mm",
+    "canvas_v_vector_from_home_mm",
+    "rail_offset_vector_from_home_mm_per_json_mm",
+    "reachable_home_relative_y_min_mm",
+    "reachable_home_relative_y_max_mm",
+    "pen_down_delta_from_lift_mm",
     "home_joints_deg",
     "user",
     "tool",
@@ -62,12 +80,13 @@ def _integer(value, label, low, high):
 class DrawingGeometry:
     canvas_width_mm: float
     canvas_height_mm: float
-    user_y_offset_mm: float
-    user_z_offset_mm: float
-    home_pose_user_y_mm: float
-    reachable_user_y_min_mm: float
-    reachable_user_y_max_mm: float
-    pen_travel_x_mm: float
+    canvas_top_left_from_home_mm: tuple
+    canvas_u_vector_from_home_mm: tuple
+    canvas_v_vector_from_home_mm: tuple
+    rail_offset_vector_from_home_mm_per_json_mm: tuple
+    reachable_home_relative_y_min_mm: float
+    reachable_home_relative_y_max_mm: float
+    pen_down_delta_from_lift_mm: tuple
     home_joints_deg: tuple
     user: int
     tool: int
@@ -155,6 +174,99 @@ def _parse_pen_rack(document):
     return PenRack(slots=tuple(slots), **values)
 
 
+def _vector(value, label):
+    if not isinstance(value, list) or len(value) != 3:
+        raise DrawingError("%s must contain three finite numbers" % label)
+    return tuple(_finite(item, label) for item in value)
+
+
+def _parse_geometry(raw):
+    if not isinstance(raw, dict):
+        raise DrawingError("geometry must be an object")
+    fields = set(raw)
+    if fields == _LEGACY_GEOMETRY_FIELDS:
+        width = _finite(raw["canvas_width_mm"], "geometry.canvas_width_mm")
+        height = _finite(raw["canvas_height_mm"], "geometry.canvas_height_mm")
+        top_left = (
+            0.0,
+            _finite(raw["user_y_offset_mm"], "geometry.user_y_offset_mm"),
+            _finite(raw["user_z_offset_mm"], "geometry.user_z_offset_mm") + height,
+        )
+        values = {
+            "canvas_width_mm": width,
+            "canvas_height_mm": height,
+            "canvas_top_left_from_home_mm": top_left,
+            "canvas_u_vector_from_home_mm": (0.0, width, 0.0),
+            "canvas_v_vector_from_home_mm": (0.0, 0.0, -height),
+            "rail_offset_vector_from_home_mm_per_json_mm": (0.0, 1.0, 0.0),
+            "reachable_home_relative_y_min_mm": _finite(
+                raw["reachable_user_y_min_mm"], "geometry.reachable_user_y_min_mm"
+            ) - _finite(raw["home_pose_user_y_mm"], "geometry.home_pose_user_y_mm"),
+            "reachable_home_relative_y_max_mm": _finite(
+                raw["reachable_user_y_max_mm"], "geometry.reachable_user_y_max_mm"
+            ) - _finite(raw["home_pose_user_y_mm"], "geometry.home_pose_user_y_mm"),
+            "pen_down_delta_from_lift_mm": (
+                -_finite(raw["pen_travel_x_mm"], "geometry.pen_travel_x_mm"),
+                0.0,
+                0.0,
+            ),
+        }
+    elif fields == _HOME_RELATIVE_GEOMETRY_FIELDS:
+        values = {
+            "canvas_width_mm": _finite(raw["canvas_width_mm"], "geometry.canvas_width_mm"),
+            "canvas_height_mm": _finite(raw["canvas_height_mm"], "geometry.canvas_height_mm"),
+            "canvas_top_left_from_home_mm": _vector(
+                raw["canvas_top_left_from_home_mm"],
+                "geometry.canvas_top_left_from_home_mm",
+            ),
+            "canvas_u_vector_from_home_mm": _vector(
+                raw["canvas_u_vector_from_home_mm"],
+                "geometry.canvas_u_vector_from_home_mm",
+            ),
+            "canvas_v_vector_from_home_mm": _vector(
+                raw["canvas_v_vector_from_home_mm"],
+                "geometry.canvas_v_vector_from_home_mm",
+            ),
+            "rail_offset_vector_from_home_mm_per_json_mm": _vector(
+                raw["rail_offset_vector_from_home_mm_per_json_mm"],
+                "geometry.rail_offset_vector_from_home_mm_per_json_mm",
+            ),
+            "reachable_home_relative_y_min_mm": _finite(
+                raw["reachable_home_relative_y_min_mm"],
+                "geometry.reachable_home_relative_y_min_mm",
+            ),
+            "reachable_home_relative_y_max_mm": _finite(
+                raw["reachable_home_relative_y_max_mm"],
+                "geometry.reachable_home_relative_y_max_mm",
+            ),
+            "pen_down_delta_from_lift_mm": _vector(
+                raw["pen_down_delta_from_lift_mm"],
+                "geometry.pen_down_delta_from_lift_mm",
+            ),
+        }
+    else:
+        raise DrawingError("geometry has unexpected or missing fields")
+    if values["canvas_width_mm"] <= 0 or values["canvas_height_mm"] <= 0:
+        raise DrawingError("configured canvas dimensions must be positive")
+    if values["reachable_home_relative_y_min_mm"] >= values["reachable_home_relative_y_max_mm"]:
+        raise DrawingError("reachable Home-relative Y minimum must be less than maximum")
+    if not any(values["pen_down_delta_from_lift_mm"]):
+        raise DrawingError("pen_down_delta_from_lift_mm must not be zero")
+    joints = raw["home_joints_deg"]
+    if not isinstance(joints, list) or len(joints) != 6:
+        raise DrawingError("home_joints_deg must contain six numbers")
+    return DrawingGeometry(
+        **values,
+        home_joints_deg=tuple(_finite(value, "home_joints_deg") for value in joints),
+        user=_integer(raw["user"], "geometry.user", 0, 9),
+        tool=_integer(raw["tool"], "geometry.tool", 0, 9),
+        draw_speed_pct=_integer(raw["draw_speed_pct"], "geometry.draw_speed_pct", 1, 100),
+        draw_blend_pct=_integer(raw["draw_blend_pct"], "geometry.draw_blend_pct", 0, 100),
+        travel_speed_pct=_integer(raw["travel_speed_pct"], "geometry.travel_speed_pct", 1, 100),
+        accel_pct=_integer(raw["accel_pct"], "geometry.accel_pct", 1, 100),
+    )
+
+
 def parse_drawing_config(document):
     if not isinstance(document, dict) or set(document) != _TOP_FIELDS:
         raise DrawingError("drawing config has unexpected or missing fields")
@@ -181,44 +293,7 @@ def parse_drawing_config(document):
         except DrawingError:
             raise DrawingError("pen slot for group %r must be one of P1..P4" % name)
 
-    raw = document["geometry"]
-    if not isinstance(raw, dict) or set(raw) != _GEOMETRY_FIELDS:
-        raise DrawingError("drawing geometry has unexpected or missing fields")
-    numeric = {
-        name: _finite(raw[name], "geometry.%s" % name)
-        for name in (
-            "canvas_width_mm",
-            "canvas_height_mm",
-            "user_y_offset_mm",
-            "user_z_offset_mm",
-            "home_pose_user_y_mm",
-            "reachable_user_y_min_mm",
-            "reachable_user_y_max_mm",
-            "pen_travel_x_mm",
-        )
-    }
-    if numeric["canvas_width_mm"] <= 0 or numeric["canvas_height_mm"] <= 0:
-        raise DrawingError("configured canvas dimensions must be positive")
-    if numeric["pen_travel_x_mm"] <= 0:
-        raise DrawingError("pen_travel_x_mm must be positive")
-    if numeric["reachable_user_y_min_mm"] >= numeric["reachable_user_y_max_mm"]:
-        raise DrawingError("reachable User-Y minimum must be less than maximum")
-    joints = raw["home_joints_deg"]
-    if not isinstance(joints, list) or len(joints) != 6:
-        raise DrawingError("home_joints_deg must contain six numbers")
-    joints = tuple(_finite(value, "home_joints_deg") for value in joints)
-    geometry = DrawingGeometry(
-        **numeric,
-        home_joints_deg=joints,
-        user=_integer(raw["user"], "geometry.user", 0, 9),
-        tool=_integer(raw["tool"], "geometry.tool", 0, 9),
-        draw_speed_pct=_integer(raw["draw_speed_pct"], "geometry.draw_speed_pct", 1, 100),
-        draw_blend_pct=_integer(raw["draw_blend_pct"], "geometry.draw_blend_pct", 0, 100),
-        travel_speed_pct=_integer(
-            raw["travel_speed_pct"], "geometry.travel_speed_pct", 1, 100
-        ),
-        accel_pct=_integer(raw["accel_pct"], "geometry.accel_pct", 1, 100),
-    )
+    geometry = _parse_geometry(document["geometry"])
     canonical = json.dumps(
         document, ensure_ascii=False, sort_keys=True, separators=(",", ":")
     ).encode("utf-8")

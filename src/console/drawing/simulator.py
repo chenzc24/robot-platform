@@ -59,12 +59,12 @@ def _point_rank(job, checkpoint):
 def _simulation_drawing_config(config, reachable_min_mm, reachable_max_mm):
     geometry = config.geometry
     low = (
-        geometry.reachable_user_y_min_mm
+        geometry.reachable_home_relative_y_min_mm
         if reachable_min_mm is None
         else _finite(reachable_min_mm, "reachable_min_mm")
     )
     high = (
-        geometry.reachable_user_y_max_mm
+        geometry.reachable_home_relative_y_max_mm
         if reachable_max_mm is None
         else _finite(reachable_max_mm, "reachable_max_mm")
     )
@@ -75,8 +75,8 @@ def _simulation_drawing_config(config, reachable_min_mm, reachable_max_mm):
         production_ready=True,
         geometry=replace(
             geometry,
-            reachable_user_y_min_mm=low,
-            reachable_user_y_max_mm=high,
+            reachable_home_relative_y_min_mm=low,
+            reachable_home_relative_y_max_mm=high,
         ),
     )
 
@@ -553,12 +553,15 @@ def _result(
         "geometry": {
             "canvas_width_mm": geometry.canvas_width_mm,
             "canvas_height_mm": geometry.canvas_height_mm,
-            "user_y_offset_mm": geometry.user_y_offset_mm,
-            "user_z_offset_mm": geometry.user_z_offset_mm,
-            "home_pose_user_y_mm": geometry.home_pose_user_y_mm,
-            "reachable_user_y_min_mm": geometry.reachable_user_y_min_mm,
-            "reachable_user_y_max_mm": geometry.reachable_user_y_max_mm,
-            "pen_travel_x_mm": geometry.pen_travel_x_mm,
+            "canvas_top_left_from_home_mm": list(geometry.canvas_top_left_from_home_mm),
+            "canvas_u_vector_from_home_mm": list(geometry.canvas_u_vector_from_home_mm),
+            "canvas_v_vector_from_home_mm": list(geometry.canvas_v_vector_from_home_mm),
+            "rail_offset_vector_from_home_mm_per_json_mm": list(
+                geometry.rail_offset_vector_from_home_mm_per_json_mm
+            ),
+            "reachable_home_relative_y_min_mm": geometry.reachable_home_relative_y_min_mm,
+            "reachable_home_relative_y_max_mm": geometry.reachable_home_relative_y_max_mm,
+            "pen_down_delta_from_lift_mm": list(geometry.pen_down_delta_from_lift_mm),
             "user": geometry.user,
             "tool": geometry.tool,
         },
@@ -566,10 +569,10 @@ def _result(
         "job_sha256": job.canonical_sha256,
         "source_config_sha256": source_config.canonical_sha256,
         "source_config_reach_overridden": (
-            geometry.reachable_user_y_min_mm
-            != source_config.geometry.reachable_user_y_min_mm
-            or geometry.reachable_user_y_max_mm
-            != source_config.geometry.reachable_user_y_max_mm
+            geometry.reachable_home_relative_y_min_mm
+            != source_config.geometry.reachable_home_relative_y_min_mm
+            or geometry.reachable_home_relative_y_max_mm
+            != source_config.geometry.reachable_home_relative_y_max_mm
         ),
         "windows": trace.windows,
         "summary": {

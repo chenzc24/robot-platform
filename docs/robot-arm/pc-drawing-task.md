@@ -72,24 +72,34 @@ requires confirmation before motion.
 Baseline executor requires a separately reviewed true value plus explicit
 attended admission; preview never consumes it as motion permission.
 
-The physical conversion is explicit:
+The physical conversion is Home-relative. `MovJ(home_joints)` establishes the
+repeatable local reference H; the controller still receives `RelMovLUser`
+translations, but every canvas target is explicitly stored and planned as a
+vector from H:
 
 ```text
-User Y relative = u / normalized_width * canvas_width_mm
-                  + user_y_offset_mm + json_axis_offset_mm
-User Z relative = (1 - v / normalized_height) * canvas_height_mm
-                  + user_z_offset_mm
-planned User Y absolute = home_pose_user_y_mm + User Y relative
+P_lift_from_H(u, v, offset)
+  = canvas_top_left_from_home
+  + u × canvas_u_vector_from_home
+  + v × canvas_v_vector_from_home
+  + offset × rail_offset_vector_from_home_per_json_mm
+
+Δ_anchor = P_lift_from_H
+Δ_draw_segment = P_lift_from_H(next) - P_lift_from_H(previous)
+Δ_pen_down = pen_down_delta_from_lift
 ```
 
-This reproduces the source project's configurable relative Y/Z drawing plane
-without pretending that the unverified home Cartesian pose is known. The JSON
-axis offset is supplied per localization generation; it changes each stroke's
-anchor but cancels from within-stroke deltas.
+The reference configuration encodes the existing axis-aligned 700 x 200 mm
+plane as top-left `[0,-350,66.666666667]`, U `[0,700,0]`, V `[0,0,-200]`,
+rail `[0,1,0]`, and pen-down `[-51,0,0]`; this yields the same controller
+translations as the earlier scalar formula. Actual calibration replaces these
+vectors with taught Home-relative values. The JSON axis offset is supplied per
+localization generation; it changes each stroke's anchor but cancels from
+within-stroke deltas.
 
-The shared motion profile also follows the delivered controller source. Stroke
-segments explicitly carry `speed_pct=12` and `blend_pct=100`. Per the project
-owner's clarified defaults, Home, anchor, pen-down/up and rack movements carry
+The shared motion profile follows the local drawing configuration. Stroke
+segments carry its `draw_speed_pct` and `blend_pct=100`; Home, anchor,
+pen-down/up and rack movements carry
 `speed_pct=50`, and every arm motion carries `accel_pct=20`. Baseline,
 Localized Baseline and Advanced consume this same plan; only their chassis
 relocation strategy differs. The upgraded primitive route carries

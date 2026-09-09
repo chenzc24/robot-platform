@@ -12,9 +12,12 @@ strategy. Copy `config/drawing-control.example.json` to the ignored
 selected strategy has completed its own L3/L4 validation.
 
 The full JSON canvas is immutable. `drawing.geometry.canvas_width_mm` and
-`canvas_height_mm` define the physical drawing region. With the confirmed axis
-formula, `user_y_offset_mm` is the JSON top-left origin's User-Y coordinate and
-the corresponding User-Z coordinate is `user_z_offset_mm + canvas_height_mm`.
+`canvas_height_mm` define the physical drawing region. Its physical mapping is
+expressed only relative to the repeatable Home pose: the top-left lift vector,
+U/V canvas vectors, rail-offset vector and pen-down vector are all explicit
+three-dimensional Home-relative values. The reference vectors preserve the
+earlier 700 x 200 axis-aligned translations exactly; actual calibration can
+replace them without changing JSON data or relocation strategy.
 The unified runner requires JSON and board millimetres to match; legacy data may
 use the explicit `--allow-uniform-canvas-rescale` option only when both axes
 have the same scale. It never allows silent non-uniform stretching.
@@ -115,9 +118,12 @@ The runner owns the one ESP32 and one arm session; do not connect the UI's
 manual device sessions at the same time. The UI may remain open for video and
 its independently configured overlay, but the script's localization samples
 and execution log are authoritative for the run. Any failure stops later
-commands without automatic retry or checkpoint recovery. The shutdown path
-attempts chassis `STOP` and `DISABLE`; these software actions do not replace the
-physical emergency stop.
+commands in that invocation. A failure proven to have occurred entirely during
+read-only preflight, before any state-changing arm or chassis task command, may
+be followed by a new run only after explicit operator authorization and with a
+new durable log. State-changing requests with an unknown outcome are never
+automatically retried or resumed. The shutdown path attempts chassis `STOP` and
+`DISABLE`; these software actions do not replace the physical emergency stop.
 
 For `baseline`, the same loop starts at the configured initial offset and uses
 the relocator's commanded open-loop offset after each barrier. For `advanced`,

@@ -145,13 +145,21 @@ def validate_job_canvas(
     return {
         "width_mm": expected[0],
         "height_mm": expected[1],
-        "json_origin_user_y_mm": drawing_config.geometry.user_y_offset_mm,
-        "json_origin_user_z_mm": (
-            drawing_config.geometry.user_z_offset_mm
-            + drawing_config.geometry.canvas_height_mm
+        "json_top_left_from_home_mm": list(
+            drawing_config.geometry.canvas_top_left_from_home_mm
         ),
-        "json_x_maps_to": "+UserY",
-        "json_y_maps_to": "-UserZ",
+        "json_u_vector_from_home_mm": list(
+            drawing_config.geometry.canvas_u_vector_from_home_mm
+        ),
+        "json_v_vector_from_home_mm": list(
+            drawing_config.geometry.canvas_v_vector_from_home_mm
+        ),
+        "json_origin_user_y_mm": (
+            drawing_config.geometry.canvas_top_left_from_home_mm[1]
+        ),
+        "json_origin_user_z_mm": (
+            drawing_config.geometry.canvas_top_left_from_home_mm[2]
+        ),
         "json_canvas_mm": [actual[0], actual[1]],
         "uniform_canvas_scale": scale,
     }

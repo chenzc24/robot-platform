@@ -109,3 +109,22 @@ class MaixCamArmClientTests(unittest.TestCase):
         messages, errors = EnvelopeStreamDecoder().feed(b"".join(connection.sent))
         self.assertEqual(errors, [])
         self.assertEqual(messages[0]["payload"]["blend_pct"], 100)
+
+    def test_integral_float_gripper_width_is_encoded_as_integer(self):
+        class CaptureConnection:
+            def __init__(self): self.sent = []
+            def send(self, data): self.sent.append(data); return len(data)
+            def recv(self, _size): raise TimeoutError("stop after capture")
+        connection = CaptureConnection()
+        with self.assertRaises(MaixCamArmUnknown):
+            MaixCamArmClient(connection).gripper(60.0)
+        messages, errors = EnvelopeStreamDecoder().feed(b"".join(connection.sent))
+        self.assertEqual(errors, [])
+        self.assertEqual(messages[0]["payload"]["width_mm"], 60)
+        self.assertEqual(messages[0]["ttl_ms"], 60000)
+
+    def test_fractional_gripper_width_is_rejected_before_send(self):
+        connection = QueryLoopback()
+        with self.assertRaisesRegex(ValueError, "invalid_gripper_width"):
+            MaixCamArmClient(connection).gripper(60.5)
+        self.assertEqual(connection.requests, [])

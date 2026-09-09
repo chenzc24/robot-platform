@@ -6,6 +6,7 @@ let currentState = null;
 let chassisInput = null;
 let videoLoaded = false;
 let pollBusy = false;
+let drawingSelectionDirty = false;
 
 function toast(message, error = false) {
   const node = $("#toast");
@@ -117,6 +118,52 @@ function renderVision(vision) {
   });
 }
 
+function syncSelect(node, values) {
+  const selected = node.value;
+  const signature = values.join("\n");
+  if (node.dataset.options === signature) return;
+  node.replaceChildren(...values.map(value => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value.replaceAll("_", " ").toUpperCase();
+    return option;
+  }));
+  node.dataset.options = signature;
+  if (values.includes(selected)) node.value = selected;
+}
+
+function renderDrawing(drawing, owner) {
+  drawing = drawing || {};
+  const state = String(drawing.state || "unconfigured");
+  const active = state === "running" || state === "stopping";
+  syncSelect($("#drawing-job"), drawing.available_jobs || []);
+  syncSelect($("#drawing-mode"), drawing.available_modes || ["baseline", "localized_baseline", "advanced"]);
+  if (!drawingSelectionDirty && drawing.job_id) $("#drawing-job").value = drawing.job_id;
+  if (!drawingSelectionDirty && drawing.mode) $("#drawing-mode").value = drawing.mode;
+  textState($("#drawing-state"), state, state === "completed", state === "failed");
+  $("#drawing-mode-state").textContent = String(drawing.mode || "—").toUpperCase();
+  $("#drawing-phase").textContent = String(drawing.phase || "—").toUpperCase();
+  $("#drawing-counts").textContent = drawing.task_id
+    ? `${drawing.groups} GROUPS · ${drawing.strokes} STROKES · ${drawing.points} POINTS`
+    : "—";
+  $("#drawing-task-id").textContent = drawing.task_id || "—";
+  $("#drawing-hash").textContent = drawing.job_sha256 || "—";
+  const readiness = drawing.readiness || {};
+  $("#drawing-readiness").textContent = drawingSelectionDirty
+    ? "SELECTION CHANGED · PREPARE REQUIRED"
+    : Object.keys(readiness).length
+    ? Object.entries(readiness).map(([name, ready]) => `${name}:${ready ? "READY" : "BLOCKED"}`).join(" · ")
+    : "—";
+  $("#drawing-last-event").textContent = drawing.last_event?.event || drawing.error || "—";
+  $("#drawing-job").disabled = active || !drawing.configured;
+  $("#drawing-mode").disabled = active || !drawing.configured;
+  $("#drawing-prepare").disabled = active || !drawing.configured || !(drawing.available_jobs || []).length;
+  $("#drawing-start").disabled = state !== "prepared" || drawingSelectionDirty || !Object.values(readiness).every(Boolean);
+  $("#drawing-cancel").disabled = !["prepared", "running", "stopping"].includes(state);
+  $$('[data-drawing-confirm]').forEach(node => node.disabled = state !== "prepared");
+  document.body.classList.toggle("drawing-owned", owner === "drawing");
+}
+
 function render(state) {
   if (currentState && state.revision < currentState.revision) return;
   currentState = state;
@@ -143,6 +190,7 @@ function render(state) {
   renderMeasurement($("#current-joints"), ["J1","J2","J3","J4","J5","J6"], measurement.joint_deg);
   renderMeasurement($("#current-pose"), ["X","Y","Z","RX","RY","RZ"], measurement.pose);
   renderVision(state.vision);
+  renderDrawing(state.drawing, state.control_owner);
   $("#requested-vector").textContent = c.motion
     ? `${c.velocity.vx_mm_s} / ${c.velocity.vy_mm_s} / ${c.velocity.omega_mrad_s} · ${c.motion.mode.toUpperCase()}`
     : "Restart backend to load updated controls";
@@ -157,6 +205,14 @@ function render(state) {
   $("#arm-status").disabled = a.gateway !== "online";
   const armMove = a.gateway === "online" && a.controller === "online" && a.motion_permitted && a.task !== "running";
   $$("#device-arm button[data-arm-command], #move-joints, #move-linear, #set-gripper").forEach(node => node.disabled = !armMove);
+  if (state.control_owner === "drawing") {
+    $("#chassis-connect").disabled = true;
+    $("#chassis-enable").disabled = true;
+    $("#chassis-disable").disabled = true;
+    $("#arm-connect").disabled = true;
+    $$('[data-motion], #apply-vector').forEach(node => node.disabled = true);
+    $$("#device-arm button[data-arm-command], #move-joints, #move-linear, #set-gripper").forEach(node => node.disabled = true);
+  }
   $("#fault-count").textContent = state.faults.filter(f => !f.acknowledged).length;
   $("#event-count").textContent = state.events.length;
   renderFaults(state.faults);
@@ -286,9 +342,9 @@ function bindChassisInput(controller, root = document, view = window) {
   one("#global-stop").onclick = () => controller.stop();
   one("#apply-vector").onclick = () => controller.begin("exact",
     ["#vx", "#vy", "#omega"].map(selector => Number(one(selector).value)), "hold", "exact");
-  view.addEventListener("blur", () => controller.stop("page_blur", true));
-  view.addEventListener("pagehide", () => controller.stop("page_hidden", true));
-  root.addEventListener("visibilitychange", () => { if (root.hidden) controller.stop("page_hidden", true); });
+  view.addEventListener("blur", () => { if (controller.active) controller.stop("page_blur", true); });
+  view.addEventListener("pagehide", () => { if (controller.active) controller.stop("page_hidden", true); });
+  root.addEventListener("visibilitychange", () => { if (root.hidden && controller.active) controller.stop("page_hidden", true); });
   const keys = {w:"forward",s:"back",a:"left",d:"right",q:"ccw",e:"cw"};
   view.addEventListener("keydown", event => {
     if (event.key === "Escape") { controller.stop(); return; }
@@ -342,6 +398,35 @@ function bind() {
   $("#move-joints").onclick=()=>armCommand("move_joint",{joint_deg:$$(".joint-target").map(x=>Number(x.value))});
   $("#move-linear").onclick=()=>armCommand("move_linear",{pose:$$(".pose-target").map(x=>Number(x.value))});
   $("#set-gripper").onclick=()=>armCommand("gripper",{width_mm:Number($("#gripper-width").value)});
+  $("#drawing-prepare").onclick=async()=>{
+    const requestedJob = $("#drawing-job").value;
+    const requestedMode = $("#drawing-mode").value;
+    drawingSelectionDirty = false;
+    const ok = await act("/api/drawing/task", {
+      action:"prepare", job_id:requestedJob, mode:requestedMode,
+    }, "drawing task prepared");
+    if (ok) {
+      $$('[data-drawing-confirm]').forEach(node => node.checked = false);
+    } else {
+      drawingSelectionDirty = true;
+      $("#drawing-job").value = requestedJob;
+      $("#drawing-mode").value = requestedMode;
+      if (currentState) renderDrawing(currentState.drawing, currentState.control_owner);
+    }
+  };
+  [$("#drawing-job"), $("#drawing-mode")].forEach(node => node.onchange=()=>{
+    drawingSelectionDirty = true;
+    if (currentState) renderDrawing(currentState.drawing, currentState.control_owner);
+  });
+  $("#drawing-start").onclick=()=>act("/api/drawing/task", {
+    action:"start",
+    task_id:currentState?.drawing.task_id,
+    job_sha256:currentState?.drawing.job_sha256,
+    confirmations:Object.fromEntries($$('[data-drawing-confirm]').map(node => [node.dataset.drawingConfirm, node.checked])),
+  }, "drawing task started");
+  $("#drawing-cancel").onclick=()=>act("/api/drawing/task", {
+    action:"cancel", task_id:currentState?.drawing.task_id,
+  }, "drawing cancellation requested");
   $("#gripper-width").oninput=()=>$("#gripper-output").textContent=`${$("#gripper-width").value} mm`;
   $("#rotate-video").onclick=()=>{const rotated=$("#viewport").classList.toggle("rotated");$("#video-rotation").textContent=rotated?"ROT 90°":"ROT 0°";if(currentState)renderVision(currentState.vision)};
   $("#open-video").onclick=()=>{if(currentState?.video.webrtc_url)window.open(currentState.video.webrtc_url,"_blank","noopener")};

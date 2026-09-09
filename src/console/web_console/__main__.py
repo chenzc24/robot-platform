@@ -3,11 +3,13 @@
 import argparse
 import sys
 import webbrowser
+from pathlib import Path
 
 from runtime_config import RuntimeConfigError, load_runtime_config
 
 from .runtime import WebConsoleRuntime
 from .server import create_server
+from .drawing_tasks import DrawingTaskError
 
 
 def parse_args(argv):
@@ -16,6 +18,9 @@ def parse_args(argv):
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", default=8080, type=int)
     parser.add_argument("--event-log", default="logs/console/web-events.log")
+    parser.add_argument("--drawing-config", default="config/drawing.local.json")
+    parser.add_argument("--drawing-control-config", default="config/drawing-control.local.json")
+    parser.add_argument("--drawing-web-config", default="config/drawing-web.local.json")
     parser.add_argument("--open", action="store_true", help="Open the console in the default browser")
     return parser.parse_args(argv)
 
@@ -25,8 +30,14 @@ def main(argv=None):
     try:
         config = load_runtime_config(args.config)
         runtime = WebConsoleRuntime(config, event_log_path=args.event_log or None)
+        runtime.configure_drawing_tasks(
+            Path.cwd(),
+            args.drawing_config,
+            args.drawing_control_config,
+            args.drawing_web_config,
+        )
         server = create_server(runtime, args.host, args.port)
-    except (RuntimeConfigError, OSError, ValueError) as error:
+    except (DrawingTaskError, RuntimeConfigError, OSError, ValueError) as error:
         print("Cannot start web console: %s" % error, file=sys.stderr)
         return 2
     url = "http://%s:%d/" % server.server_address

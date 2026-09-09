@@ -33,7 +33,7 @@
     </section>
 
     <section class="device-panel">
-      <nav class="tabs device-tabs" aria-label="Device"><button class="tab active" data-device-tab="chassis">CHASSIS</button><button class="tab" data-device-tab="arm">ROBOT ARM</button></nav>
+      <nav class="tabs device-tabs" aria-label="Device"><button class="tab active" data-device-tab="chassis">CHASSIS</button><button class="tab" data-device-tab="arm">ROBOT ARM</button><button class="tab" data-device-tab="drawing">DRAWING</button></nav>
 
       <div class="device-view active" id="device-chassis">
         <div class="device-summary">
@@ -104,6 +104,33 @@
           <label class="gripper-control"><span>WIDTH <output id="gripper-output">35 mm</output></span><input id="gripper-width" type="range" min="0" max="70" value="35"></label>
           <button class="primary full" id="set-gripper">SET GRIPPER</button>
         </div>
+      </div>
+
+      <div class="device-view" id="device-drawing">
+        <div class="device-summary drawing-summary">
+          <div><span>STATE</span><strong id="drawing-state">UNCONFIGURED</strong></div>
+          <div><span>MODE</span><strong id="drawing-mode-state">—</strong></div>
+          <div><span>PHASE</span><strong id="drawing-phase">—</strong></div>
+        </div>
+        <div class="drawing-form">
+          <label>JOB<select id="drawing-job"></select></label>
+          <label>MODE<select id="drawing-mode"><option value="baseline">BASELINE</option><option value="localized_baseline">LOCALIZED BASELINE</option><option value="advanced">ADVANCED</option></select></label>
+        </div>
+        <div class="action-row"><button class="primary" id="drawing-prepare">PREPARE / DRY-RUN</button><button class="danger" id="drawing-cancel">CANCEL &amp; STOP</button></div>
+        <section class="drawing-audit">
+          <div class="section-label"><span>IMMUTABLE TASK SNAPSHOT</span><span id="drawing-counts">—</span></div>
+          <dl><dt>TASK</dt><dd id="drawing-task-id">—</dd><dt>JOB SHA-256</dt><dd id="drawing-hash">—</dd><dt>READINESS</dt><dd id="drawing-readiness">—</dd><dt>LAST EVENT</dt><dd id="drawing-last-event">—</dd></dl>
+        </section>
+        <fieldset class="drawing-confirmations">
+          <legend>CURRENT ATTENDED SAFETY CONFIRMATIONS</legend>
+          <label><input type="checkbox" data-drawing-confirm="operator_present"> Operator present</label>
+          <label><input type="checkbox" data-drawing-confirm="emergency_stop_ready"> Physical emergency stop ready</label>
+          <label><input type="checkbox" data-drawing-confirm="area_clear"> Full arm/chassis area clear</label>
+          <label><input type="checkbox" data-drawing-confirm="arm_profile_reviewed"> Arm profile reviewed</label>
+          <label><input type="checkbox" data-drawing-confirm="chassis_profile_reviewed"> Chassis profile reviewed</label>
+        </fieldset>
+        <button class="primary full drawing-start" id="drawing-start">START PREPARED TASK</button>
+        <p class="drawing-note">Mode is locked after START. To change mode, cancel or finish the current task, then PREPARE again. Software stop does not replace the physical emergency stop.</p>
       </div>
     </section>
   </main>

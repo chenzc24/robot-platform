@@ -9,9 +9,16 @@ from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 
+from drawing import (
+    DrawingExecutionAdmission,
+    RelocationAdmission,
+    execute_drawing,
+)
 from localization import LocalizationStateError, create_localization_state_machine
 from runtime_core import MOTION_ARM_COMMANDS, close_client, default_arm_factory, default_chassis_factory, dispatch_arm, dispatch_chassis
 from status_mapping import StatusMappingError, parse_arm_status, parse_chassis_status
+
+from .drawing_tasks import DrawingTaskError, DrawingTaskManager
 
 
 class WebConsoleError(RuntimeError):
@@ -21,6 +28,97 @@ class WebConsoleError(RuntimeError):
         super().__init__(code)
         self.code = code
         self.http_status = http_status
+
+
+class _DrawingChassisAdapter:
+    """Expose the drawing coordinator API through the Web runtime's I/O lock."""
+
+    def __init__(self, runtime):
+        self.runtime = runtime
+
+    def _check(self):
+        self.runtime._drawing_tasks.raise_if_cancelled()
+
+    def ping(self):
+        with self.runtime._chassis_io:
+            self._check()
+            return self.runtime._chassis_request("ping", journal=False)
+
+    def status(self):
+        with self.runtime._chassis_io:
+            self._check()
+            return self.runtime._chassis_request("status", journal=False)
+
+    def velocity(self, vx, vy, omega, hold_ms, _ttl_ms=None):
+        with self.runtime._chassis_io:
+            self._check()
+            return self.runtime._chassis_request("velocity", {
+                "vx_mm_s": vx,
+                "vy_mm_s": vy,
+                "omega_mrad_s": omega,
+                "hold_ms": hold_ms,
+            }, journal=False)
+
+    def stop(self):
+        return self.runtime._chassis_request("stop", journal=False)
+
+    def line_follow_start(self, direction):
+        with self.runtime._chassis_io:
+            self._check()
+            return self.runtime._chassis_request(
+                "line_follow_start", {"direction": direction}, journal=False
+            )
+
+    def line_follow_status(self):
+        with self.runtime._chassis_io:
+            self._check()
+            return self.runtime._chassis_request("line_follow_status", journal=False)
+
+    def line_follow_stop(self):
+        return self.runtime._chassis_request("line_follow_stop", journal=False)
+
+
+class _DrawingArmAdapter:
+    """Expose arm methods while preserving drawing cancellation and chassis guard."""
+
+    def __init__(self, runtime):
+        self.runtime = runtime
+
+    def _call(self, command, payload=None, allow_cancelled=False):
+        with self.runtime._arm_io:
+            if not allow_cancelled:
+                self.runtime._drawing_tasks.raise_if_cancelled()
+            self.runtime._require_drawing_chassis_health()
+            return self.runtime._arm_request(command, payload, journal=False)
+
+    def ping(self):
+        return self._call("ping")
+
+    def status(self):
+        return self._call("status")
+
+    def move_joint(self, joint_deg, accel_pct=5, speed_pct=5):
+        return self._call("move_joint", {
+            "joint_deg": list(joint_deg),
+            "accel_pct": accel_pct,
+            "speed_pct": speed_pct,
+        })
+
+    def jog_xyz(
+        self, translation_mm, user=0, tool=0, accel_pct=5, speed_pct=5,
+        blend_pct=0,
+    ):
+        return self._call("jog_xyz", {
+            "translation_mm": list(translation_mm),
+            "user": user,
+            "tool": tool,
+            "accel_pct": accel_pct,
+            "speed_pct": speed_pct,
+            "blend_pct": blend_pct,
+        })
+
+    def gripper(self, width_mm):
+        return self._call("gripper", {"width_mm": width_mm})
 
 
 class WebConsoleRuntime:
@@ -42,6 +140,8 @@ class WebConsoleRuntime:
         self._arm_io = threading.RLock()
         self._chassis = None
         self._arm = None
+        self._control_owner = "none"
+        self._drawing_tasks = None
         self._revision = 0
         self._event_index = 0
         self._events = deque(maxlen=80)
@@ -263,6 +363,7 @@ class WebConsoleRuntime:
             snapshot = {
                 "revision": self._revision,
                 "log_error": self._log_error,
+                "control_owner": self._control_owner,
                 "video": state["video"],
                 "vision": state["vision"],
                 "chassis": state["chassis"],
@@ -271,7 +372,223 @@ class WebConsoleRuntime:
                 "events": list(self._events),
             }
         snapshot["localization"] = self._localization.snapshot(now)
+        snapshot["drawing"] = (
+            {
+                "configured": False,
+                "state": "unconfigured",
+                "phase": "configuration_required",
+                "available_jobs": [],
+                "available_modes": ["baseline", "localized_baseline", "advanced"],
+            }
+            if self._drawing_tasks is None else self._drawing_tasks.snapshot()
+        )
         return snapshot
+
+    def configure_drawing_tasks(
+        self,
+        repository_root,
+        drawing_config_path,
+        control_config_path,
+        policy_path,
+        manager_factory=DrawingTaskManager,
+        thread_factory=None,
+    ):
+        if self._drawing_tasks is not None:
+            raise ValueError("drawing_tasks_already_configured")
+        self._drawing_tasks = manager_factory(
+            repository_root,
+            drawing_config_path,
+            control_config_path,
+            policy_path,
+            self._execute_drawing_task,
+            self._acquire_drawing_control,
+            self._release_drawing_control,
+            self._stop_for_drawing_cancel,
+            self._drawing_runtime_ready,
+            self._drawing_state_changed,
+            thread_factory,
+        )
+        self._touch()
+        return self.snapshot()
+
+    def _drawing_state_changed(self):
+        with self._lock:
+            self._touch()
+
+    def _drawing_runtime_ready(self, mode, control_config):
+        if mode == "baseline":
+            return True
+        return bool(
+            self.config.vision.complete
+            and self.config.localization.complete
+            and self.config.localization.json_mm_per_rail_mm
+            == control_config.json_mm_per_rail_mm
+        )
+
+    def _acquire_drawing_control(self, _prepared):
+        with self._lock:
+            if self._control_owner not in ("none", "manual_ui"):
+                raise DrawingTaskError("device_control_already_owned")
+            if self._held_velocity is not None or self._stops_pending:
+                raise DrawingTaskError("manual_chassis_motion_active")
+            if self._state["arm"]["task"] != "idle":
+                raise DrawingTaskError("manual_arm_task_active")
+            localization_task = (
+                self._localization.snapshot().get("task") or {}
+            ).get("active")
+            if localization_task is not None:
+                raise DrawingTaskError("localized_task_already_active")
+            self._control_owner = "drawing"
+            self._state["arm"]["task"] = "running"
+            self._touch()
+
+    def _release_drawing_control(self):
+        with self._lock:
+            self._state["arm"]["task"] = "idle"
+            self._control_owner = (
+                "manual_ui" if self._chassis is not None or self._arm is not None
+                else "none"
+            )
+            self._touch()
+
+    def _sync_manual_owner_locked(self):
+        if self._control_owner != "drawing":
+            self._control_owner = (
+                "manual_ui" if self._chassis is not None or self._arm is not None
+                else "none"
+            )
+
+    def _require_manual_control(self):
+        with self._lock:
+            if self._control_owner == "drawing":
+                raise WebConsoleError("drawing_task_owns_devices")
+
+    def _require_drawing_chassis_health(self):
+        with self._lock:
+            if (
+                self._control_owner != "drawing"
+                or self._chassis is None
+                or self._state["chassis"]["link"] != "online"
+            ):
+                raise DrawingTaskError("drawing_chassis_unavailable")
+
+    def drawing_task(self, request):
+        if self._drawing_tasks is None:
+            raise WebConsoleError("drawing_web_not_configured")
+        try:
+            self._drawing_tasks.handle(request)
+        except DrawingTaskError as error:
+            raise WebConsoleError(error.code, error.http_status) from error
+        return self.snapshot()
+
+    def _stop_for_drawing_cancel(self):
+        with self._chassis_io:
+            with self._lock:
+                available = self._chassis is not None
+            if available:
+                try:
+                    self._chassis_request("stop", journal=False)
+                except WebConsoleError:
+                    pass
+        # Wait behind one already-submitted arm request. New drawing arm calls
+        # re-check the cancellation event only after obtaining this same lock.
+        with self._arm_io:
+            pass
+
+    def _wait_for_drawing_lock(self, prepared, emit):
+        settings = (
+            prepared.control_config.localized_baseline
+            if prepared.mode == "localized_baseline"
+            else prepared.control_config.advanced
+        )
+        deadline = self._clock() + settings.localization_timeout_ms / 1000.0
+        while self._clock() < deadline:
+            self._drawing_tasks.raise_if_cancelled()
+            snapshot = self._localization.snapshot()
+            context = snapshot.get("context") or {}
+            if snapshot.get("state") == "locked" and context:
+                if (
+                    context.get("json_mm_per_rail_mm")
+                    != prepared.control_config.json_mm_per_rail_mm
+                ):
+                    raise DrawingTaskError("localized_runtime_scale_mismatch")
+                emit({
+                    "event": "initial_localization_locked",
+                    "generation": snapshot.get("generation"),
+                    "json_axis_offset_mm": context.get("json_axis_offset_mm"),
+                })
+                return
+            if snapshot.get("state") in ("blocked", "disabled"):
+                raise DrawingTaskError("initial_localization_" + snapshot.get("state"))
+            _DrawingChassisAdapter(self).ping()
+            self._drawing_tasks.sleep(settings.poll_ms / 1000.0)
+        raise DrawingTaskError("initial_localization_timeout")
+
+    def _execute_drawing_task(self, prepared, confirmations, _cancel, emit):
+        chassis_session = False
+        try:
+            with self._chassis_io:
+                if self._chassis is None:
+                    self._connect_chassis_locked()
+                chassis_session = self._chassis is not None
+            status = parse_chassis_status(
+                self._chassis_request("status", journal=False)
+            )
+            if status.chassis_state == "disabled":
+                self._chassis_request("enable", journal=False)
+                status = parse_chassis_status(
+                    self._chassis_request("status", journal=False)
+                )
+            if (
+                status.service_state != "ready"
+                or status.chassis_state != "enabled_stopped"
+                or not status.authenticated
+                or not status.motion_permitted
+                or status.last_error != "none"
+            ):
+                raise DrawingTaskError("chassis_preflight_rejected")
+            self._localization.on_chassis_status(status.chassis_state)
+            with self._arm_io:
+                if self._arm is None:
+                    self._connect_arm_locked()
+            if prepared.mode != "baseline":
+                self._wait_for_drawing_lock(prepared, emit)
+            result = execute_drawing(
+                _DrawingArmAdapter(self),
+                _DrawingChassisAdapter(self),
+                None if prepared.mode == "baseline" else self._localization,
+                prepared.job,
+                prepared.drawing_config,
+                prepared.control_config,
+                DrawingExecutionAdmission(
+                    confirmations["operator_present"],
+                    confirmations["emergency_stop_ready"],
+                    confirmations["area_clear"],
+                    confirmations["arm_profile_reviewed"],
+                ),
+                RelocationAdmission(
+                    confirmations["operator_present"],
+                    confirmations["emergency_stop_ready"],
+                    True,
+                    "enabled_stopped",
+                ),
+                "web-drawing-" + prepared.task_id[:16],
+                emit,
+                sleep_func=self._drawing_tasks.sleep,
+                clock=self._clock,
+            )
+            return result
+        finally:
+            if chassis_session:
+                for command in ("stop", "disable"):
+                    try:
+                        self._chassis_request(command, journal=False)
+                    except Exception:
+                        break
+                try:
+                    self.refresh_chassis_status(journal=False)
+                except Exception:
+                    pass
 
     def _require_chassis(self):
         with self._lock:
@@ -286,17 +603,20 @@ class WebConsoleRuntime:
             return self._arm
 
     def connect_chassis(self):
+        self._require_manual_control()
         with self._chassis_io:
             return self._connect_chassis_locked()
 
     def _connect_chassis_locked(self):
         with self._lock:
-            if self._chassis is not None:
-                return self.snapshot()
+            already_connected = self._chassis is not None
+        if already_connected:
+            return self.snapshot()
         try:
             client = self._chassis_factory(self.config.chassis)
             with self._lock:
                 self._chassis = client
+                self._sync_manual_owner_locked()
                 self._state["chassis"].update(link="online", authenticated=True, last_error="none")
                 self._last_chassis_health = self._clock()
                 self._touch()
@@ -320,12 +640,14 @@ class WebConsoleRuntime:
                 motion_enabled=False, reported_state="disconnected",
                 velocity={"vx_mm_s": 0, "vy_mm_s": 0, "omega_mrad_s": 0},
             )
+            self._sync_manual_owner_locked()
             self._touch()
         close_client(client)
         self._localization.on_chassis_unavailable("chassis_disconnected")
         self._report_localization_state("chassis")
 
     def disconnect_chassis(self):
+        self._require_manual_control()
         self._cancel_motion("disconnect", stopping=True)
         try:
             with self._chassis_io:
@@ -399,12 +721,14 @@ class WebConsoleRuntime:
         return self.snapshot()
 
     def enable_chassis(self):
+        self._require_manual_control()
         if not self.config.manual_chassis.enabled:
             raise WebConsoleError("manual_chassis_disabled")
         self._chassis_request("enable")
         return self.refresh_chassis_status(journal=False)
 
     def disable_chassis(self):
+        self._require_manual_control()
         self._cancel_motion("disable", stopping=True)
         try:
             with self._chassis_io:
@@ -453,6 +777,7 @@ class WebConsoleRuntime:
         return {"vx_mm_s": vx, "vy_mm_s": vy, "omega_mrad_s": omega, "hold_ms": self.config.manual_chassis.velocity_hold_ms}
 
     def start_chassis_motion(self, payload):
+        self._require_manual_control()
         if not self.config.manual_chassis.enabled:
             raise WebConsoleError("manual_chassis_disabled")
         command = self._validate_velocity(payload)
@@ -503,6 +828,20 @@ class WebConsoleRuntime:
         return self.snapshot()
 
     def stop_chassis_motion(self, reason="operator_stop"):
+        drawing = None if self._drawing_tasks is None else self._drawing_tasks.snapshot()
+        with self._lock:
+            drawing_cancellable = (
+                drawing is not None
+                and drawing.get("state") in ("prepared", "running", "stopping")
+            )
+            drawing_task_id = None if drawing is None else drawing.get("task_id")
+        if drawing_cancellable:
+            try:
+                self._drawing_tasks.handle({
+                    "action": "cancel", "task_id": drawing_task_id,
+                })
+            except DrawingTaskError:
+                pass
         self._cancel_motion(reason, stopping=True)
         try:
             with self._chassis_io:
@@ -514,6 +853,7 @@ class WebConsoleRuntime:
         return self.snapshot()
 
     def keep_chassis_motion(self, payload):
+        self._require_manual_control()
         """Input presence only: cannot start motion, change vectors or revive expiry."""
         with self._chassis_io:
             with self._lock:
@@ -599,17 +939,20 @@ class WebConsoleRuntime:
                 pass
 
     def connect_arm(self):
+        self._require_manual_control()
         with self._arm_io:
             return self._connect_arm_locked()
 
     def _connect_arm_locked(self):
         with self._lock:
-            if self._arm is not None:
-                return self.snapshot()
+            already_connected = self._arm is not None
+        if already_connected:
+            return self.snapshot()
         try:
             client = self._arm_factory(self.config.arm)
             with self._lock:
                 self._arm = client
+                self._sync_manual_owner_locked()
                 self._state["arm"].update(gateway="online", last_error="none")
                 self._last_arm_health = self._clock()
                 self._touch()
@@ -633,10 +976,12 @@ class WebConsoleRuntime:
                 reported_state="disconnected",
             )
             self._state["arm"]["measurement"].update(valid=False, error="disconnected")
+            self._sync_manual_owner_locked()
             self._touch()
         close_client(client)
 
     def disconnect_arm(self):
+        self._require_manual_control()
         with self._arm_io:
             self._disconnect_arm_state()
         self._event("Arm", "disconnect", "DONE", "disconnected")
@@ -768,6 +1113,7 @@ class WebConsoleRuntime:
         return clean
 
     def arm_command(self, command, payload):
+        self._require_manual_control()
         clean = self._arm_payload(command, payload)
         with self._lock:
             arm = self._state["arm"]
@@ -784,6 +1130,7 @@ class WebConsoleRuntime:
         return self.snapshot()
 
     def request_relocalization(self):
+        self._require_manual_control()
         try:
             self._localization.request_relocalization()
         except LocalizationStateError as error:
@@ -801,6 +1148,7 @@ class WebConsoleRuntime:
 
     def begin_localized_task(self, task_id, expected_generation=None):
         """Reserve the locked transform for a future coordinated executor."""
+        self._require_manual_control()
         try:
             context = self._localization.begin_task(task_id, expected_generation)
         except LocalizationStateError as error:
@@ -810,6 +1158,7 @@ class WebConsoleRuntime:
         return context
 
     def finish_localized_task(self, task_id, outcome, result="none"):
+        self._require_manual_control()
         try:
             self._localization.finish_task(task_id, outcome, result)
         except LocalizationStateError as error:
@@ -830,15 +1179,27 @@ class WebConsoleRuntime:
 
     def close(self):
         self._stop_event.set()
+        if self._drawing_tasks is not None:
+            self._drawing_tasks.close()
         if self._vision_worker is not None:
             try:
                 self._vision_worker.stop()
             except Exception:
                 pass
+        self._cancel_motion("runtime_close", stopping=True)
         try:
-            self.disconnect_chassis()
-        except Exception:
-            pass
+            with self._chassis_io:
+                with self._lock:
+                    client = self._chassis
+                if client is not None:
+                    for command in ("stop", "disable"):
+                        try:
+                            dispatch_chassis(client, command)
+                        except Exception:
+                            break
+                self._disconnect_chassis_state()
+        finally:
+            self._finish_stop()
         self._disconnect_arm_state()
         for thread in self._threads:
             thread.join(timeout=1.0)

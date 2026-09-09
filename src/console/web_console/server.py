@@ -103,6 +103,7 @@ def _handler(runtime, static_root):
                     "/api/arm/status": runtime.refresh_arm_status,
                     "/api/arm/command": lambda: runtime.arm_command(body.get("command"), body.get("payload")),
                     "/api/localization/relocalize": runtime.request_relocalization,
+                    "/api/drawing/task": lambda: runtime.drawing_task(body),
                     "/api/faults/ack": lambda: runtime.acknowledge_fault(body.get("code")),
                 }
                 action = routes.get(urlsplit(self.path).path)

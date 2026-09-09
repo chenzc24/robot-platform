@@ -150,3 +150,73 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.drawing-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.drawing-form select {
+  display: block;
+  width: 100%;
+  height: 34px;
+  margin-top: 4px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--text);
+  background: #0c1219;
+  padding: 0 8px;
+}
+
+.drawing-audit {
+  margin: 14px 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #0d141d;
+}
+
+.drawing-audit dl {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr);
+  gap: 5px 8px;
+  margin: 0;
+  font: 10px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.drawing-audit dt { color: var(--muted); }
+.drawing-audit dd {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drawing-confirmations {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 10px 12px;
+}
+
+.drawing-confirmations legend {
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: .1em;
+}
+
+.drawing-confirmations label {
+  color: var(--text);
+  letter-spacing: 0;
+}
+
+.drawing-start { margin-top: 4px; }
+.drawing-note {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}

@@ -133,6 +133,16 @@ test("page blur, hide, and pagehide send immediate keepalive STOP", async () => 
   }
 });
 
+test("page lifecycle does not send STOP without active manual input", async () => {
+  const f = fixture();
+  f.windowEvents.blur();
+  f.windowEvents.pagehide();
+  f.root.hidden = true;
+  f.documentEvents.visibilitychange();
+  await flush();
+  assert.equal(f.calls.length, 0);
+});
+
 test("late start reply after release cannot re-arm browser input", async () => {
   const f = fixture(), pending = deferred(), original = f.input.request;
   f.input.request = (path, body, options) => path.endsWith("/start") ? pending.promise : original(path, body, options);

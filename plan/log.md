@@ -1935,3 +1935,28 @@ entry format:
   connection, command, deployment, service operation or physical motion
   occurred. Unrelated web-console and `.vscode/settings.json` work was not
   modified or staged. Commit status was pending at log-entry time on `main`.
+
+## 2026-09-09 - Manage drawing modes from the Web console
+
+- Added one backend-owned drawing task lifecycle (`prepare`, `start`, `cancel`)
+  and a Drawing UI for the allowlisted Baseline, Localized Baseline and Advanced
+  strategies. A prepared task freezes its job, mode, configuration hashes and
+  readiness; mode changes require a new prepare and cannot occur while running.
+- Added exclusive `control_owner` arbitration over the existing Web chassis and
+  arm sessions. Manual motion and localization routes fail closed while drawing
+  owns the devices; global STOP remains available, cancels an active or prepared
+  task and finalization attempts chassis STOP/DISABLE before ownership release.
+- Added independent default-deny Web release gates for each mode, exact attended
+  start confirmations, durable JSONL task events and cancellation-aware waits.
+  The real repository sample prepared as 439 strokes / 3,903 points with all
+  Web release gates false; the live Web service was not restarted.
+- L1 validation passed 27 focused drawing/Web API tests, 11 arm-Web integration
+  tests, 15 browser-input tests, Python compilation, JSON parsing, 222 non-Qt
+  repository tests and `git diff --check`. Console discovery passed 146 of 148
+  tests; the other two legacy Qt modules could not import because `PySide6` is
+  absent from this environment.
+- No hardware discovery, credential read, device connection, device command,
+  deployment, service action or motion occurred. The unrelated
+  `.vscode/settings.json` user change was not modified or staged. Real-device L4
+  acceptance remains separately safety-gated. Commit status was pending at
+  log-entry time on `main`.

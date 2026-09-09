@@ -18,7 +18,8 @@ Browser on 127.0.0.1
 The Python process, not the browser, owns both device sockets, request
 serialization, health checks, chassis velocity refresh, state parsing, event
 journal, and faults. Chassis and arm sessions have separate locks and failure
-state. A fault on one route does not lock the other route.
+state. A fault on one manual route does not lock the other route. A coordinated
+drawing task deliberately acquires one higher-level owner across both routes.
 
 The server binds only to loopback, serves a fixed asset allowlist, and accepts
 state-changing browser requests only from its own origin. Credentials,
@@ -31,7 +32,7 @@ to the browser journal.
 +-----------------------------------------------------------------------+
 | Robot Console | video / ESP32 / arm | time | STOP CHASSIS            |
 +---------------------------------------------+-------------------------+
-|                                             | Chassis | Robot Arm     |
+|                                             | Chassis | Arm | Drawing |
 | Camera                                      +-------------------------+
 | complete letterboxed WebRTC viewport        | status and connection   |
 | PC AprilTag observation overlay             | complete precise panel  |
@@ -41,7 +42,7 @@ to the browser journal.
 ```
 
 The camera is dominant and the selected device panel uses the full right
-column. Chassis and robot arm are tabs instead of two compressed cards.
+column. Chassis, robot arm and Drawing are tabs instead of compressed cards.
 Diagnostics is collapsed by default. At narrower widths the device panel moves
 below the camera.
 
@@ -184,13 +185,64 @@ a future coordinate task, not an added gate on the independent manual arm
 controls. See the
 [localization lock state machine](localization-state-machine.md).
 
+## Backend-owned drawing tasks
+
+The Drawing tab prepares and runs the existing `baseline`,
+`localized_baseline` and `advanced` coordinators inside the Web backend. It does
+not launch a second CLI process. One `DrawingTaskManager` uses the console's
+existing arm, chassis and localization sessions and their serialized I/O paths.
+
+Its lifecycle is:
+
+```text
+idle -> prepared -> running -> stopping -> completed / failed / cancelled
+```
+
+`prepare` is a no-motion operation. It resolves a job only through the local
+allowlist, loads both drawing configurations, selects the requested strategy in
+an immutable in-memory snapshot, validates the canvas, builds the first window
+and returns the exact job/config hashes and readiness gates. Arbitrary browser
+filesystem paths are not accepted.
+
+Mode selection may change in `idle`, `prepared` or a terminal state by preparing
+a new task. It is locked in `running` and `stopping`; there is no hot switch,
+automatic fallback or cross-mode checkpoint reuse. After completion or
+cancellation, switching mode requires a new prepare/hash and new current safety
+confirmations.
+
+At start, the backend atomically changes `control_owner` from `none` to
+`drawing`. While held, chassis connect/enable/disable/motion and arm
+connect/disconnect/motion requests are rejected in the backend as well as
+disabled in the page. Read-only status remains available. Application STOP and
+Drawing Cancel remain available: they request chassis STOP immediately, mark
+an active task stopping and prevent later drawing commands. Global STOP also
+invalidates a merely prepared task so its old confirmations cannot be reused.
+An in-flight arm request
+cannot be preempted by this software path; the physical emergency stop remains
+the immediate safety control. The task's finalizer attempts chassis STOP and
+DISABLE before releasing ownership.
+
+Web mode release is independent per strategy. Copy
+`config/drawing-web.example.json` to ignored
+`config/drawing-web.local.json`, allowlist reviewed JSON jobs and set only a
+physically accepted mode's `mode_production_ready` value to true. Execution also
+requires both existing drawing configuration production gates, matching
+mode-specific runtime prerequisites, the exact prepared task/hash, and all five
+current attended safety confirmations. Baseline needs no localization;
+Localized Baseline and Advanced additionally require complete vision and
+localization configuration with matching scale. The Web policy is loaded only
+at backend startup, so changing a per-mode release requires a backend restart;
+an already prepared or running task never observes the file change.
+
 ## Launch
 
 Copy the template to the ignored local configuration once and fill approved
-endpoints. Keep the chassis credential only in its named environment variable.
+endpoints. Copy the drawing Web policy separately when the Drawing tab is to be
+used. Keep the chassis credential only in its named environment variable.
 
 ```powershell
 Copy-Item config\console.example.json config\console.local.json
+Copy-Item config\drawing-web.example.json config\drawing-web.local.json
 .\robot-console.cmd
 ```
 
@@ -240,8 +292,17 @@ POST /api/arm/status            POST /api/arm/command
 
 POST /api/localization/relocalize
 
+POST /api/drawing/task
+
 POST /api/faults/ack
 ```
+
+The drawing route accepts `action=prepare`, `start`, or `cancel`. Prepare takes
+an allowlisted `job_id` and one explicit mode. Start echoes the prepared
+`task_id`, exact `job_sha256`, and the five named confirmations. Cancel echoes
+the active task ID. Progress, phase, terminal result, error, log path and the
+immutable mode/hash snapshot are returned under `drawing` by the existing
+state endpoint.
 
 The browser sends intents such as exact velocity or an existing arm command
 name/payload. The backend validates numeric shapes and configured envelopes,
@@ -261,7 +322,8 @@ fields exist only between the web caller and PC; device RCP/TCP remains v3.
 L1 covers fixed-path HTTP serving, same-origin rejection, offline STOP,
 credential omission, valid status mapping, full-range chassis commands,
 backend-owned velocity refresh, explicit rejection behavior, arm/chassis
-independence, arm vector shapes, JavaScript syntax, and the existing suites.
+independence, drawing ownership and mode locking, arm vector shapes, JavaScript
+syntax, and the existing suites.
 
 Hold-release regression checks (all offline):
 

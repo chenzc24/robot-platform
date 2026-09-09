@@ -401,6 +401,8 @@ class WebServerTests(unittest.TestCase):
         self.assertIn("Live view", html)
         self.assertIn("EXACT VECTOR", html)
         self.assertIn("ROBOT ARM", html)
+        self.assertIn("DRAWING", html)
+        self.assertIn('id="drawing-prepare"', html)
         self.assertIn("Measured robot arm position", html)
         self.assertIn('id="vision-canvas"', html)
         response = json.load(self._request("/api/state"))
@@ -427,6 +429,15 @@ class WebServerTests(unittest.TestCase):
         self.assertEqual(rejected.exception.code, 409)
         body = json.load(rejected.exception)
         self.assertEqual(body["error"], "localization_disabled")
+
+    def test_drawing_route_fails_closed_without_web_drawing_configuration(self):
+        with self.assertRaises(urllib.error.HTTPError) as rejected:
+            self._request("/api/drawing/task", {
+                "action": "prepare", "job_id": "sample", "mode": "baseline",
+            }, self.base)
+        self.assertEqual(rejected.exception.code, 409)
+        body = json.load(rejected.exception)
+        self.assertEqual(body["error"], "drawing_web_not_configured")
 
     def test_server_refuses_non_loopback_binding(self):
         with self.assertRaisesRegex(ValueError, "loopback"):

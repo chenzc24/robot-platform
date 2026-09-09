@@ -60,9 +60,15 @@ class MaixRtspBackend:
     """Thin adapter around MaixPy camera and RTSP APIs."""
 
     def __init__(self, settings):
-        from maix import camera, comm, err, image, rtsp
+        from maix import camera, comm, err, image, key, rtsp
 
         self._err = err
+        # MaixPy installs two unrelated default listeners at process startup.
+        # The communication listener owns UART0 and the key listener converts
+        # the device OK key into SIGINT/application exit.  This is a headless
+        # resident service, so neither default behavior belongs here.
+        key.rm_default_listener()
+        self._key_exit_listener_removed = True
         self._listener_removed = comm.rm_default_comm_listener()
         self._camera = camera.Camera(
             settings.width,
@@ -84,6 +90,7 @@ class MaixRtspBackend:
         return {
             "url": self._server.get_url(),
             "default_uart_listener_removed": self._listener_removed,
+            "default_key_exit_listener_removed": self._key_exit_listener_removed,
         }
 
     def stop(self):

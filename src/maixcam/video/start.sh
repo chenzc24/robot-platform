@@ -4,6 +4,7 @@ set -eu
 video_dir=/root/robot-platform/video
 pid_file="$video_dir/rtsp.pid"
 log_file="$video_dir/rtsp.log"
+launcher_exe=/maixapp/apps/launcher/launcher
 
 pid_matches_server() {
     candidate_pid=$1
@@ -31,6 +32,17 @@ if test -f "$pid_file"; then
             ;;
     esac
 fi
+
+# The in-process ResourceRegistry cannot see a different MaixCam process.
+# Refuse before importing MaixPy when the vendor launcher is still active;
+# attempting camera initialization in that state can leave the ISP unable to
+# reacquire frames until a physical restart.
+for proc_path in /proc/[0-9]*; do
+    if [ "$(readlink "$proc_path/exe" 2>/dev/null || true)" = "$launcher_exe" ]; then
+        echo "RTSP_START_REFUSED launcher_active pid=${proc_path#/proc/}" >&2
+        exit 3
+    fi
+done
 
 for required_file in maix_runtime_status.py resource_guard.py video_service.py rtsp_server.py; do
     if ! test -f "$video_dir/$required_file"; then

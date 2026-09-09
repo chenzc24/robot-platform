@@ -123,6 +123,13 @@ class DeviceLifecycleScriptTests(unittest.TestCase):
     def _script(self, name):
         return (VIDEO_DIR / name).read_text(encoding="ascii")
 
+    def test_start_refuses_vendor_launcher_before_importing_maixpy(self):
+        script = self._script("start.sh")
+        refusal = script.index("RTSP_START_REFUSED launcher_active")
+        launch = script.index('nohup python3 -u "$video_dir/rtsp_server.py"')
+        self.assertLess(refusal, launch)
+        self.assertIn('readlink "$proc_path/exe"', script)
+
     def test_start_waits_for_a_structured_ready_event(self):
         start = self._script("start.sh")
         self.assertIn("pid_matches_server", start)

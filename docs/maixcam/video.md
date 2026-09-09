@@ -29,7 +29,19 @@ MaixVision and MaixCode are not part of this path. SSH/SCP manages files and pro
 - Console endpoint: loopback TCP RTSP port 8555, path `/maixcam`.
 - Display orientation: clockwise 90 degrees. The encoded stream remains unmodified; the console owns display and AprilTag overlay-coordinate rotation.
 
-MaixPy RTSP capture requires `image.Format.FMT_YVU420SP`. Importing MaixPy initializes its default UART listener, so the video service removes that listener before starting the camera. The video service does not read, write, or forward robot-arm commands.
+MaixPy RTSP capture requires `image.Format.FMT_YVU420SP`. Importing MaixPy
+initializes two unrelated listeners: the default communication listener may own
+UART0, and the default key listener turns the physical OK key into application
+exit. The headless video service removes both before starting the camera. The
+video service does not read, write, or forward robot-arm commands.
+
+`video/start.sh` also checks the real process table before importing MaixPy. If
+the vendor launcher is still active it returns
+`RTSP_START_REFUSED launcher_active` immediately. This process-level check is
+required because the Python `ResourceRegistry` only coordinates owners inside
+one process; it cannot see the launcher. The refusal leaves the ISP untouched,
+so the operator can exit the startup app and retry without first contaminating
+camera state.
 
 ## 3. Computer prerequisites
 
@@ -68,7 +80,7 @@ Do not commit a temporary DHCP address. The device source is resolved from `maix
 
 ## 4. Normal operating flow
 
-From the repository root:
+From the repository root, after the startup application has exited:
 
 ```powershell
 # Start or confirm the MaixCam source. This is idempotent for an owned video PID.
@@ -135,6 +147,7 @@ No chassis, CAN, robot-arm, UART, or TCP232 command was sent during this validat
 | Symptom | Check and response |
 |---|---|
 | Device port 8554 is closed | Check SSH and the device video log, then run the owned `start.sh`. Do not kill an unknown camera process. |
+| `RTSP_START_REFUSED launcher_active` | Exit the startup application, release the OK key, and start again. The headless video service ignores later OK presses. |
 | Relay says `NOT_RUNNING` | Confirm the source RTSP first, then start the relay. |
 | Relay says `NOT_READY` | Inspect `logs/mediamtx/ffmpeg-stderr.log` and MediaMTX logs; stop the owned pair before retrying. |
 | Immediate RTSP 404 after startup | The current script waits for path readiness. Treat a recurrence as a relay-start defect and retain the logs. |

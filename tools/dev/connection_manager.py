@@ -399,7 +399,12 @@ class ConnectionManager:
             return "DEGRADED"
         return "OFFLINE"
 
-    def report(self, explicit_esp32_host=None, ensure_relay=False):
+    def report(
+        self,
+        explicit_esp32_host=None,
+        ensure_relay=False,
+        include_esp32=True,
+    ):
         checks = []
         changed = False
         maixcam_ipv4, maixcam_error = self._maixcam_ipv4()
@@ -418,30 +423,39 @@ class ConnectionManager:
                 )
             )
 
-        esp32_ipv4, esp32_error = self.discover_esp32(
-            explicit_host=explicit_esp32_host,
-            maixcam_ipv4=maixcam_ipv4,
-        )
-        if esp32_ipv4:
-            checks.append(LinkCheck("esp32", True, "ok", "WebREPL port ready"))
-        else:
-            checks.append(
-                LinkCheck(
-                    "esp32",
-                    False,
-                    esp32_error or "esp32_unreachable",
-                    "WebREPL port is unavailable",
-                    "Check the hotspot client list or pass --esp32-host",
-                )
+        if include_esp32:
+            esp32_ipv4, esp32_error = self.discover_esp32(
+                explicit_host=explicit_esp32_host,
+                maixcam_ipv4=maixcam_ipv4,
             )
+            if esp32_ipv4:
+                checks.append(LinkCheck("esp32", True, "ok", "WebREPL port ready"))
+            else:
+                checks.append(
+                    LinkCheck(
+                        "esp32",
+                        False,
+                        esp32_error or "esp32_unreachable",
+                        "WebREPL port is unavailable",
+                        "Check the hotspot client list or pass --esp32-host",
+                    )
+                )
 
         device_rtsp_ready = maixcam_ipv4 and self.network.tcp_open(
             maixcam_ipv4,
             MAIXCAM_RTSP_PORT,
         )
         video_start_failed = False
+        video_start_owner_busy = False
         if ensure_relay and ssh_ready and maixcam_ipv4 and not device_rtsp_ready:
             start_result = self.remote_video_start()
+            video_start_owner_busy = (
+                start_result.returncode == 3
+                and "launcher_active" in "%s\n%s" % (
+                    start_result.stdout,
+                    start_result.stderr,
+                )
+            )
             if start_result.returncode == 0:
                 for _attempt in range(10):
                     if self.network.tcp_open(maixcam_ipv4, MAIXCAM_RTSP_PORT):
@@ -461,16 +475,30 @@ class ConnectionManager:
             )
         else:
             error_code = maixcam_error or (
-                "maixcam_video_start_failed"
-                if video_start_failed
-                else "maixcam_rtsp_unavailable"
+                "maixcam_camera_owner_busy"
+                if video_start_owner_busy
+                else (
+                    "maixcam_video_start_failed"
+                    if video_start_failed
+                    else "maixcam_rtsp_unavailable"
+                )
+            )
+            detail = (
+                "vendor launcher still owns the MaixCam runtime"
+                if video_start_owner_busy
+                else "device RTSP is unavailable"
+            )
+            action = (
+                "Exit the startup app before starting the headless video service"
+                if video_start_owner_busy
+                else "Inspect MaixCam video logs, then run: .\\robot connect"
             )
             device_video = LinkCheck(
                 "camera",
                 False,
                 error_code,
-                "device RTSP is unavailable",
-                "Exit num or inspect logs, then run: .\\robot connect",
+                detail,
+                action,
             )
         checks.append(device_video)
 

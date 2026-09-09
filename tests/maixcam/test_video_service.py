@@ -14,7 +14,7 @@ from resource_guard import (
     ResourceOwnershipError,
     ResourceRegistry,
 )
-from video_service import RtspVideoService, VideoSettings
+from video_service import MaixRtspBackend, RtspVideoService, VideoSettings
 
 
 class FakeBackend:
@@ -119,6 +119,75 @@ class VideoServiceLifecycleTests(unittest.TestCase):
             VideoSettings(fps=0)
         with self.assertRaises(ValueError):
             VideoSettings(port=70_000)
+
+
+class MaixBackendListenerTests(unittest.TestCase):
+    def test_headless_backend_removes_key_exit_before_camera_initialization(self):
+        events = []
+
+        class FakeKey:
+            @staticmethod
+            def rm_default_listener():
+                events.append("key_listener_removed")
+
+        class FakeComm:
+            @staticmethod
+            def rm_default_comm_listener():
+                events.append("uart_listener_removed")
+                return True
+
+        class FakeCameraModule:
+            @staticmethod
+            def Camera(*_args):
+                events.append("camera_created")
+                return object()
+
+        class FakeImage:
+            class Format:
+                FMT_YVU420SP = object()
+
+        class FakeRtspInstance:
+            def bind_camera(self, _camera):
+                events.append("camera_bound")
+
+        class FakeRtsp:
+            class RtspStreamType:
+                RTSP_STREAM_H264 = object()
+
+            @staticmethod
+            def Rtsp(**_kwargs):
+                return FakeRtspInstance()
+
+        class FakeErr:
+            class Err:
+                ERR_NONE = 0
+
+        fake_maix = type("FakeMaix", (), {
+            "camera": FakeCameraModule,
+            "comm": FakeComm,
+            "err": FakeErr,
+            "image": FakeImage,
+            "key": FakeKey,
+            "rtsp": FakeRtsp,
+        })
+        original = sys.modules.get("maix")
+        sys.modules["maix"] = fake_maix
+        try:
+            MaixRtspBackend(VideoSettings())
+        finally:
+            if original is None:
+                del sys.modules["maix"]
+            else:
+                sys.modules["maix"] = original
+        self.assertEqual(
+            events,
+            [
+                "key_listener_removed",
+                "uart_listener_removed",
+                "camera_created",
+                "camera_bound",
+            ],
+        )
 
 
 if __name__ == "__main__":

@@ -475,6 +475,10 @@ def main(
                 report = manager.report(
                     explicit_esp32_host=args.esp32_host,
                     ensure_relay=args.command == "connect",
+                    # connect mutates only the MaixCam video path.  ESP32
+                    # discovery is an independent status concern and must not
+                    # turn a successful video startup into DEGRADED.
+                    include_esp32=args.command != "connect",
                 )
                 return _emit_report(
                     report,

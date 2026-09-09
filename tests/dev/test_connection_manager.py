@@ -49,6 +49,7 @@ class FakeRunner:
     def __init__(self):
         self.relay_running = False
         self.remote_video_start_succeeds = False
+        self.remote_video_start_owner_busy = False
         self.network = None
         self.ssh_ready = True
         self.calls = []
@@ -68,6 +69,12 @@ class FakeRunner:
         if args[0] == "ssh" and args[-1] == "true":
             return CommandResult(0 if self.ssh_ready else 1)
         if args[0] == "ssh" and str(args[-1]).endswith("/start.sh"):
+            if self.remote_video_start_owner_busy:
+                return CommandResult(
+                    3,
+                    "",
+                    "RTSP_START_REFUSED launcher_active pid=123",
+                )
             if self.remote_video_start_succeeds:
                 self.network.open_ports.add((self.network.maixcam_ipv4, 8554))
                 return CommandResult(0, "RTSP_STARTED")
@@ -164,6 +171,35 @@ class ConnectionManagerTests(unittest.TestCase):
         self.assertTrue(
             any(str(call[0][-1]).endswith("/start.sh") for call in self.runner.calls)
         )
+
+    def test_video_only_report_does_not_discover_esp32(self):
+        self.runner.relay_running = True
+        self.network.open_ports.update(
+            {
+                ("192.0.2.20", 8554),
+                ("127.0.0.1", 8555),
+                ("127.0.0.1", 8889),
+            }
+        )
+        report = self.manager.report(include_esp32=False)
+        self.assertEqual(report.level, "READY")
+        self.assertEqual(
+            [check.name for check in report.checks],
+            ["maixcam", "camera", "video"],
+        )
+
+    def test_launcher_owner_refusal_is_reported_without_starting_relay(self):
+        self.runner.remote_video_start_owner_busy = True
+        report = self.manager.report(ensure_relay=True, include_esp32=False)
+        camera = next(check for check in report.checks if check.name == "camera")
+        self.assertEqual(camera.code, "maixcam_camera_owner_busy")
+        self.assertIn("startup app", camera.action)
+        relay_actions = [
+            call[0][call[0].index("-Action") + 1]
+            for call in self.runner.calls
+            if "-Action" in call[0]
+        ]
+        self.assertEqual(relay_actions, ["status"])
 
     def test_esp32_discovery_rejects_multiple_webrepl_candidates(self):
         self.network.scan_matches = ["192.0.2.30", "192.0.2.31"]

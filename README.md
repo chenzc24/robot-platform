@@ -54,7 +54,13 @@ It opens `http://127.0.0.1:8080/`, starts with both device sessions disconnected
 and reads only the ignored `config/console.local.json`. The previous PySide6
 interface remains a temporary fallback.
 
-`connect` currently starts only a missing MaixCam video service or computer-side relay and reports ESP32 WebREPL as a maintenance check. It does not start the new ESP32 runtime service, deploy code, enter the ESP32 REPL, or reset a device. See [the development-session guide](docs/development-session.md) for maintenance commands and protection rules.
+`connect` currently starts only a missing MaixCam video service or computer-side
+relay. Its result is deliberately video-only; it does not wait for or report the
+independent ESP32 maintenance link. `status` and `details` still report all
+links. None of these commands starts the ESP32 runtime service, deploys code,
+enters the ESP32 REPL, or resets a device. See the
+[development-session guide](docs/development-session.md) for maintenance
+commands and protection rules.
 
 ## Development Workflow
 

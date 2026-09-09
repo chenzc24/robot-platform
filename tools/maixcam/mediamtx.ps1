@@ -106,7 +106,7 @@ function Wait-RelayReady {
     param(
         [System.Diagnostics.Process]$MediaMtxProcess,
         [System.Diagnostics.Process]$FfmpegProcess,
-        [int]$TimeoutSeconds = 20
+        [int]$TimeoutSeconds = 12
     )
 
     $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)

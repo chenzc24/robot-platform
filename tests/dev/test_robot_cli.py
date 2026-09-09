@@ -34,8 +34,15 @@ class FakeManager:
         self.calls = []
         type(self).instances.append(self)
 
-    def report(self, explicit_esp32_host=None, ensure_relay=False):
-        self.calls.append(("report", explicit_esp32_host, ensure_relay))
+    def report(
+        self,
+        explicit_esp32_host=None,
+        ensure_relay=False,
+        include_esp32=True,
+    ):
+        self.calls.append(
+            ("report", explicit_esp32_host, ensure_relay, include_esp32)
+        )
         return ConnectionReport(
             "READY",
             [
@@ -146,12 +153,12 @@ class RobotCliTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(payload["level"], "READY")
         self.assertEqual(len(payload["checks"]), 4)
-        self.assertEqual(manager.calls, [("report", "192.0.2.30", False)])
+        self.assertEqual(manager.calls, [("report", "192.0.2.30", False, True)])
 
     def test_connect_is_the_only_report_command_that_ensures_relay(self):
         exit_code, _output, manager = run_cli(["connect"])
         self.assertEqual(exit_code, 0)
-        self.assertEqual(manager.calls, [("report", None, True)])
+        self.assertEqual(manager.calls, [("report", None, True, False)])
 
     def test_restart_relay_stops_before_starting(self):
         exit_code, _output, manager = run_cli(["restart", "relay"])

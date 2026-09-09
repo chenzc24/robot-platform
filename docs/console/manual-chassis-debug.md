@@ -14,7 +14,7 @@ Connect → Enable → hold a direction → release to stop
 Finish motion → STOP → Disable → Disconnect
 ```
 
-The successful authenticated TCP connection is the control session. There is no
+The successful trusted-LAN TCP connection is the control session. There is no
 separate acquire, release, manual-unlock, or operator lease. `Enable` is available
 after the ESP32 reports an authenticated connection and motion permission.
 
@@ -24,9 +24,9 @@ is always derived to be well inside the configured velocity hold. Releasing the
 button stops refresh and immediately queues STOP.
 
 `STOP` zeros the requested velocity and leaves the motors enabled for the next
-jog. `Disable` stops and disables the chassis but keeps the authenticated TCP
+jog. `Disable` stops and disables the chassis but keeps the active TCP
 connection available, so the operator can use `Enable` again. `Disconnect`
-ends the session; reconnecting requires only `HELLO` authentication and `Enable`.
+ends the session; reconnecting requires only `HELLO` and `Enable`.
 
 ## Minimal runtime protection
 

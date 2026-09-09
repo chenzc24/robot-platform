@@ -76,7 +76,7 @@ See [Network Baseline](network/README.md) for detailed addressing, failure behav
 
 - USB: initial firmware, Wi-Fi bootstrap, backup, and recovery.
 - WebREPL: routine file synchronization and soft reset on a trusted development LAN.
-- Production runtime: dedicated computer-to-ESP32 Wi-Fi/TCP service with authenticated connection, enable/disable, velocity, stop, status, health polling, and fault handling. WebREPL uses a separate maintenance port and lifecycle.
+- Production runtime: dedicated computer-to-ESP32 Wi-Fi/TCP service on the trusted LAN with one explicit session handshake, enable/disable, velocity, stop, status, health polling, and fault handling. WebREPL uses a separate maintenance port and lifecycle.
 
 ### MaixCam
 
@@ -99,7 +99,7 @@ Arm:     computer → Wi-Fi → MaixCam → UART → TCP232 → LAN1
 Status:  ESP32 → Wi-Fi/TCP → computer; arm → MaixCam → Wi-Fi → computer
 ```
 
-The computer orchestrator combines independently reported chassis and arm state and enforces cross-device gates such as requiring confirmed chassis stop before an arm task. ESP32 validates chassis commands and retains final limits, authenticated-session health, and stop behavior. MaixCam validates robot-arm tasks, and the arm retains controller limits and body safety.
+The computer orchestrator combines independently reported chassis and arm state and enforces cross-device gates such as requiring confirmed chassis stop before an arm task. ESP32 validates chassis commands and retains final limits, session health, and stop behavior. MaixCam validates robot-arm tasks, and the arm retains controller limits and body safety.
 
 The first high-level task sequence is:
 

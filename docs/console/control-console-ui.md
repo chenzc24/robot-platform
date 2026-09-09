@@ -238,7 +238,7 @@ an already prepared or running task never observes the file change.
 
 Copy the template to the ignored local configuration once and fill approved
 endpoints. Copy the drawing Web policy separately when the Drawing tab is to be
-used. Keep the chassis credential only in its named environment variable.
+used. The current RCP/TCP v3 trusted-LAN connection has no credential field.
 
 ```powershell
 Copy-Item config\console.example.json config\console.local.json

@@ -1,7 +1,6 @@
 """Run one explicitly attended, bounded ESP32 chassis L3 wheel-rotation test."""
 
 import argparse
-import os
 import pathlib
 import sys
 import time
@@ -22,7 +21,6 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", required=True)
     parser.add_argument("--port", type=int, default=8765)
-    parser.add_argument("--credential-env", default="ROBOT_CHASSIS_CREDENTIAL")
     parser.add_argument("--client-id", default="l3-attended-test")
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--safety-confirmed", action="store_true")
@@ -36,14 +34,10 @@ def _required(response, response_type):
 
 
 def execute(arguments):
-    credential = os.environ.get(arguments.credential_env)
-    if not credential:
-        raise RuntimeError("credential_unavailable")
-
     connection = open_connection(arguments.host, arguments.port, 3.0)
     client = ChassisMotionTcpClient(connection)
     try:
-        welcome = _required(client.hello(arguments.client_id, credential), "WELCOME")
+        welcome = _required(client.hello(arguments.client_id), "WELCOME")
         if welcome["payload"]["motion_permitted"] is not True:
             raise RuntimeError("motion_not_permitted_by_device")
         _required(client.enable(), "DONE")

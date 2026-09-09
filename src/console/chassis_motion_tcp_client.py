@@ -119,10 +119,10 @@ class ChassisMotionTcpClient:
                 raise ChassisMotionTcpUnknown("outcome_unknown") from error
             raise
 
-    def hello(self, client_id, credential, ttl_ms=1000):
+    def hello(self, client_id, ttl_ms=1000):
         response = self.exchange(
             "HELLO",
-            {"client": client_id, "credential": credential},
+            {"client": client_id},
             ttl_ms,
         )
         self.authenticated = True

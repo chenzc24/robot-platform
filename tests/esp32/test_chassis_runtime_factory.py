@@ -18,14 +18,12 @@ class Transport:
 
 
 class ChassisRuntimeFactoryTests(unittest.TestCase):
-    def test_l2_service_has_no_motor_or_can_dependency_and_denies_authentication_without_local_secret(self):
+    def test_l2_service_has_no_motor_or_can_dependency_and_starts_trusted_lan_session(self):
         transport = Transport()
         config = types.SimpleNamespace(RUNTIME_HEALTH_TIMEOUT_MS=2000)
-        with patch.dict(sys.modules, {"device_config": config}), patch(
-            "chassis_runtime_factory.runtime_credential", return_value=None
-        ):
+        with patch.dict(sys.modules, {"device_config": config}):
             service = make_l2_service(transport)
         self.assertIsInstance(service.chassis, NoMotionChassis)
-        service.feed(encode_message("HELLO", 1, 1000, {"client": "test", "credential": "wrong-credential-0001"}))
-        self.assertEqual(decode_message(transport.writes[-1])["payload"]["code"], "authentication_failed")
+        service.feed(encode_message("HELLO", 1, 1000, {"client": "test"}))
+        self.assertEqual(decode_message(transport.writes[-1])["type"], "WELCOME")
         self.assertFalse(service.motion_permitted)

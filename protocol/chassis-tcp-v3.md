@@ -33,7 +33,7 @@ Every message contains exactly:
 ## Session
 
 ```text
-HELLO(client, credential) → WELCOME(protocol=3)
+HELLO(client)             → WELCOME(protocol=3)
 ENABLE                    → ACK → DONE
 PING / STATUS             → PONG / STATE
 LINE_FOLLOW_STATUS        → LINE_FOLLOW_STATE
@@ -41,7 +41,7 @@ LINE_FOLLOW_START / STOP  → ACK → DONE
 STOP / DISABLE            → ACK → DONE
 ```
 
-The credential is checked by an injected local verifier. It is never echoed, logged, included in status, or committed to Git. The authenticated TCP connection is the controller; there is no separate ownership lease. The baseline relies on the controlled WPA-protected LAN and does not claim TLS or internet-safe authentication.
+The successful trusted-LAN TCP handshake is the controller; there is no credential field or separate ownership lease. The baseline relies on the controlled WPA-protected LAN and does not claim TLS or internet-safe authentication.
 
 Only one TCP client is processed at a time. Closing or replacing the connection ends the control session.
 
@@ -49,15 +49,15 @@ Only one TCP client is processed at a time. Closing or replacing the connection 
 
 | Request | Payload | Local rule |
 |---|---|---|
-| `PING` | `{}` | Authenticated liveness query |
-| `STATUS` | `{}` | Authenticated state query |
-| `ENABLE` | `{}` | Requires authentication and local motion policy |
+| `PING` | `{}` | Session liveness query |
+| `STATUS` | `{}` | Session state query |
+| `ENABLE` | `{}` | Requires a completed handshake and local motion policy |
 | `VELOCITY` | `vx_mm_s`, `vy_mm_s`, `omega_mrad_s`, `hold_ms` | Linear components `-600..600`, angular `-800..800`, hold `100..500`, and hold no longer than TTL |
 | `LINE_FOLLOW_START` | `direction` (`-1` or `1`) | Requires an explicitly configured local follower and `enabled_stopped`; starts local sensor-rate decisions |
 | `LINE_FOLLOW_STATUS` | `{}` | Returns local state, sanitized reason and direction; refreshes connection health |
-| `LINE_FOLLOW_STOP` | `{}` | Stops the local follower without disabling the authenticated chassis session |
-| `STOP` | `{}` | Authenticated fail-safe zero request |
-| `DISABLE` | `{}` | Authenticated zero plus motor-disable request |
+| `LINE_FOLLOW_STOP` | `{}` | Stops the local follower without disabling the active chassis session |
+| `STOP` | `{}` | Session fail-safe zero request |
+| `DISABLE` | `{}` | Session zero plus motor-disable request |
 
 State-changing commands return either:
 
@@ -80,8 +80,8 @@ explicit PC task decision, never an automatic ESP32 reaction.
 - An identical duplicate of the latest request replays cached responses and never re-executes motion.
 - The same sequence with different bytes returns `sequence_conflict`.
 - An older sequence returns `sequence_replay`.
-- A malformed authenticated stream, TCP disconnect, health timeout, short write, or execution exception invokes local stop and disable and closes the session.
-- Velocity-hold expiry sends a local stop but preserves the authenticated, enabled session for the next manual jog.
+- A malformed session stream, TCP disconnect, health timeout, short write, or execution exception invokes local stop and disable and closes the session.
+- Velocity-hold expiry sends a local stop but preserves the active, enabled session for the next manual jog.
 - The runtime steps an active local line follower while polling socket safety.
   A scheduler exception invokes stop/disable and closes the session.
 - A state-changing request with a lost response has an unknown outcome and is never automatically retried.
@@ -89,4 +89,4 @@ explicit PC task decision, never an automatic ESP32 reaction.
 
 ## Safety Boundary
 
-Committed templates keep credentials local and motion permission explicit. L2 uses `tcp_v3_l2` with no CAN construction. The separately gated L3 composition is `tcp_v3_l3`.
+The trusted-LAN deployment has no credential mechanism; motion permission remains explicit. L2 uses `tcp_v3_l2` with no CAN construction. The separately gated L3 composition is `tcp_v3_l3`.

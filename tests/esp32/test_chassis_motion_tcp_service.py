@@ -12,12 +12,8 @@ sys.path.insert(0, str(ROOT / "src/esp32/app"))
 from chassis_motion_tcp_service import (
     ChassisMotionTcpRuntime,
     ChassisMotionTcpService,
-    fixed_credential_verifier,
 )
 from chassis_tcp_v3 import decode_message, encode_message
-
-
-CREDENTIAL = "test-credential-0001"
 
 
 class FakeClock:
@@ -108,7 +104,6 @@ class ServiceHarness:
     def __init__(
         self,
         motion_permitted=False,
-        authorize=True,
         short_write=False,
         fail_drive=False,
         fail_stop=False,
@@ -117,11 +112,9 @@ class ServiceHarness:
         self.clock = FakeClock()
         self.transport = FakeTransport(short_write)
         self.chassis = FakeChassis(fail_drive, fail_stop)
-        verifier = fixed_credential_verifier(CREDENTIAL) if authorize else None
         self.service = ChassisMotionTcpService(
             self.transport,
             self.chassis,
-            authorize=verifier,
             motion_permitted=motion_permitted,
             clock_ms=self.clock,
             health_timeout_ms=health_timeout_ms,
@@ -143,20 +136,17 @@ class ServiceHarness:
         ]
 
     def authenticate(self):
-        return self.feed(
-            "HELLO", {"client": "console", "credential": CREDENTIAL}
-        )
+        return self.feed("HELLO", {"client": "console"})
 
 
 class ChassisMotionTcpServiceTests(unittest.TestCase):
-    def test_default_denies_authentication_and_does_not_retain_credential(self):
-        harness = ServiceHarness(authorize=False)
+    def test_hello_starts_trusted_lan_session_without_credential(self):
+        harness = ServiceHarness()
         responses = harness.authenticate()
-        self.assertEqual(responses[-1]["payload"]["code"], "authentication_failed")
-        self.assertFalse(harness.service.authenticated)
+        self.assertEqual(responses[-1]["type"], "WELCOME")
+        self.assertTrue(harness.service.authenticated)
         self.assertIsNone(harness.service._last_fingerprint)
-        self.assertNotIn(CREDENTIAL, repr(harness.service.__dict__))
-        self.assertTrue(harness.service.close_required)
+        self.assertFalse(harness.service.close_required)
 
     def test_authenticated_status_reports_motion_disabled_without_hardware_calls(self):
         harness = ServiceHarness()
@@ -358,7 +348,7 @@ class ChassisMotionTcpServiceTests(unittest.TestCase):
                 "HELLO",
                 1,
                 1000,
-                {"client": "console", "credential": CREDENTIAL},
+                {"client": "console"},
             )
         )
         self.assertEqual(decode_message(replacement.writes[-1])["type"], "WELCOME")
@@ -420,7 +410,6 @@ class ChassisMotionTcpRuntimeTests(unittest.TestCase):
         service = ChassisMotionTcpService(
             connection,
             chassis,
-            authorize=fixed_credential_verifier(CREDENTIAL),
             clock_ms=clock,
         )
         runtime = ChassisMotionTcpRuntime(service, connection)
@@ -439,7 +428,6 @@ class ChassisMotionTcpRuntimeTests(unittest.TestCase):
         service = ChassisMotionTcpService(
             connection,
             chassis,
-            authorize=fixed_credential_verifier(CREDENTIAL),
             clock_ms=clock,
             health_timeout_ms=500,
         )
@@ -448,7 +436,7 @@ class ChassisMotionTcpRuntimeTests(unittest.TestCase):
                 "HELLO",
                 1,
                 1000,
-                {"client": "console", "credential": CREDENTIAL},
+                {"client": "console"},
             ),
             now_ms=clock.now,
         )
@@ -465,7 +453,6 @@ class ChassisMotionTcpRuntimeTests(unittest.TestCase):
         service = ChassisMotionTcpService(
             connection,
             chassis,
-            authorize=fixed_credential_verifier(CREDENTIAL),
             clock_ms=clock,
         )
         runtime = ChassisMotionTcpRuntime(service, connection)

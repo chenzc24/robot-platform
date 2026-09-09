@@ -1,6 +1,6 @@
 """Fail-closed ESP32 RCP/TCP v3 L2 and L3 runtime composition."""
 
-from chassis_motion_tcp_service import ChassisMotionTcpService, fixed_credential_verifier
+from chassis_motion_tcp_service import ChassisMotionTcpService
 
 
 class NoMotionChassis:
@@ -12,23 +12,12 @@ class NoMotionChassis:
     def disable(self): self.state = "disabled"
 
 
-def runtime_credential():
-    try:
-        from secrets import RUNTIME_CREDENTIAL
-    except ImportError:
-        return None
-    return RUNTIME_CREDENTIAL if isinstance(RUNTIME_CREDENTIAL, str) and RUNTIME_CREDENTIAL else None
-
-
 def make_l2_service(transport):
     """Create the v3 diagnostic service: network only, motion impossible."""
     config = _local_config()
-    credential = runtime_credential()
-    verifier = fixed_credential_verifier(credential) if credential else None
     return ChassisMotionTcpService(
         transport,
         NoMotionChassis(),
-        authorize=verifier,
         motion_permitted=False,
         health_timeout_ms=_health_timeout(config),
     )
@@ -76,8 +65,6 @@ def make_l3_service_factory():
     except Exception:
         startup_fault = "startup_safe_output_failed"
 
-    credential = runtime_credential()
-    verifier = fixed_credential_verifier(credential) if credential else None
     motion_permitted = getattr(config, "L3_MOTION_PERMITTED", False) is True
     max_linear_mm_s = _positive_int(config, "L3_MAX_LINEAR_SPEED_MM_S", 600)
     max_omega_mrad_s = _positive_int(config, "L3_MAX_OMEGA_MRAD_S", 800)
@@ -88,7 +75,6 @@ def make_l3_service_factory():
         service = ChassisMotionTcpService(
             transport,
             chassis,
-            authorize=verifier,
             motion_permitted=motion_permitted,
             health_timeout_ms=_health_timeout(config),
             max_linear_mm_s=max_linear_mm_s,

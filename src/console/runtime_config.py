@@ -23,7 +23,6 @@ class EndpointConfig:
 @dataclass(frozen=True)
 class ChassisConfig(EndpointConfig):
     client_id: str
-    credential_env: str
 
 
 @dataclass(frozen=True)
@@ -184,7 +183,7 @@ def load_runtime_config(path):
     video = _mapping(raw["video"], "video")
     vision = _mapping(raw["vision"], "vision") if schema_version in {4, 5} else None
     localization = _mapping(raw["localization"], "localization") if schema_version == 5 else None
-    if set(chassis) != {"host", "port", "client_id", "credential_env", "connect_timeout_seconds"}:
+    if set(chassis) != {"host", "port", "client_id", "connect_timeout_seconds"}:
         raise RuntimeConfigError("unexpected chassis configuration fields")
     if set(manual_chassis) != {"enabled", "health_interval_ms", "velocity_hold_ms", "linear_limit_mm_s", "angular_limit_mrad_s"}:
         raise RuntimeConfigError("unexpected manual chassis configuration fields")
@@ -209,7 +208,6 @@ def load_runtime_config(path):
             host=_string(chassis["host"], "chassis.host", allow_empty=True),
             port=_port(chassis["port"], "chassis.port"),
             client_id=_string(chassis["client_id"], "chassis.client_id"),
-            credential_env=_string(chassis["credential_env"], "chassis.credential_env"),
             connect_timeout_seconds=_timeout(chassis["connect_timeout_seconds"], "chassis.connect_timeout_seconds"),
         ),
         manual_chassis=ManualChassisConfig(

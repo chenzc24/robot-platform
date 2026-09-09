@@ -63,7 +63,7 @@ class ChassisTcpV3ContractTests(unittest.TestCase):
 
     def test_request_ranges_and_exact_payloads_are_enforced(self):
         invalid = (
-            ("HELLO", 1, 1000, {"client": "console", "credential": "short"}),
+            ("HELLO", 1, 1000, {"client": "console", "credential": "obsolete"}),
             ("ACQUIRE", 1, 1000, {}),
             ("HEARTBEAT", 1, 1000, {}),
             ("RELEASE", 1, 1000, {}),

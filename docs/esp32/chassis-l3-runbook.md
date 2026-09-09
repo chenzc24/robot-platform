@@ -52,8 +52,7 @@ RX `18`. `CAN.send()` is only local transmit acceptance, not motor feedback.
 
 ## Execution command
 
-Set the credential only in the local environment, then substitute the current
-ESP32 endpoint:
+Substitute the current ESP32 endpoint:
 
 ```powershell
 python tools/esp32/l3_chassis_test.py --host <esp32-address> --execute --safety-confirmed

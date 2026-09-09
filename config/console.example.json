@@ -4,7 +4,6 @@
     "host": "",
     "port": 0,
     "client_id": "console",
-    "credential_env": "ROBOT_CHASSIS_CREDENTIAL",
     "connect_timeout_seconds": 3.0
   },
   "manual_chassis": {

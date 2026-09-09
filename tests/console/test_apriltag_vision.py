@@ -111,7 +111,7 @@ class CalibrationTests(unittest.TestCase):
 
     def test_localization_requires_enabled_complete_vision(self):
         runtime = RuntimeConfig(
-            chassis=ChassisConfig("host", 4242, 1.0, "console", "CREDENTIAL"),
+            chassis=ChassisConfig("host", 4242, 1.0, "console"),
             manual_chassis=ManualChassisConfig(False, 500, 300, 600, 800),
             arm=ArmConfig("host", 4343, 1.0, "console"),
             video=VideoConfig("", "", 1.0, ""),
@@ -257,7 +257,7 @@ class ConsoleVisionStateTests(unittest.TestCase):
     @staticmethod
     def config():
         return RuntimeConfig(
-            chassis=ChassisConfig("", 0, 1.0, "console", "TEST_CREDENTIAL"),
+            chassis=ChassisConfig("", 0, 1.0, "console"),
             manual_chassis=ManualChassisConfig(False, 500, 300, 600, 800),
             arm=ArmConfig("", 0, 1.0, "console"),
             video=VideoConfig("", "", 1.0, ""),

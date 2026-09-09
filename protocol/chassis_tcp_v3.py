@@ -15,8 +15,6 @@ MIN_HOLD_MS = 100
 MAX_HOLD_MS = 500
 MAX_LINEAR_MM_S = 600
 MAX_OMEGA_MRAD_S = 800
-MIN_CREDENTIAL_BYTES = 16
-MAX_CREDENTIAL_BYTES = 64
 
 QUERY_TYPES = ("HELLO", "PING", "STATUS", "LINE_FOLLOW_STATUS")
 CONTROL_TYPES = (
@@ -41,7 +39,7 @@ VALID_TYPES = REQUEST_TYPES + RESPONSE_TYPES
 
 
 class ChassisTcpV3FrameError(ValueError):
-    """Describe a rejected frame without retaining raw input or credentials."""
+    """Describe a rejected frame without retaining raw input."""
 
     def __init__(self, code):
         ValueError.__init__(self, code)
@@ -81,21 +79,6 @@ def _token(value, code, max_bytes=64, allow_none=False):
     return value
 
 
-def _credential(value):
-    if not isinstance(value, str):
-        raise ChassisTcpV3FrameError("invalid_credential")
-    try:
-        encoded = value.encode("ascii")
-    except UnicodeError:
-        raise ChassisTcpV3FrameError("invalid_credential")
-    allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-"
-    if len(encoded) < MIN_CREDENTIAL_BYTES or len(encoded) > MAX_CREDENTIAL_BYTES:
-        raise ChassisTcpV3FrameError("invalid_credential")
-    if not all(character in allowed for character in value):
-        raise ChassisTcpV3FrameError("invalid_credential")
-    return value
-
-
 def _exact(payload, fields):
     if not isinstance(payload, dict) or set(payload) != set(fields):
         raise ChassisTcpV3FrameError("invalid_payload")
@@ -103,10 +86,9 @@ def _exact(payload, fields):
 
 def _validate_payload(message_type, payload):
     if message_type == "HELLO":
-        _exact(payload, ("client", "credential"))
+        _exact(payload, ("client",))
         return {
             "client": _token(payload["client"], "invalid_client", 32),
-            "credential": _credential(payload["credential"]),
         }
     if message_type in (
         "PING",
@@ -238,10 +220,7 @@ def validate_message(message):
 
 def _payload_text(message_type, payload):
     if message_type == "HELLO":
-        return '{"client":"%s","credential":"%s"}' % (
-            payload["client"],
-            payload["credential"],
-        )
+        return '{"client":"%s"}' % payload["client"]
     if message_type in (
         "PING",
         "STATUS",

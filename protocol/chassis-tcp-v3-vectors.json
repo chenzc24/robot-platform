@@ -3,15 +3,14 @@
   "version": 3,
   "vectors": [
     {
-      "name": "authenticated_hello",
+      "name": "trusted_lan_hello",
       "type": "HELLO",
       "sequence": 1,
       "ttl_ms": 1000,
       "payload": {
-        "client": "console",
-        "credential": "test-credential-0001"
+        "client": "console"
       },
-      "frame": "{\"version\":3,\"sequence\":1,\"type\":\"HELLO\",\"ttl_ms\":1000,\"payload\":{\"client\":\"console\",\"credential\":\"test-credential-0001\"}}\n"
+      "frame": "{\"version\":3,\"sequence\":1,\"type\":\"HELLO\",\"ttl_ms\":1000,\"payload\":{\"client\":\"console\"}}\n"
     },
     {
       "name": "bounded_velocity",

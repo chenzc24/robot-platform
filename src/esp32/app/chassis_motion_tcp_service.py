@@ -1,4 +1,4 @@
-"""Lease-free RCP/TCP v3 chassis service with authenticated link health."""
+"""Lease-free RCP/TCP v3 chassis service with trusted-LAN link health."""
 
 import time
 
@@ -56,40 +56,17 @@ def _safe_token(value, fallback="unknown"):
     return text[:64]
 
 
-def fixed_credential_verifier(expected_credential):
-    """Build a constant-work local verifier without logging either value."""
-    if not isinstance(expected_credential, str) or not expected_credential:
-        raise ValueError("expected credential is required")
-    expected = expected_credential.encode("ascii")
-
-    def verify(_client_id, supplied_credential):
-        try:
-            supplied = supplied_credential.encode("ascii")
-        except (AttributeError, UnicodeError):
-            return False
-        difference = len(expected) ^ len(supplied)
-        maximum = max(len(expected), len(supplied))
-        for index in range(maximum):
-            left = expected[index] if index < len(expected) else 0
-            right = supplied[index] if index < len(supplied) else 0
-            difference |= left ^ right
-        return difference == 0
-
-    return verify
-
-
 class ChassisMotionRequestError(ValueError):
     """A stable request rejection that is safe to expose as an error code."""
 
 
 class ChassisMotionTcpService:
-    """Execute one authenticated v3 request at a time and fail locally safe."""
+    """Execute one trusted-LAN v3 request at a time and fail locally safe."""
 
     def __init__(
         self,
         transport,
         chassis,
-        authorize=None,
         motion_permitted=False,
         clock_ms=None,
         health_timeout_ms=DEFAULT_HEALTH_TIMEOUT_MS,
@@ -100,7 +77,6 @@ class ChassisMotionTcpService:
     ):
         self.transport = transport
         self.chassis = chassis
-        self.authorize = authorize
         self.motion_permitted = motion_permitted is True
         self._clock_ms = clock_ms or _clock_ms
         self.health_timeout_ms = self._optional_positive_int(
@@ -221,19 +197,10 @@ class ChassisMotionTcpService:
         elif state == "fault":
             self.line_follower.reset_fault()
 
-    def _authenticate(self, request):
+    def _start_session(self, request):
         if self.authenticated:
             return self._error(request, "session_started")
         payload = request["payload"]
-        allowed = False
-        if self.authorize is not None:
-            try:
-                allowed = self.authorize(payload["client"], payload["credential"])
-            except Exception:
-                allowed = False
-        if allowed is not True:
-            self.close_required = True
-            return self._error(request, "authentication_failed")
         self.client_id = payload["client"]
         self.authenticated = True
         self._health_deadline_ms = _ticks_add(
@@ -256,7 +223,7 @@ class ChassisMotionTcpService:
     def _execute(self, request, received_at_ms, now_ms):
         request_type = request["type"]
         if request_type == "HELLO":
-            return self._authenticate(request)
+            return self._start_session(request)
         if not self.authenticated:
             return self._error(request, "session_required")
         if _ticks_diff(now_ms, _ticks_add(received_at_ms, request["ttl_ms"])) > 0:

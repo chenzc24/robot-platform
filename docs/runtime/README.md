@@ -36,7 +36,7 @@ The computer, MaixCam, and ESP32 must join the LAN at runtime. Robot arm LAN2 ma
 |---|---|---|
 | Computer | Receive video, run vision inference, orchestrate tasks, own one direct ESP32 chassis session and one MaixCam arm/video session | Does not control CAN or arm LAN1 directly and is not the sole emergency-stop or interlock layer |
 | MaixCam | Video output, robot-arm command validation/routing, arm status, and arm task gates | Does not route chassis commands or replace local device safety |
-| ESP32 | Receive direct TCP chassis commands, own chassis control, enforce authentication/TTL/connection-health and speed limits, execute CAN commands, report status | WebREPL is maintenance-only; safe stopping cannot depend on the computer remaining online; no arm control |
+| ESP32 | Receive direct trusted-LAN TCP chassis commands, own chassis control, enforce TTL/connection-health and speed limits, execute CAN commands, report status | WebREPL is maintenance-only; safe stopping cannot depend on the computer remaining online; no arm control |
 | TCP232 | Transparent byte transport between MaixCam UART and robot arm LAN1 TCP | Does not parse the application protocol or decide whether an action completed |
 | Robot arm | Host the LAN1 service, parse commands, own its action state machine, call the Dobot API, report results | Does not accept a second computer runtime owner and does not use LAN2 for runtime data |
 
@@ -45,7 +45,7 @@ The computer, MaixCam, and ESP32 must join the LAN at runtime. Robot arm LAN2 ma
 | Channel | Direction | Transport | Current status |
 |---|---|---|---|
 | Video | MaixCam → computer | RTSP/H.264; FFmpeg/MediaMTX exposes local RTSP, HLS, and WebRTC | Passed continuous real-device video validation |
-| Chassis commands and status | Computer ↔ ESP32 | RCP/TCP v3 persistent TCP service with bounded newline-delimited messages, sequence, TTL, authentication, and health polling | v3 deployed; authenticated non-motion readiness passed; the dated deployment did not test motion |
+| Chassis commands and status | Computer ↔ ESP32 | RCP/TCP v3 persistent TCP service with bounded newline-delimited messages, sequence, TTL and health polling | v3 deployed; trusted-LAN non-motion readiness passed; the dated deployment did not test motion |
 | Arm commands and status | Computer ↔ MaixCam | Persistent bidirectional NDJSON control envelope | Measured feedback and attended drawing passed; committed configuration template remains default-deny; deployed attended configuration uses YOLO |
 | Arm commands and status | MaixCam ↔ TCP232 ↔ arm LAN1 | UART 115200 8N1, RPA2 CRC frames, and a robot-arm project | RPA2 feedback and sequential drawing passed; source defaults remain motion-disabled unless the reviewed YOLO project is generated |
 
@@ -66,7 +66,7 @@ ttl_ms
 payload
 ```
 
-Byte-oriented device links require framing and integrity checks appropriate to their transport. TCP chassis messages use bounded newline-delimited JSON and rely on TCP integrity; UART arm messages retain explicit checksum requirements. A receiver rejects unknown versions or targets, invalid or out-of-range values, duplicate/expired/out-of-order commands, unauthenticated commands, commands illegal in the current state, oversized frames, and incomplete frames.
+Byte-oriented device links require framing and integrity checks appropriate to their transport. TCP chassis messages use bounded newline-delimited JSON and rely on TCP integrity; UART arm messages retain explicit checksum requirements. A receiver rejects unknown versions or targets, invalid or out-of-range values, duplicate/expired/out-of-order commands, commands illegal in the current state, oversized frames, and incomplete frames.
 
 Current device commands remain separate (not arbitrary API pass-through):
 
@@ -95,7 +95,7 @@ RECEIVED → ACCEPTED → RUNNING → DONE
 - `RUNNING`: the service reports execution in progress; this is not independent physical-motion feedback.
 - `DONE`: the target reports completion. For the current arm project this means the sequential controller API returned, not verified terminal pose or pen pressure; writing bytes alone is not completion.
 - `FAULT`: the target explicitly reported failure.
-- `REJECTED`: the command was not executed because state, parameters, TTL, or authentication were invalid.
+- `REJECTED`: the command was not executed because state, parameters or TTL were invalid.
 - `UNKNOWN`: a link failed and execution or completion cannot be determined. Never auto-retry a non-idempotent command in this state.
 
 The computer advances a task only after receiving a matching terminal state. A connected TCP socket, a successful UART write, an online TCP232, or a legacy "running" response is not proof of completion.
@@ -119,14 +119,14 @@ The v3 implementation separates four responsibilities:
 ```text
 chassis_tcp_v3 codec
         ↓
-ChassisMotionTcpService: authentication, commands, lifecycle, watchdogs
+ChassisMotionTcpService: trusted-LAN session, commands, lifecycle, watchdogs
         ↓ injected interfaces
 SafeMecanumChassis
         ↓ configured CAN-backed runtime
 MotorBus + MicroPython CAN
 ```
 
-`ChassisMotionTcpRuntime` polls one injected connection and all local deadlines. `ChassisMotionTcpServer` binds one client. Ignored local configuration selects `tcp_v3_l2` for `NoMotionChassis` or the separately gated `tcp_v3_l3` CAN composition. The default credential verifier denies every login and the default application entry remains safe idle.
+`ChassisMotionTcpRuntime` polls one injected connection and all local deadlines. `ChassisMotionTcpServer` binds one client. Ignored local configuration selects `tcp_v3_l2` for `NoMotionChassis` or the separately gated `tcp_v3_l3` CAN composition. The application entry remains safe idle until an explicit Enable request.
 
 ### 6.3 Robot Arm
 
@@ -158,7 +158,7 @@ A missing state keeps the system idle. Link recovery never replays an old comman
 | Fault | Required local behavior |
 |---|---|
 | Computer or hotspot disconnects | ESP32 stops and disables under its local TCP connection-health policy; MaixCam accepts no new arm tasks from that session |
-| ESP32 TCP client disconnects | ESP32 stops locally, clears authentication and old sequence state, and requires a fresh handshake |
+| ESP32 TCP client disconnects | ESP32 stops locally, clears the active session and old sequence state, and requires a fresh handshake |
 | MaixCam process exits | The arm receives no new task; in-flight action status follows the real protocol evidence; ESP32 chassis safety remains independent |
 | MaixCam-arm link disconnects | MaixCam enters `FAULT`; an uncertain non-idempotent action becomes `UNKNOWN` and is not retried |
 | Video disconnects | Stop vision-dependent decisions; never continue from the last frame |

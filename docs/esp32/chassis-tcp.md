@@ -29,7 +29,7 @@ STATUS → STATE(service=safe_idle, motion_enabled=false)
 
 It then closes. It does not import or initialize CAN, MotorBus, chassis motion, PS2, UART, or servo code. The computer client performs the three requests once and does not retry automatically.
 
-The real-device proof returned matching sequences `1,2,3`, responses `WELCOME,PONG,STATE`, `service=safe_idle`, and `motion_enabled=false`. The ESP32 server reported one `console` client, three handled requests, and successful completion. This proves the isolated application transport only; it does not prove resident startup, authentication, heartbeat stopping, CAN integration, or motion.
+The real-device proof returned matching sequences `1,2,3`, responses `WELCOME,PONG,STATE`, `service=safe_idle`, and `motion_enabled=false`. The ESP32 server reported one `console` client, three handled requests, and successful completion. This proves the isolated application transport only; it does not prove resident startup, connection-health stopping, CAN integration, or motion.
 
 Implemented files:
 
@@ -58,7 +58,7 @@ After the current safety gate is confirmed:
 
 The later production service must add, test, and validate together:
 
-- authenticated single-client connection;
+- trusted-LAN single-client session;
 - connection-health polling and local stop/disable on timeout;
 - bounded velocity, explicit stop, and disable types;
 - safe CAN and MotorBus composition;
@@ -75,21 +75,21 @@ RCP/TCP v3 is the current motion-capable revision. It is intentionally incompati
 The v3 source consists of:
 
 - `protocol/chassis_tcp_v3.py`: strict MicroPython-compatible JSON framing and validation;
-- `src/esp32/app/chassis_motion_tcp_service.py`: authentication, connection health, bounded velocity, stop, disable, status, duplicate handling, and local watchdogs;
+- `src/esp32/app/chassis_motion_tcp_service.py`: trusted-LAN session handling, connection health, bounded velocity, stop, disable, status, duplicate handling, and local watchdogs;
 - `src/console/chassis_motion_tcp_client.py`: one-request-at-a-time client with lifecycle correlation and no automatic retry;
 - `src/console/motion_router.py`: computer-side routing that sends chassis commands directly to ESP32 and arm commands only to the MaixCam arm session.
 
 Committed safety defaults remain:
 
 ```text
-credential verifier: absent, therefore authentication denied
+trusted-LAN HELLO: accepted without a credential field
 motion_permitted: false
 socket listener: available in explicit `tcp_v3_l2` and `tcp_v3_l3` compositions
 CAN and MotorBus: not constructed by `tcp_v3_l2`
 startup integration: selected by local ignored `device_config.py`
 ```
 
-After `HELLO` succeeds, the TCP connection itself is the control session and `ENABLE` may be sent directly. `STOP` zeros motion without disabling. `DISABLE` stops and disables but retains the authenticated connection, so `ENABLE` may be sent again. Disconnecting ends the session. Background `PING` requests maintain connection health; timeout stops, disables, and closes the session. Velocity contains a separate `100..500 ms` hold whose expiry stops motion without disabling, so an attended operator can jog again immediately.
+After `HELLO` succeeds, the TCP connection itself is the control session and `ENABLE` may be sent directly. `STOP` zeros motion without disabling. `DISABLE` stops and disables but retains the active connection, so `ENABLE` may be sent again. Disconnecting ends the session. Background `PING` requests maintain connection health; timeout stops, disables, and closes the session. Velocity contains a separate `100..500 ms` hold whose expiry stops motion without disabling, so an attended operator can jog again immediately.
 
 The configured command ceiling is 600 mm/s resultant planar speed and
 800 mrad/s angular speed, matching the current protocol and chassis-model
@@ -97,6 +97,4 @@ ceilings. Combined commands remain subject to the 200 RPM wheel-speed cap.
 The ESP32 local configuration and console local configuration must carry the same
 limits before the wider range is used; a UI-only increase is not deployment.
 
-The first credential is a local pre-shared value checked by an injected verifier. It is never included in committed configuration, responses, status, or logs. It is access control on the controlled WPA-protected LAN, not TLS and not a physical safety mechanism.
-
-Before replacing an older device runtime, deploy `tcp_v3_l2` with a local credential and `motion_permitted=false`, then prove authentication rejection/acceptance, `PING`, `STATUS`, health timeout, disconnect cleanup, and rollback without CAN initialization. Only after that L2 proof should `tcp_v3_l3` be deployed and validated under a fresh on-site motion gate.
+RCP/TCP v3 uses the controlled LAN and a single TCP session without a credential field. Before replacing an older device runtime, deploy `tcp_v3_l2` with `motion_permitted=false`, then prove HELLO, `PING`, `STATUS`, health timeout, disconnect cleanup, and rollback without CAN initialization. Only after that L2 proof should `tcp_v3_l3` be deployed and validated under a fresh on-site motion gate.

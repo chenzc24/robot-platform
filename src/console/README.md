@@ -14,8 +14,8 @@ client described below.
 ## Direct Chassis Motion Foundation
 
 `chassis_motion_tcp_client.py` implements the RCP/TCP v3 computer session. It
-supports authenticated `HELLO`, `PING`, `STATUS`, enable, bounded velocity,
-stop, and disable. The authenticated connection itself is the control session;
+supports trusted-LAN `HELLO`, `PING`, `STATUS`, enable, bounded velocity,
+stop, and disable. The completed TCP session itself is the control session;
 there is no acquire/release layer. It sends one request at a time and never
 automatically retries a state-changing request whose outcome becomes unknown.
 
@@ -28,7 +28,7 @@ arm.*     → injected MaixCam arm session
 
 It validates target/name agreement and exact payload keys, requires an injected admission callback for motion, preserves correlation IDs, and reports `automatic_retry=false`. `maixcam_arm_client.py` provides the matching one-request-at-a-time NDJSON client for the MaixCam arm endpoint.
 
-No credential, host address, or runtime port is hard-coded in these modules. Real values belong in ignored local configuration.
+No host address or runtime port is hard-coded in these modules. Real endpoint values belong in ignored local configuration.
 
 ## Unified control console
 
@@ -87,7 +87,7 @@ $env:PYTHONPATH = "$PWD/src/console"
 python -m ui
 ```
 
-To prepare an optional local runtime configuration, copy `config/console.example.json` to the ignored `config/console.local.json`, then fill only endpoint values that have been separately approved for an L2 non-motion test. Credentials remain environment variables and must not be added to either JSON file. The default launch does not require this file; without it, `Hardware` mode displays no real connection.
+To prepare an optional local runtime configuration, copy `config/console.example.json` to the ignored `config/console.local.json`, then fill only endpoint values that have been separately approved for an L2 non-motion test. RCP/TCP v3 uses the trusted LAN and has no credential field. The default launch does not require this file; without it, `Hardware` mode displays no real connection.
 
 Run the non-interactive GUI construction check with:
 

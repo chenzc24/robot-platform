@@ -17,14 +17,10 @@ from chassis_motion_tcp_client import (
 )
 from chassis_motion_tcp_service import (
     ChassisMotionTcpService,
-    fixed_credential_verifier,
 )
 from chassis_tcp_v3 import decode_message, encode_message
 from chassis_tcp_v3 import MAX_SEQUENCE
 from motion_router import DualSessionMotionRouter, MotionRouterError
-
-
-CREDENTIAL = "test-credential-0001"
 
 
 class FakeChassis:
@@ -58,7 +54,6 @@ class LoopbackConnection:
         self.service = ChassisMotionTcpService(
             self,
             self.chassis,
-            authorize=fixed_credential_verifier(CREDENTIAL),
             motion_permitted=motion_permitted,
             line_follower=line_follower,
         )
@@ -77,10 +72,10 @@ class LoopbackConnection:
 
 
 class ChassisMotionTcpClientTests(unittest.TestCase):
-    def test_authenticated_motion_lifecycle_is_correlated(self):
+    def test_trusted_lan_motion_lifecycle_is_correlated(self):
         connection = LoopbackConnection()
         client = ChassisMotionTcpClient(connection)
-        self.assertEqual(client.hello("console", CREDENTIAL)["type"], "WELCOME")
+        self.assertEqual(client.hello("console")["type"], "WELCOME")
         self.assertEqual(client.enable()["payload"]["state"], "enabled_stopped")
         result = client.velocity(100, 0, 0, 250, 500)
         self.assertEqual(result["type"], "DONE")
@@ -114,7 +109,7 @@ class ChassisMotionTcpClientTests(unittest.TestCase):
         follower = Follower(connection.chassis)
         connection.service.line_follower = follower
         client = ChassisMotionTcpClient(connection)
-        client.hello("console", CREDENTIAL)
+        client.hello("console")
         client.enable()
         self.assertEqual(client.line_follow_start(1)["payload"]["state"], "following")
         status = client.line_follow_status()
@@ -122,11 +117,10 @@ class ChassisMotionTcpClientTests(unittest.TestCase):
         self.assertEqual(status["payload"]["direction"], 1)
         self.assertEqual(client.line_follow_stop()["payload"]["state"], "enabled_stopped")
 
-    def test_authentication_rejection_is_explicit(self):
-        client = ChassisMotionTcpClient(LoopbackConnection())
-        with self.assertRaisesRegex(ChassisMotionTcpRejected, "authentication_failed") as raised:
-            client.hello("console", "wrong-credential-01")
-        self.assertTrue(raised.exception.explicit_rejection)
+    def test_hello_rejects_obsolete_credential_field(self):
+        with self.assertRaises(Exception):
+            from chassis_tcp_v3 import encode_message
+            encode_message("HELLO", 1, 1000, {"client": "console", "credential": "obsolete"})
 
     def test_state_changing_timeout_is_unknown_and_not_retried(self):
         class TimeoutConnection:
@@ -169,7 +163,7 @@ class ChassisMotionTcpClientTests(unittest.TestCase):
     def test_sequence_exhaustion_requires_a_fresh_connection(self):
         connection = LoopbackConnection()
         client = ChassisMotionTcpClient(connection)
-        client.hello("console", CREDENTIAL)
+        client.hello("console")
         client.next_sequence = MAX_SEQUENCE
         client.ping()
         with self.assertRaisesRegex(Exception, "sequence_exhausted"):

@@ -1,6 +1,5 @@
 """Pure-Python device session primitives shared by desktop and web consoles."""
 
-import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -68,19 +67,16 @@ def ensure_runtime_import_paths():
 
 
 def default_chassis_factory(config):
-    """Create and authenticate one chassis client after explicit connect."""
+    """Create one trusted-LAN chassis client after explicit connect."""
     if not config.complete:
         raise ValueError("chassis_configuration_incomplete")
-    credential = os.environ.get(config.credential_env)
-    if not credential:
-        raise ValueError("chassis_credential_unavailable")
     ensure_runtime_import_paths()
     from chassis_motion_tcp_client import ChassisMotionTcpClient, open_connection
 
     connection = open_connection(config.host, config.port, config.connect_timeout_seconds)
     client = ChassisMotionTcpClient(connection)
     try:
-        client.hello(config.client_id, credential)
+        client.hello(config.client_id)
     except Exception:
         connection.close()
         raise

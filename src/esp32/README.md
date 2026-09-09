@@ -9,7 +9,7 @@ structured runtime status, the chassis safety state machine, injectable CAN
 MotorBus, and a one-client RCP/TCP v3 listener. `tcp_v3_l2` composes
 `NoMotionChassis` and rejects motion without constructing CAN. `tcp_v3_l3`
 composes the reviewed CAN runtime when local motion permission is enabled. The
-authenticated TCP connection is the control session; no acquire/release lease
+trusted-LAN TCP session is the control session; no acquire/release lease
 exists. The CAN path still reports commanded state rather than measured driver
 feedback.
 

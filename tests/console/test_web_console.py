@@ -21,7 +21,7 @@ from web_console.server import create_server
 
 def config(manual=True):
     return RuntimeConfig(
-        chassis=ChassisConfig("esp32.invalid", 4242, 1.0, "console", "TEST_CREDENTIAL"),
+        chassis=ChassisConfig("esp32.invalid", 4242, 1.0, "console"),
         manual_chassis=ManualChassisConfig(manual, 500, 300, 600, 800),
         arm=ArmConfig("maixcam.invalid", 4343, 1.0, "console"),
         video=VideoConfig("", "http://127.0.0.1:8889/maixcam/", 1.0, ""),

@@ -18,9 +18,10 @@ if str(CONSOLE_SOURCE) not in sys.path:
 from vision.board_calibration import (  # noqa: E402
     BoardCalibrationError,
     detect_apriltag_pixels,
+    parse_center_anchor_layout,
     solve_board_layout,
 )
-from vision.calibration import load_board_layout, parse_board_layout  # noqa: E402
+from vision.calibration import parse_board_layout  # noqa: E402
 
 
 DICTIONARY = "DICT_APRILTAG_36H11"
@@ -69,7 +70,11 @@ def parse_args(argv=None):
 
     solve = commands.add_parser("solve", help="Fit unknown tag world corners from measured anchors")
     solve.add_argument("--observations", required=True)
-    solve.add_argument("--anchors", required=True, help="Measured anchor-only board JSON")
+    solve.add_argument(
+        "--anchors",
+        required=True,
+        help="Measured center-anchor JSON or legacy measured four-corner board JSON",
+    )
     solve.add_argument("--target-ids", required=True, type=_parse_ids, help="All intended IDs, comma-separated")
     solve.add_argument("--layout-id", required=True)
     solve.add_argument("--output", required=True, help="Generated complete board JSON")
@@ -217,7 +222,12 @@ def solve_command(args):
     if args.refinement_iterations < 0:
         raise BoardCalibrationError("refinement_iterations_must_be_non_negative")
     observations = _read_json(args.observations)
-    anchors = load_board_layout(args.anchors)
+    raw_anchors = _read_json(args.anchors)
+    anchors = (
+        parse_center_anchor_layout(raw_anchors)
+        if "anchors" in raw_anchors
+        else parse_board_layout(raw_anchors)
+    )
     board, report = solve_board_layout(
         anchors,
         observations,

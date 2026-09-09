@@ -1,5 +1,6 @@
 """Synthetic checks for observation-only planar AprilTag board calibration."""
 
+import json
 import pathlib
 import sys
 import unittest
@@ -14,6 +15,7 @@ sys.path.insert(0, str(ROOT / "src" / "console"))
 from vision.board_calibration import (
     BoardCalibrationError,
     detect_apriltag_pixels,
+    parse_center_anchor_layout,
     solve_board_layout,
 )
 from vision.calibration import BoardLayout, parse_board_layout
@@ -42,6 +44,16 @@ def corners3(points):
     return tuple((float(x), float(y), 0.0) for x, y in points)
 
 
+def rotate_tag(points, degrees):
+    center = points.mean(axis=0)
+    radians = np.deg2rad(degrees)
+    rotation = np.asarray([
+        [np.cos(radians), -np.sin(radians)],
+        [np.sin(radians), np.cos(radians)],
+    ])
+    return (points - center) @ rotation.T + center
+
+
 ANCHORS = BoardLayout(
     "measured-four-corners",
     "drawing_board",
@@ -51,12 +63,25 @@ ANCHORS = BoardLayout(
     False,
 )
 
+CENTER_ANCHORS = parse_center_anchor_layout({
+    "schema_version": 1,
+    "layout_id": "measured-center-anchors",
+    "frame": "drawing_board",
+    "units": "mm",
+    "dictionary": "DICT_APRILTAG_36H11",
+    "tag_size_mm": 40.0,
+    "anchors": {
+        str(tag_id): {"center": [*WORLD[tag_id].mean(axis=0).tolist(), 0.0]}
+        for tag_id in (0, 3, 4, 7)
+    },
+})
+
 
 def project(points, matrix):
     return cv2.perspectiveTransform(points.reshape(1, -1, 2), matrix).reshape(-1, 2)
 
 
-def synthetic_observations():
+def synthetic_observations(world=WORLD):
     rng = np.random.default_rng(20260909)
     frames = []
     groups = ((0, 1, 4, 5), (1, 2, 5, 6), (2, 3, 6, 7))
@@ -69,7 +94,7 @@ def synthetic_observations():
             ])
             observations = []
             for tag_id in visible:
-                pixels = project(WORLD[tag_id], matrix)
+                pixels = project(world[tag_id], matrix)
                 pixels += rng.normal(0.0, 0.03, pixels.shape)
                 observations.append({"id": tag_id, "corners_px": pixels.tolist()})
             frames.append({"station": "stop-%d" % station, "observations": observations})
@@ -81,6 +106,19 @@ def synthetic_observations():
 
 
 class BoardCalibrationTests(unittest.TestCase):
+    def test_supplied_center_anchor_example_preserves_centers_and_side_length(self):
+        raw = json.loads(
+            (ROOT / "config" / "apriltag-center-anchors.example.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        anchors = parse_center_anchor_layout(raw)
+
+        self.assertEqual(anchors.tag_size_mm, 37.5)
+        self.assertEqual(sorted(anchors.anchor_centers), [0, 1, 2, 3])
+        np.testing.assert_allclose(anchors.anchor_centers[0], [0.0, 0.0, 0.0])
+        np.testing.assert_allclose(anchors.anchor_centers[3], [1000.0, 300.0, 0.0])
+
     def test_capture_detector_records_decoded_id_and_four_pixel_corners(self):
         dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
         marker = cv2.aruco.generateImageMarker(dictionary, 17, 180)
@@ -124,6 +162,49 @@ class BoardCalibrationTests(unittest.TestCase):
             )
             self.assertGreaterEqual(report["tags"][str(tag_id)]["accepted_frame_count"], 3)
             self.assertGreaterEqual(report["tags"][str(tag_id)]["accepted_station_count"], 2)
+
+    def test_center_anchors_fix_only_centers_and_fit_anchor_rotations(self):
+        angles = {
+            0: 1.0, 1: -0.5, 2: 0.75, 3: -1.0,
+            4: 1.5, 5: -0.8, 6: 0.6, 7: -1.25,
+        }
+        rotated_world = {
+            tag_id: rotate_tag(points, angles[tag_id])
+            for tag_id, points in WORLD.items()
+        }
+
+        board, report = solve_board_layout(
+            CENTER_ANCHORS,
+            synthetic_observations(rotated_world),
+            target_ids=range(8),
+            layout_id="center-anchor-test",
+            min_samples_per_tag=3,
+            outlier_threshold_mm=8.0,
+            refinement_iterations=30,
+        )
+
+        parsed = parse_board_layout(board)
+        self.assertEqual(
+            report["anchor_constraint"],
+            "measured_centers_with_fitted_in_plane_rotation",
+        )
+        for tag_id in range(8):
+            np.testing.assert_allclose(
+                np.asarray(parsed.tag_corners[tag_id])[:, :2],
+                rotated_world[tag_id],
+                atol=0.5,
+            )
+        for tag_id in (0, 3, 4, 7):
+            np.testing.assert_allclose(
+                np.asarray(parsed.tag_corners[tag_id])[:, :2].mean(axis=0),
+                rotated_world[tag_id].mean(axis=0),
+                atol=1e-6,
+            )
+            self.assertEqual(
+                report["tags"][str(tag_id)]["kind"],
+                "measured_center_anchor_fitted_rotation",
+            )
+        self.assertLess(report["bundle_reprojection_rmse_px"], 0.1)
 
     def test_target_must_be_connected_to_an_anchor_by_a_co_visible_frame(self):
         document = {

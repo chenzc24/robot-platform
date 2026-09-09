@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "layout_id": "drawing-board-center-anchors-draft",
+  "frame": "drawing_board",
+  "units": "mm",
+  "dictionary": "DICT_APRILTAG_36H11",
+  "tag_size_mm": 37.5,
+  "anchors": {
+    "0": {"center": [0.0, 0.0, 0.0]},
+    "1": {"center": [0.0, 300.0, 0.0]},
+    "2": {"center": [1000.0, 0.0, 0.0]},
+    "3": {"center": [1000.0, 300.0, 0.0]}
+  }
+}

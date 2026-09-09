@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict, deque
+from dataclasses import dataclass
 
 from .calibration import BoardLayout, VisionCalibrationError
 
@@ -22,6 +23,18 @@ class BoardCalibrationError(ValueError):
     """Raised when observations cannot define one connected planar layout."""
 
 
+@dataclass(frozen=True)
+class CenterAnchorLayout:
+    """Planar board definition that fixes anchor centers but not rotations."""
+
+    layout_id: str
+    frame: str
+    units: str
+    dictionary: str
+    tag_size_mm: float
+    anchor_centers: dict
+
+
 def _require_opencv():
     if _IMPORT_ERROR is not None:
         raise VisionCalibrationError("opencv_with_aruco_is_required") from _IMPORT_ERROR
@@ -37,6 +50,60 @@ def _finite_points(value, shape, field):
     if points.shape != shape or not np.all(np.isfinite(points)):
         raise BoardCalibrationError("%s_invalid" % field)
     return points
+
+
+def parse_center_anchor_layout(raw):
+    """Parse a draft layout whose measured inputs are tag centers and side length."""
+    _require_opencv()
+    expected = {
+        "schema_version", "layout_id", "frame", "units", "dictionary",
+        "tag_size_mm", "anchors",
+    }
+    if not isinstance(raw, dict) or set(raw) != expected or raw.get("schema_version") != 1:
+        raise BoardCalibrationError("center_anchor_schema_invalid")
+    if raw["units"] != "mm":
+        raise BoardCalibrationError("center_anchor_units_must_be_mm")
+    if raw["dictionary"] != "DICT_APRILTAG_36H11":
+        raise BoardCalibrationError("center_anchor_dictionary_unsupported")
+    if not isinstance(raw["layout_id"], str) or not raw["layout_id"].strip():
+        raise BoardCalibrationError("center_anchor_layout_id_invalid")
+    if not isinstance(raw["frame"], str) or not raw["frame"].strip():
+        raise BoardCalibrationError("center_anchor_frame_invalid")
+    try:
+        tag_size_mm = float(raw["tag_size_mm"])
+    except (TypeError, ValueError) as error:
+        raise BoardCalibrationError("center_anchor_tag_size_invalid") from error
+    if not math.isfinite(tag_size_mm) or tag_size_mm <= 0:
+        raise BoardCalibrationError("center_anchor_tag_size_invalid")
+    if not isinstance(raw["anchors"], dict) or len(raw["anchors"]) < 3:
+        raise BoardCalibrationError("at_least_three_center_anchors_required")
+    centers = {}
+    for key, value in raw["anchors"].items():
+        try:
+            tag_id = int(key)
+        except (TypeError, ValueError) as error:
+            raise BoardCalibrationError("center_anchor_id_invalid") from error
+        if str(tag_id) != str(key) or tag_id < 0:
+            raise BoardCalibrationError("center_anchor_id_invalid")
+        if not isinstance(value, dict) or set(value) != {"center"}:
+            raise BoardCalibrationError("center_anchor_entry_invalid")
+        centers[tag_id] = _finite_points(
+            value["center"], (3,), "center_anchor_coordinate"
+        )
+    xy = np.stack([center[:2] for center in centers.values()])
+    if np.linalg.matrix_rank(xy - xy.mean(axis=0), tol=1e-9) < 2:
+        raise BoardCalibrationError("center_anchors_must_not_be_collinear")
+    z = [float(center[2]) for center in centers.values()]
+    if max(z) - min(z) > 1e-6:
+        raise BoardCalibrationError("center_anchors_must_be_coplanar")
+    return CenterAnchorLayout(
+        raw["layout_id"].strip(),
+        raw["frame"].strip(),
+        "mm",
+        raw["dictionary"],
+        tag_size_mm,
+        centers,
+    )
 
 
 def detect_apriltag_pixels(image, *, min_tag_edge_px=12.0):
@@ -162,12 +229,16 @@ def _frame_image_to_board(frame, world_points, excluded_id):
     return _homography(image_points, board_points)
 
 
-def _fit_square(raw_corners, tag_size_mm):
+def _fit_square(raw_corners, tag_size_mm, fixed_center=None):
     template = np.asarray(
         [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]],
         dtype=np.float64,
     ) * float(tag_size_mm)
-    center = np.asarray(raw_corners, dtype=np.float64).mean(axis=0)
+    center = (
+        np.asarray(raw_corners, dtype=np.float64).mean(axis=0)
+        if fixed_center is None
+        else np.asarray(fixed_center, dtype=np.float64)
+    )
     centered = np.asarray(raw_corners, dtype=np.float64) - center
     covariance = template.T @ centered
     left, _, right = np.linalg.svd(covariance)
@@ -178,10 +249,15 @@ def _fit_square(raw_corners, tag_size_mm):
     return template @ rotation.T + center
 
 
-def _robust_square(candidates, tag_size_mm, outlier_threshold_mm):
+def _robust_square(candidates, tag_size_mm, outlier_threshold_mm, fixed_center=None):
     if not candidates:
         return None, [], []
-    preliminary = _fit_square(np.median(np.stack(candidates), axis=0), tag_size_mm)
+    if fixed_center is not None:
+        center = np.asarray(fixed_center, dtype=np.float64)
+        candidates = [candidate - candidate.mean(axis=0) + center for candidate in candidates]
+    preliminary = _fit_square(
+        np.median(np.stack(candidates), axis=0), tag_size_mm, fixed_center
+    )
     errors = np.asarray([
         math.sqrt(float(np.mean(np.sum((candidate - preliminary) ** 2, axis=1))))
         for candidate in candidates
@@ -194,7 +270,9 @@ def _robust_square(candidates, tag_size_mm, outlier_threshold_mm):
     accepted = [candidates[index] for index in accepted_indexes]
     if not accepted:
         return None, [], errors.tolist()
-    fitted = _fit_square(np.median(np.stack(accepted), axis=0), tag_size_mm)
+    fitted = _fit_square(
+        np.median(np.stack(accepted), axis=0), tag_size_mm, fixed_center
+    )
     final_errors = [
         math.sqrt(float(np.mean(np.sum((candidate - fitted) ** 2, axis=1))))
         for candidate in candidates
@@ -216,7 +294,11 @@ def _connectivity(frames, target_ids, anchor_ids):
             if neighbor not in reached:
                 reached.add(neighbor)
                 queue.append(neighbor)
-    edges = sorted({(min(first, second), max(first, second)) for first in graph for second in graph[first]})
+    edges = sorted({
+        (min(first, second), max(first, second))
+        for first in graph
+        for second in graph[first]
+    })
     return reached, edges
 
 
@@ -224,8 +306,118 @@ def _rounded_points(points, plane_z):
     return [[round(float(x), 6), round(float(y), 6), round(float(plane_z), 6)] for x, y in points]
 
 
+def _square_from_parameters(center, angle_radians, tag_size_mm):
+    template = np.asarray(
+        [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]],
+        dtype=np.float64,
+    ) * float(tag_size_mm)
+    cosine = math.cos(float(angle_radians))
+    sine = math.sin(float(angle_radians))
+    rotation = np.asarray([[cosine, -sine], [sine, cosine]], dtype=np.float64)
+    return template @ rotation.T + np.asarray(center, dtype=np.float64)
+
+
+def _square_angle(points):
+    edge = np.asarray(points, dtype=np.float64)[1] - np.asarray(points, dtype=np.float64)[0]
+    return math.atan2(float(edge[1]), float(edge[0]))
+
+
+def _bundle_refine_center_anchors(
+    frames,
+    initial_world_points,
+    center_constraints,
+    estimated_ids,
+    tag_size_mm,
+    iterations,
+):
+    """Jointly fit free tag poses while eliminating one homography per frame."""
+    descriptors = []
+    values = []
+    for tag_id in sorted(center_constraints):
+        descriptors.append((tag_id, "angle"))
+        values.append(_square_angle(initial_world_points[tag_id]))
+    for tag_id in estimated_ids:
+        center = initial_world_points[tag_id].mean(axis=0)
+        descriptors.extend(((tag_id, "x"), (tag_id, "y"), (tag_id, "angle")))
+        values.extend((
+            float(center[0]),
+            float(center[1]),
+            _square_angle(initial_world_points[tag_id]),
+        ))
+    parameters = np.asarray(values, dtype=np.float64)
+
+    def unpack(candidate):
+        centers = {tag_id: center.copy() for tag_id, center in center_constraints.items()}
+        angles = {}
+        for value, (tag_id, kind) in zip(candidate, descriptors):
+            if kind == "angle":
+                angles[tag_id] = float(value)
+            else:
+                centers.setdefault(
+                    tag_id, initial_world_points[tag_id].mean(axis=0).copy()
+                )
+                centers[tag_id][0 if kind == "x" else 1] = float(value)
+        return {
+            tag_id: _square_from_parameters(centers[tag_id], angles[tag_id], tag_size_mm)
+            for tag_id in sorted(centers)
+        }
+
+    def residual(candidate):
+        world = unpack(candidate)
+        chunks = []
+        for frame in frames:
+            visible = sorted(set(frame["observations"]).intersection(world))
+            if len(visible) < 2:
+                continue
+            board_points = np.concatenate([world[tag_id] for tag_id in visible], axis=0)
+            image_points = np.concatenate(
+                [frame["observations"][tag_id] for tag_id in visible], axis=0
+            )
+            board_to_image = _homography(board_points, image_points)
+            if board_to_image is None:
+                continue
+            chunks.append((_project(board_points, board_to_image) - image_points).reshape(-1))
+        if not chunks:
+            raise BoardCalibrationError("center_anchor_bundle_has_no_overlap_frames")
+        return np.concatenate(chunks)
+
+    damping = 1e-3
+    current_residual = residual(parameters)
+    current_cost = float(np.mean(current_residual ** 2))
+    for _ in range(max(1, iterations)):
+        jacobian = np.empty((len(current_residual), len(parameters)), dtype=np.float64)
+        for index in range(len(parameters)):
+            step = 1e-5 * max(1.0, abs(float(parameters[index])))
+            shifted = parameters.copy()
+            shifted[index] += step
+            jacobian[:, index] = (residual(shifted) - current_residual) / step
+        normal = jacobian.T @ jacobian
+        gradient = jacobian.T @ current_residual
+        scale = np.diag(np.maximum(np.diag(normal), 1.0))
+        accepted = False
+        for _ in range(8):
+            try:
+                delta = np.linalg.solve(normal + damping * scale, -gradient)
+            except np.linalg.LinAlgError:
+                delta = np.linalg.lstsq(normal + damping * scale, -gradient, rcond=None)[0]
+            candidate = parameters + delta
+            candidate_residual = residual(candidate)
+            candidate_cost = float(np.mean(candidate_residual ** 2))
+            if candidate_cost < current_cost:
+                parameters = candidate
+                current_residual = candidate_residual
+                current_cost = candidate_cost
+                damping = max(damping / 3.0, 1e-9)
+                accepted = True
+                break
+            damping *= 10.0
+        if not accepted or float(np.max(np.abs(delta))) < 1e-7:
+            break
+    return unpack(parameters), math.sqrt(current_cost)
+
+
 def solve_board_layout(
-    anchor_board: BoardLayout,
+    anchor_board,
     observation_document,
     *,
     target_ids=None,
@@ -238,6 +430,33 @@ def solve_board_layout(
 ):
     """Expand a measured anchor layout into a connected coplanar tag board."""
     _require_opencv()
+    center_anchor_constraints = {}
+    center_anchor_tag_size = None
+    if isinstance(anchor_board, CenterAnchorLayout):
+        center_anchor_tag_size = anchor_board.tag_size_mm
+        template = np.asarray(
+            [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]],
+            dtype=np.float64,
+        ) * anchor_board.tag_size_mm
+        center_anchor_constraints = {
+            tag_id: np.asarray(center, dtype=np.float64)[:2]
+            for tag_id, center in anchor_board.anchor_centers.items()
+        }
+        initial_tags = {
+            tag_id: tuple(
+                (float(x), float(y), float(center[2]))
+                for x, y in template + center[:2]
+            )
+            for tag_id, center in anchor_board.anchor_centers.items()
+        }
+        anchor_board = BoardLayout(
+            anchor_board.layout_id,
+            anchor_board.frame,
+            anchor_board.units,
+            anchor_board.dictionary,
+            initial_tags,
+            False,
+        )
     if anchor_board.dictionary != "DICT_APRILTAG_36H11":
         raise BoardCalibrationError("board_dictionary_unsupported")
     if (
@@ -254,7 +473,11 @@ def solve_board_layout(
         requested_ids = anchor_ids | detected_ids
     else:
         requested_ids = set(target_ids)
-        if not requested_ids or any(isinstance(tag_id, bool) or not isinstance(tag_id, int) or tag_id < 0 for tag_id in requested_ids):
+        invalid_target = any(
+            isinstance(tag_id, bool) or not isinstance(tag_id, int) or tag_id < 0
+            for tag_id in requested_ids
+        )
+        if not requested_ids or invalid_target:
             raise BoardCalibrationError("target_ids_invalid")
         if not anchor_ids.issubset(requested_ids):
             raise BoardCalibrationError("target_ids_must_include_all_anchors")
@@ -264,9 +487,16 @@ def solve_board_layout(
     reached, edges = _connectivity(frames, requested_ids, anchor_ids)
     disconnected = sorted(requested_ids - reached)
     if disconnected:
-        raise BoardCalibrationError("target_tags_not_connected_to_anchors:%s" % ",".join(map(str, disconnected)))
+        raise BoardCalibrationError(
+            "target_tags_not_connected_to_anchors:%s"
+            % ",".join(map(str, disconnected))
+        )
 
-    inferred_size = _tag_size_from_anchors(anchor_board)
+    inferred_size = (
+        center_anchor_tag_size
+        if center_anchor_tag_size is not None
+        else _tag_size_from_anchors(anchor_board)
+    )
     size = inferred_size if tag_size_mm is None else float(tag_size_mm)
     if not math.isfinite(size) or size <= 0:
         raise BoardCalibrationError("tag_size_mm_invalid")
@@ -308,7 +538,7 @@ def solve_board_layout(
             "insufficient_overlap_samples_for_tags:%s" % ",".join(map(str, unresolved))
         )
 
-    # Alternate per-frame homographies and rigid-square estimates. Anchors never move.
+    # Refine inferred tags against the current anchors before the optional joint fit.
     for _ in range(refinement_iterations):
         maximum_shift = 0.0
         updates = {}
@@ -322,21 +552,75 @@ def solve_board_layout(
                 if image_to_board is not None:
                     candidates.append(_project(frame["observations"][tag_id], image_to_board))
                     candidate_stations.append(frame["station"] or "frame-%d" % frame["index"])
-            fitted, accepted, errors = _robust_square(candidates, size, outlier_threshold_mm)
+            fitted, accepted, errors = _robust_square(
+                candidates,
+                size,
+                outlier_threshold_mm,
+            )
             accepted_stations = {candidate_stations[index] for index in accepted}
             if fitted is None or len(accepted) < min_samples_per_tag:
-                raise BoardCalibrationError("insufficient_refinement_samples_for_tag:%d" % tag_id)
+                continue
             if len(accepted_stations) < min_stations_per_tag:
-                raise BoardCalibrationError("insufficient_distinct_stations_for_tag:%d" % tag_id)
+                continue
             updates[tag_id] = fitted
             tag_stats[tag_id] = (len(candidates), accepted, errors, accepted_stations)
             maximum_shift = max(
                 maximum_shift,
-                float(np.linalg.norm(fitted.mean(axis=0) - world_points[tag_id].mean(axis=0))),
+                float(np.max(np.linalg.norm(fitted - world_points[tag_id], axis=1))),
             )
         world_points.update(updates)
         if maximum_shift < 1e-5:
             break
+
+    bundle_reprojection_rmse_px = None
+    if center_anchor_constraints:
+        world_points, bundle_reprojection_rmse_px = _bundle_refine_center_anchors(
+            frames,
+            world_points,
+            center_anchor_constraints,
+            estimated_ids,
+            size,
+            max(20, refinement_iterations),
+        )
+
+    # Recompute sample diagnostics against the final layout rather than an
+    # intermediate propagation estimate.
+    for tag_id in estimated_ids + sorted(center_anchor_constraints):
+        candidates = []
+        candidate_stations = []
+        for frame in frames:
+            if tag_id not in frame["observations"]:
+                continue
+            image_to_board = _frame_image_to_board(frame, world_points, tag_id)
+            if image_to_board is None:
+                continue
+            candidate = _project(frame["observations"][tag_id], image_to_board)
+            if tag_id in center_anchor_constraints:
+                center = center_anchor_constraints[tag_id]
+                candidate = candidate - candidate.mean(axis=0) + center
+            candidates.append(candidate)
+            candidate_stations.append(frame["station"] or "frame-%d" % frame["index"])
+        errors = [
+            math.sqrt(float(np.mean(np.sum((candidate - world_points[tag_id]) ** 2, axis=1))))
+            for candidate in candidates
+        ]
+        accepted_indexes = [
+            index for index, error in enumerate(errors)
+            if error <= outlier_threshold_mm
+        ]
+        accepted_stations = {candidate_stations[index] for index in accepted_indexes}
+        tag_stats[tag_id] = (
+            len(candidates), accepted_indexes, errors, accepted_stations
+        )
+        if len(accepted_indexes) < min_samples_per_tag:
+            error_name = (
+                "insufficient_orientation_samples_for_center_anchor"
+                if tag_id in center_anchor_constraints
+                else "insufficient_refinement_samples_for_tag"
+            )
+            raise BoardCalibrationError("%s:%d" % (error_name, tag_id))
+        if tag_id in estimated_ids and len(accepted_stations) < min_stations_per_tag:
+            raise BoardCalibrationError("insufficient_distinct_stations_for_tag:%d" % tag_id)
 
     held_out_errors = defaultdict(list)
     usable_frames = set()
@@ -361,7 +645,11 @@ def solve_board_layout(
         errors = held_out_errors[tag_id]
         all_held_out.extend(errors)
         entry = {
-            "kind": "measured_anchor" if tag_id in anchor_ids else "estimated",
+            "kind": (
+                "measured_center_anchor_fitted_rotation"
+                if tag_id in center_anchor_constraints
+                else "measured_anchor" if tag_id in anchor_ids else "estimated"
+            ),
             "center_mm": [round(float(axis), 6) for axis in points.mean(axis=0)],
             "held_out_corner_rmse_mm": (
                 round(math.sqrt(sum(error * error for error in errors) / len(errors)), 6)
@@ -405,7 +693,19 @@ def solve_board_layout(
         "frame": anchor_board.frame,
         "dictionary": anchor_board.dictionary,
         "tag_size_mm": round(size, 6),
-        "tag_size_source": "anchor_median" if tag_size_mm is None else "explicit",
+        "tag_size_source": (
+            "explicit"
+            if tag_size_mm is not None
+            else "center_anchor_spec" if center_anchor_constraints else "anchor_median"
+        ),
+        "anchor_constraint": (
+            "measured_centers_with_fitted_in_plane_rotation"
+            if center_anchor_constraints else "measured_four_corners"
+        ),
+        "bundle_reprojection_rmse_px": (
+            round(bundle_reprojection_rmse_px, 6)
+            if bundle_reprojection_rmse_px is not None else None
+        ),
         "frame_count": len(frames),
         "station_count": len({frame["station"] for frame in frames if frame["station"]}),
         "stations": sorted({frame["station"] for frame in frames if frame["station"]}),
@@ -420,7 +720,10 @@ def solve_board_layout(
         ),
         "tags": report_tags,
         "notes": [
-            "Measured anchor corners were held fixed.",
+            (
+                "Measured anchor centers were held fixed; anchor rotations were fitted."
+                if center_anchor_constraints else "Measured anchor corners were held fixed."
+            ),
             "Estimated tags were constrained to one rigid square on the anchor plane.",
             "production_ready remains false until physical review and runtime validation.",
         ],

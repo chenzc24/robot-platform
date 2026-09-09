@@ -14,18 +14,39 @@ MaixCam 命令服务或机械臂，也不会发出任何运动命令。
 ## 坐标与输入
 
 先建立锚点文件，例如忽略版本控制的
-`config/apriltag-board.anchors.local.json`。格式与现有 board schema 相同，
-只包含四个已测锚点：
+`config/apriltag-center-anchors.local.json`。中心锚点格式只写实测中心和共同
+黑框边长，不把未测量的角点方向当成已知量：
+
+```json
+{
+  "schema_version": 1,
+  "layout_id": "drawing-board-center-anchors-draft",
+  "frame": "drawing_board",
+  "units": "mm",
+  "dictionary": "DICT_APRILTAG_36H11",
+  "tag_size_mm": 37.5,
+  "anchors": {
+    "0": {"center": [0, 0, 0]},
+    "1": {"center": [0, 300, 0]},
+    "2": {"center": [1000, 0, 0]},
+    "3": {"center": [1000, 300, 0]}
+  }
+}
+```
+
+约束规则是：
 
 - 原点建议取画板左上角；
 - X 沿轨道正方向，Y 沿画板向下，Z 垂直画板；
 - 单位统一为毫米；
-- 每个 Tag 必须填写四个实测角点，而不只是中心点；
-- 角点顺序固定为解码后的左上、右上、右下、左下；
+- ID0–3 的中心位置固定，但各自的平面旋转由全部观测共同拟合；
+- ID4–7 的中心 X/Y 与平面旋转均自由，不强迫等距、同排或对称；
+- 只固定共同黑框边长和共面性，这两项是 Tag 的物理定义；
 - 四个锚点尽量分布在布局最外侧，不能集中在一小段。
 
 厘米级测量可用于首次联调，但不能据此声称 3 mm 级定位。最终布局应把
-锚点四角测到约 1–2 mm，并先确认打印 Tag 的实际黑色方框边长。
+锚点中心测到约 1–2 mm，并确认打印 Tag 的实际黑色方框边长。工具也继续
+接受旧式四角锚点 board 文件，但那种输入会把四个角全部视为已测量固定值。
 
 ## 采集
 
@@ -47,6 +68,11 @@ MaixCam 命令服务或机械臂，也不会发出任何运动命令。
 采集命令只保存 ID 和像素四角。它也接受单张图片、图片目录或通配符，便于
 离线复查。默认忽略最短边小于 12 px 的 Tag。
 
+相机到 Tag 平面的距离和俯仰角不需要保持不变；不同距离和视角能增加约束。
+必须保持相机型号、焦距、对焦、分辨率和裁剪方式不变。手持采集时可以在
+各位置之间走动，但正式样本应取自 5–8 个短暂停留段，避开运动模糊和明显
+滚动快门形变；程序用不同 `--station` 保存这些停留段。
+
 观测必须形成从锚点到每个未知 Tag 的连续重叠链。一个可靠的八 Tag 现场
 序列是：
 
@@ -66,7 +92,7 @@ MaixCam 命令服务或机械臂，也不会发出任何运动命令。
 ```powershell
 .\.venv\Scripts\python.exe app\apriltag_board_calibration.py solve `
   --observations logs\vision\board-observations.local.json `
-  --anchors config\apriltag-board.anchors.local.json `
+  --anchors config\apriltag-center-anchors.local.json `
   --target-ids 0,1,2,3,4,5,6,7 `
   --layout-id drawing-board-eight-tag-v1 `
   --output config\apriltag-board.fitted.local.json `
@@ -75,15 +101,15 @@ MaixCam 命令服务或机械臂，也不会发出任何运动命令。
 
 求解器执行以下物理约束：
 
-1. 锚点世界四角保持原值，不参与优化；
+1. 锚点世界中心保持原值，锚点自身的平面旋转参与联合拟合；
 2. 每帧用已连接 Tag 建立“像素平面 → drawing_board 平面”单应变换；
 3. 未知 Tag 通过相邻重叠帧逐段接入；
-4. 每个未知 Tag 被约束为与锚点同尺寸的刚性正方形，但允许独立的平面旋转；
+4. 每个 Tag 是边长 37.5 mm 的刚性正方形，但允许独立的平面旋转；
 5. 多帧结果采用稳健汇总，并报告被拒绝的离群帧；
 6. 最后逐 Tag 留一交叉验证，报告世界坐标角点残差。
 
-如所有 Tag 的实际边长相同，工具默认使用锚点边长中位数。也可用
-`--tag-size-mm` 显式指定实测边长。
+中心锚点文件直接提供实际黑框边长。使用旧式四角锚点文件时，工具默认取
+锚点边长中位数；两种方式都可用 `--tag-size-mm` 显式覆盖。
 
 ## 结果判读与接入
 
@@ -95,6 +121,7 @@ MaixCam 命令服务或机械臂，也不会发出任何运动命令。
 - `fit_sample_rmse_mm`：多帧反投影在板坐标中的一致性；
 - `held_out_corner_rmse_mm`：不使用当前 Tag 建立变换时，对它的四角预测误差；
 - `cross_validated_corner_rmse_mm`：全部可交叉验证角点的综合值。
+- `bundle_reprojection_rmse_px`：中心锚点、自由 Tag 和逐帧单应联合拟合后的像素残差。
 
 工具不内置虚假的统一“合格阈值”。先检查每个未知 Tag 至少覆盖多个停车
 位置、残差没有随轨道位置单向增大，再用卷尺复核输出中心距与上下排间距。

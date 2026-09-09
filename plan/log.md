@@ -1902,3 +1902,16 @@ entry format:
   configuration write, deployment, service action or motion occurred. The
   separate chassis direction observation remains outstanding before Baseline
   can be armed. Commit status was pending at log-entry time on `main`.
+
+## 2026-09-09 - Verify the ESP32 positive-vx physical direction
+
+- With the attended L3 safety gate confirmed, ran exactly one chassis request
+  at `+vx=50 mm/s` for 200 ms using the fixed repository test tool.
+- The ESP32 reported `velocity_hold_expired`, reached `enabled_stopped`, and was
+  then disabled. Final authenticated status was `ready/disabled`, zero hold and
+  no error.
+- The on-site operator reported that the physical test succeeded, establishing
+  `+vx` as the intended vehicle-forward direction for the current wiring and
+  deployment. No retry, reverse test, arm command or drawing command occurred.
+- The unrelated `.vscode/settings.json` user change was not modified or staged.
+  Commit status was pending at log-entry time on `main`.

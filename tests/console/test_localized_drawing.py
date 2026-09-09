@@ -197,8 +197,8 @@ class LocalizedDrawingTests(unittest.TestCase):
         clock, arm, chassis = Clock(), Arm(), Chassis()
         result = execute_drawing(
             arm, chassis, None, job, drawing_config(), control_config("baseline", 5),
-            DrawingExecutionAdmission(True, True, True, True),
-            RelocationAdmission(True, True, True, "enabled_stopped"),
+            DrawingExecutionAdmission(True),
+            RelocationAdmission(True, True, "enabled_stopped"),
             sleep_func=clock.sleep, clock=clock,
         )
         self.assertEqual(result["mode"], "baseline")
@@ -223,8 +223,8 @@ class LocalizedDrawingTests(unittest.TestCase):
         clock, arm, chassis, localization = Clock(), Arm(), Chassis(), Localization()
         result = execute_localized_drawing(
             arm, chassis, localization, job, drawing_config(), control_config(),
-            DrawingExecutionAdmission(True, True, True, True),
-            RelocationAdmission(True, True, True, "enabled_stopped"),
+            DrawingExecutionAdmission(True),
+            RelocationAdmission(True, True, "enabled_stopped"),
             "test", sleep_func=clock.sleep, clock=clock,
         )
         self.assertEqual(result["windows"], 2)

@@ -56,6 +56,13 @@ yellow maps to P1, purple to P2, pink and black both map to P3, and green maps t
 P4. Every input group must have an explicit mapping to one of exactly these four
 slots before planning succeeds.
 
+This is now the complete site profile, not only an arm file. The same JSON also
+owns image contain fitting, rail mechanical datum/travel, AprilTag reference
+`r0`, rail/JSON scale, relocation parameters, localization
+sampling, camera intrinsics and all measured Tag corners. Endpoint addresses
+remain in `console.local.json`; the former split drawing-control and calibration
+files are compatibility/calibration artifacts rather than normal runtime inputs.
+
 The rack configuration also preserves the delivered controller operations:
 
 - normal pickup and between-color return depth: 60 mm;

@@ -29,7 +29,7 @@ class ChassisMotionTcpUnknown(ChassisMotionTcpClientError):
 
 
 class ChassisMotionTcpClient:
-    """Hold the single authenticated ESP32 connection and serialize requests."""
+    """Hold the single active ESP32 session and serialize requests."""
 
     def __init__(self, connection):
         self.connection = connection

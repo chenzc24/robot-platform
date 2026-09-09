@@ -199,16 +199,16 @@ idle -> prepared -> running -> stopping -> completed / failed / cancelled
 ```
 
 `prepare` is a no-motion operation. It resolves a job only through the local
-allowlist, loads both drawing configurations, selects the requested strategy in
-an immutable in-memory snapshot, validates the canvas, builds the first window
+allowlist, loads the configured site strategy into an immutable in-memory
+snapshot, validates the canvas, builds the first window
 and returns the exact job/config hashes and readiness gates. Arbitrary browser
 filesystem paths are not accepted.
 
 Mode selection may change in `idle`, `prepared` or a terminal state by preparing
 a new task. It is locked in `running` and `stopping`; there is no hot switch,
 automatic fallback or cross-mode checkpoint reuse. After completion or
-cancellation, switching mode requires a new prepare/hash and new current safety
-confirmations.
+cancellation, switching mode requires a new prepare and one new attended-run
+confirmation.
 
 At start, the backend atomically changes `control_owner` from `none` to
 `drawing`. While held, chassis connect/enable/disable/motion and arm
@@ -216,23 +216,20 @@ connect/disconnect/motion requests are rejected in the backend as well as
 disabled in the page. Read-only status remains available. Application STOP and
 Drawing Cancel remain available: they request chassis STOP immediately, mark
 an active task stopping and prevent later drawing commands. Global STOP also
-invalidates a merely prepared task so its old confirmations cannot be reused.
+invalidates a merely prepared task so its old attended confirmation cannot be reused.
 An in-flight arm request
 cannot be preempted by this software path; the physical emergency stop remains
 the immediate safety control. The task's finalizer attempts chassis STOP and
 DISABLE before releasing ownership.
 
-Web mode release is independent per strategy. Copy
-`config/drawing-web.example.json` to ignored
-`config/drawing-web.local.json`, allowlist reviewed JSON jobs and set only a
-physically accepted mode's `mode_production_ready` value to true. Execution also
-requires both existing drawing configuration production gates, matching
-mode-specific runtime prerequisites, the exact prepared task/hash, and all five
-current attended safety confirmations. Baseline needs no localization;
-Localized Baseline and Advanced additionally require complete vision and
-localization configuration with matching scale. The Web policy is loaded only
-at backend startup, so changing a per-mode release requires a backend restart;
-an already prepared or running task never observes the file change.
+Copy `config/drawing-web.example.json` to ignored
+`config/drawing-web.local.json` and allowlist reviewed JSON jobs. Execution uses
+the site's single top-level production gate, matching mode-specific runtime
+prerequisites, the exact prepared task id, and one attended-run confirmation.
+Baseline needs no localization; Localized Baseline and Advanced additionally
+require complete vision and localization configuration with matching scale.
+The Web policy is loaded only at backend startup; an already prepared or
+running task never observes an allowlist change.
 
 ## Launch
 
@@ -298,8 +295,9 @@ POST /api/faults/ack
 ```
 
 The drawing route accepts `action=prepare`, `start`, or `cancel`. Prepare takes
-an allowlisted `job_id` and one explicit mode. Start echoes the prepared
-`task_id`, exact `job_sha256`, and the five named confirmations. Cancel echoes
+an allowlisted `job_id`; mode comes from the site configuration. Start sends the prepared
+`task_id` and `attended=true`; the stored prepared object already freezes the
+job hash. Cancel echoes
 the active task ID. Progress, phase, terminal result, error, log path and the
 immutable mode/hash snapshot are returned under `drawing` by the existing
 state endpoint.

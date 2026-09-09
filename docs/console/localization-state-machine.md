@@ -77,26 +77,35 @@ wheel or IMU velocity; the settling timer is not proof of physical standstill.
 
 ## Configuration
 
-Console schema 5 contains:
+The unified drawing-site schema separates the rail datum/reference from the
+localization sampling policy:
 
 ```json
 {
-  "enabled": false,
-  "rail_axis": "x",
-  "json_axis": "x",
-  "json_origin_rail_position_mm": 0.0,
-  "json_mm_per_rail_mm": -1.0,
-  "settle_time_ms": 2000,
-  "sample_window_ms": 3000,
-  "min_valid_samples": 8,
-  "min_visible_tags": 2,
-  "max_position_spread_mm": 2.0
+  "rail": {
+    "physical_start_mm": 0.0,
+    "physical_travel_mm": null,
+    "json_origin_rail_position_mm": 0.0,
+    "json_mm_per_rail_mm": -1.0
+  },
+  "localization": {
+    "enabled": false,
+    "rail_axis": "x",
+    "json_axis": "x",
+    "settle_time_ms": 2000,
+    "sample_window_ms": 3000,
+    "min_valid_samples": 8,
+    "min_visible_tags": 2,
+    "max_position_spread_mm": 2.0
+  }
 }
 ```
 
 `json_origin_rail_position_mm` is the camera's AprilTag-derived rail position
 when the original JSON is known to draw correctly. It absorbs the unknown fixed
-camera/base offset. Apply `json_axis_offset_mm` only after the selected JSON
+camera/base offset. It is not required to equal `physical_start_mm`, which is a
+mechanical rail datum rather than an AprilTag observation. Apply
+`json_axis_offset_mm` only after the selected JSON
 coordinate has been converted to millimetres.
 
 Localization also requires enabled, production-ready AprilTag vision. `GET

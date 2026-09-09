@@ -28,6 +28,7 @@ from .executor import (
 from .models import DrawingError, DrawingJob, DrawingPlan, PlanCheckpoint
 from .planner import build_drawing_plan
 from .simulator import simulate_localized_baseline
+from .site_config import DrawingSiteConfig, load_drawing_site_config, parse_drawing_site_config
 
 __all__ = (
     "AdvancedRelocator",
@@ -40,6 +41,7 @@ __all__ = (
     "DrawingGeometry",
     "DrawingJob",
     "DrawingPlan",
+    "DrawingSiteConfig",
     "LocalizedBaselineRelocator",
     "PlanCheckpoint",
     "RelocationAdmission",
@@ -55,9 +57,11 @@ __all__ = (
     "load_drawing_config",
     "load_drawing_control_config",
     "load_drawing_job",
+    "load_drawing_site_config",
     "process_image_to_artifacts",
     "parse_drawing_document",
     "parse_drawing_control_config",
+    "parse_drawing_site_config",
     "relocate_reposition_plan",
     "require_ready_arm",
     "simulate_localized_baseline",

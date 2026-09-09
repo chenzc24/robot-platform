@@ -78,7 +78,7 @@ python app/run_drawing.py path/to/image.png --mode localized_baseline
 把正式笔触、审核文档、完整响应和输入哈希保存在忽略的
 `dataset/generated/`。默认只做预演且不连接设备。若要让自动审核结果进入
 真实运动，除任务哈希和现场安全门禁外还必须显式提供
-`--confirm-auto-review`；也可以先在网页中人工修改并导出 JSON，再把 JSON
+运行器会自动记录生成结果的哈希；也可以先在网页中人工修改并导出 JSON，再把 JSON
 交给同一入口。
 
 ## 本地验证

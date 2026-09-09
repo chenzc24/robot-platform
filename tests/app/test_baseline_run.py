@@ -25,24 +25,14 @@ class BaselineRunCliTests(unittest.TestCase):
             "version": "1.0", "coordinate_space": "normalized",
             "axis": {"origin": "top-left", "x_positive": "right", "y_positive": "down"},
             "canvas": {"width": 1, "height": 1, "source_width": 10, "source_height": 10,
-                       "source_aspect_ratio": 1, "target_width_mm": 100, "target_height_mm": 100},
-            "strokes": [{"id": "s1", "order": 1, "points": [[0, 0], [1, 1]], "closed": False}],
+                       "source_aspect_ratio": 1, "target_width_mm": 700, "target_height_mm": 200},
+            "strokes": [{"id": "s1", "order": 1, "points": [[0.4, 0.4], [0.6, 0.6]], "closed": False}],
         }), encoding="utf-8")
-        self.config.write_text(json.dumps({
-            "production_ready": False, "flat_group_name": "default",
-            "group_pen_slots": {"default": "P1"},
-            "pen_rack": {"change_depth_mm": 60, "final_return_depth_mm": 30,
-                         "gripper_open_mm": 60, "gripper_closed_mm": 1,
-                         "slots": {name: {"joint_deg": [index] * 6}
-                                   for index, name in enumerate(("P1", "P2", "P3", "P4"), 1)}},
-            "geometry": {"canvas_width_mm": 100, "canvas_height_mm": 100,
-                         "user_y_offset_mm": -50, "user_z_offset_mm": -50,
-                         "home_pose_user_y_mm": 0, "reachable_user_y_min_mm": -100,
-                         "reachable_user_y_max_mm": 100, "pen_travel_x_mm": 20,
-                         "home_joints_deg": [-120, 0, -90, -90, -30, 90],
-                         "user": 0, "tool": 0, "draw_speed_pct": 12,
-                         "draw_blend_pct": 100, "travel_speed_pct": 50, "accel_pct": 20},
-        }), encoding="utf-8")
+        site = json.loads(
+            (ROOT / "config" / "drawing.example.json").read_text(encoding="utf-8")
+        )
+        site["drawing"]["group_pen_slots"]["default"] = "P1"
+        self.config.write_text(json.dumps(site), encoding="utf-8")
 
     def tearDown(self):
         self.temp.cleanup()
@@ -60,16 +50,14 @@ class BaselineRunCliTests(unittest.TestCase):
         finally:
             BASELINE_RUN.open_connection = original
 
-    def test_execute_rejects_hash_log_admission_and_false_production_gate(self):
-        for extra, code in (
-            (["--execute"], "job_hash_confirmation_required"),
-            (["--execute", "--confirm-job-sha256", "wrong"], "job_hash_confirmation_required"),
-        ):
-            errors = io.StringIO()
-            with redirect_stderr(errors), redirect_stdout(io.StringIO()):
-                result = BASELINE_RUN.main([str(self.drawing), "--config", str(self.config), *extra])
-            self.assertEqual(result, 2)
-            self.assertIn(code, errors.getvalue())
+    def test_execute_requires_one_attended_confirmation(self):
+        errors = io.StringIO()
+        with redirect_stderr(errors), redirect_stdout(io.StringIO()):
+            result = BASELINE_RUN.main([
+                str(self.drawing), "--config", str(self.config), "--execute",
+            ])
+        self.assertEqual(result, 2)
+        self.assertIn("execution_admission_required", errors.getvalue())
 
 
 if __name__ == "__main__":

@@ -67,8 +67,9 @@ def _boolean(value, field):
     return value
 
 
-def load_camera_calibration(path):
-    raw = _read_object(path, "camera_calibration")
+def parse_camera_calibration(raw):
+    if not isinstance(raw, dict):
+        raise VisionCalibrationError("camera_calibration_object_required")
     expected = {
         "schema_version", "production_ready", "calibration_id", "image_width",
         "image_height", "camera_matrix", "distortion_coefficients",
@@ -101,8 +102,13 @@ def load_camera_calibration(path):
     )
 
 
-def load_board_layout(path):
-    raw = _read_object(path, "board_layout")
+def load_camera_calibration(path):
+    return parse_camera_calibration(_read_object(path, "camera_calibration"))
+
+
+def parse_board_layout(raw):
+    if not isinstance(raw, dict):
+        raise VisionCalibrationError("board_layout_object_required")
     expected = {
         "schema_version", "production_ready", "layout_id", "frame", "units",
         "dictionary", "corner_order", "tags",
@@ -158,3 +164,7 @@ def load_board_layout(path):
         tag_corners=parsed,
         production_ready=production_ready,
     )
+
+
+def load_board_layout(path):
+    return parse_board_layout(_read_object(path, "board_layout"))

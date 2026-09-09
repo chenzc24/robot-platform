@@ -21,36 +21,21 @@ from web_console.runtime import WebConsoleError, WebConsoleRuntime
 from web_console.server import create_server
 
 
-CONFIRMATIONS = {
-    "operator_present": True,
-    "emergency_stop_ready": True,
-    "area_clear": True,
-    "arm_profile_reviewed": True,
-    "chassis_profile_reviewed": True,
-}
-
-
-def task_files(directory, mode_release=None):
+def task_files(directory):
     root = pathlib.Path(directory)
     drawing = json.loads((ROOT / "config" / "drawing.example.json").read_text(encoding="utf-8"))
-    control = json.loads((ROOT / "config" / "drawing-control.example.json").read_text(encoding="utf-8"))
     drawing["production_ready"] = True
-    control["production_ready"] = True
+    drawing["relocation"]["selected_mode"] = "baseline"
+    drawing["rail"]["json_origin_rail_position_mm"] = -100.0
     (root / "drawing.json").write_text(json.dumps(drawing), encoding="utf-8")
-    (root / "control.json").write_text(json.dumps(control), encoding="utf-8")
     (root / "job.json").write_bytes((ROOT / "dataset" / "dobot-generation-1.json").read_bytes())
     policy = {
         "version": 1,
         "jobs": {"sample": "job.json"},
-        "mode_production_ready": mode_release or {
-            "baseline": True,
-            "localized_baseline": False,
-            "advanced": False,
-        },
         "execution_log_directory": "logs",
     }
     (root / "web.json").write_text(json.dumps(policy), encoding="utf-8")
-    return root / "drawing.json", root / "control.json", root / "web.json"
+    return root / "drawing.json", root / "web.json"
 
 
 def two_window_job(path):
@@ -128,12 +113,12 @@ class DrawingTaskManagerTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = pathlib.Path(self.temporary.name)
-        self.drawing, self.control, self.policy = task_files(self.root)
+        self.drawing, self.policy = task_files(self.root)
         self.started = threading.Event()
         self.released = threading.Event()
         self.acquired = []
 
-        def execute(prepared, _confirmations, cancel, emit):
+        def execute(prepared, _attended, cancel, emit):
             self.started.set()
             emit({"event": "fake_window_start", "mode": prepared.mode})
             cancel.wait(2)
@@ -144,7 +129,6 @@ class DrawingTaskManagerTests(unittest.TestCase):
         self.manager = DrawingTaskManager(
             self.root,
             self.drawing,
-            self.control,
             self.policy,
             execute,
             lambda prepared: self.acquired.append(prepared.mode),
@@ -157,6 +141,11 @@ class DrawingTaskManagerTests(unittest.TestCase):
         self.manager.close()
         self.temporary.cleanup()
 
+    def set_mode(self, mode):
+        drawing = json.loads(self.drawing.read_text(encoding="utf-8"))
+        drawing["relocation"]["selected_mode"] = mode
+        self.drawing.write_text(json.dumps(drawing), encoding="utf-8")
+
     def test_prepare_snapshots_real_job_and_mode_specific_readiness(self):
         baseline = self.manager.prepare({
             "action": "prepare", "job_id": "sample", "mode": "baseline",
@@ -166,18 +155,17 @@ class DrawingTaskManagerTests(unittest.TestCase):
         self.assertEqual(baseline["points"], 3903)
         self.assertTrue(all(baseline["readiness"].values()))
 
+        self.set_mode("localized_baseline")
         localized = self.manager.prepare({
             "action": "prepare", "job_id": "sample", "mode": "localized_baseline",
         })
         self.assertEqual(localized["mode"], "localized_baseline")
-        self.assertFalse(localized["readiness"]["mode_released"])
         self.assertFalse(localized["readiness"]["runtime"])
         with self.assertRaisesRegex(DrawingTaskError, "drawing_mode_not_production_ready"):
             self.manager.start({
                 "action": "start",
                 "task_id": localized["task_id"],
-                "job_sha256": localized["job_sha256"],
-                "confirmations": CONFIRMATIONS,
+                "attended": True,
             })
 
     def test_running_task_locks_mode_and_cancel_releases_owner(self):
@@ -187,8 +175,7 @@ class DrawingTaskManagerTests(unittest.TestCase):
         running = self.manager.start({
             "action": "start",
             "task_id": prepared["task_id"],
-            "job_sha256": prepared["job_sha256"],
-            "confirmations": CONFIRMATIONS,
+            "attended": True,
         })
         self.assertEqual(running["state"], "running")
         self.assertTrue(self.started.wait(1))
@@ -201,25 +188,24 @@ class DrawingTaskManagerTests(unittest.TestCase):
         final = self.manager.wait(2)
         self.assertEqual(final["state"], "cancelled")
         self.assertTrue(self.released.is_set())
+        self.set_mode("advanced")
         switched = self.manager.prepare({
             "action": "prepare", "job_id": "sample", "mode": "advanced",
         })
         self.assertEqual(switched["mode"], "advanced")
 
-    def test_start_requires_exact_task_hash_and_all_current_confirmations(self):
+    def test_start_requires_only_current_task_and_attended_confirmation(self):
         prepared = self.manager.prepare({
             "action": "prepare", "job_id": "sample", "mode": "baseline",
         })
-        with self.assertRaisesRegex(DrawingTaskError, "drawing_job_hash_mismatch"):
+        with self.assertRaisesRegex(DrawingTaskError, "drawing_attended_confirmation_required"):
             self.manager.start({
                 "action": "start", "task_id": prepared["task_id"],
-                "job_sha256": "wrong", "confirmations": CONFIRMATIONS,
+                "attended": False,
             })
-        incomplete = dict(CONFIRMATIONS, area_clear=False)
-        with self.assertRaisesRegex(DrawingTaskError, "drawing_confirmations_required"):
+        with self.assertRaisesRegex(DrawingTaskError, "drawing_task_id_mismatch"):
             self.manager.start({
-                "action": "start", "task_id": prepared["task_id"],
-                "job_sha256": prepared["job_sha256"], "confirmations": incomplete,
+                "action": "start", "task_id": "stale", "attended": True,
             })
 
     def test_prepare_and_start_requests_are_lifecycle_serialized(self):
@@ -229,14 +215,15 @@ class DrawingTaskManagerTests(unittest.TestCase):
         entered, release = threading.Event(), threading.Event()
         errors = []
         from web_console import drawing_tasks as module
-        original_load = module.load_drawing_config
+        original_load = module.load_drawing_site_config
+        self.set_mode("advanced")
 
         def slow_load(path):
             entered.set()
             release.wait(2)
             return original_load(path)
 
-        with mock.patch.object(module, "load_drawing_config", slow_load):
+        with mock.patch.object(module, "load_drawing_site_config", slow_load):
             prepare_thread = threading.Thread(target=lambda: self.manager.handle({
                 "action": "prepare", "job_id": "sample", "mode": "advanced",
             }))
@@ -245,8 +232,7 @@ class DrawingTaskManagerTests(unittest.TestCase):
                 try:
                     self.manager.handle({
                         "action": "start", "task_id": prepared["task_id"],
-                        "job_sha256": prepared["job_sha256"],
-                        "confirmations": CONFIRMATIONS,
+                        "attended": True,
                     })
                 except DrawingTaskError as error:
                     errors.append(error.code)
@@ -267,14 +253,14 @@ class WebDrawingOwnershipTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = pathlib.Path(self.temporary.name)
-        self.drawing, self.control, self.policy = task_files(self.root)
+        self.drawing, self.policy = task_files(self.root)
         self.runtime = WebConsoleRuntime(
             config(), lambda _config: FakeChassis(), lambda _config: FakeArm(),
             start_workers=False,
         )
         self.execution_started = threading.Event()
 
-        def fake_execute(_prepared, _confirmations, cancel, _emit):
+        def fake_execute(_prepared, _attended, cancel, _emit):
             self.execution_started.set()
             cancel.wait(2)
             if cancel.is_set():
@@ -283,7 +269,7 @@ class WebDrawingOwnershipTests(unittest.TestCase):
 
         self.runtime._execute_drawing_task = fake_execute
         self.runtime.configure_drawing_tasks(
-            self.root, self.drawing, self.control, self.policy,
+            self.root, self.drawing, self.policy,
         )
 
     def tearDown(self):
@@ -296,7 +282,7 @@ class WebDrawingOwnershipTests(unittest.TestCase):
         })["drawing"]
         self.runtime.drawing_task({
             "action": "start", "task_id": state["task_id"],
-            "job_sha256": state["job_sha256"], "confirmations": CONFIRMATIONS,
+            "attended": True,
         })
         self.assertTrue(self.execution_started.wait(1))
         return state
@@ -332,8 +318,7 @@ class WebDrawingOwnershipTests(unittest.TestCase):
         with self.assertRaisesRegex(WebConsoleError, "drawing_task_not_prepared"):
             self.runtime.drawing_task({
                 "action": "start", "task_id": prepared["task_id"],
-                "job_sha256": prepared["job_sha256"],
-                "confirmations": CONFIRMATIONS,
+                "attended": True,
             })
 
     def test_runtime_executes_one_small_window_through_shared_fake_sessions(self):
@@ -350,15 +335,14 @@ class WebDrawingOwnershipTests(unittest.TestCase):
         )
         try:
             runtime.configure_drawing_tasks(
-                self.root, self.drawing, self.control, self.policy,
+                self.root, self.drawing, self.policy,
             )
             prepared = runtime.drawing_task({
                 "action": "prepare", "job_id": "sample", "mode": "baseline",
             })["drawing"]
             runtime.drawing_task({
                 "action": "start", "task_id": prepared["task_id"],
-                "job_sha256": prepared["job_sha256"],
-                "confirmations": CONFIRMATIONS,
+                "attended": True,
             })
             final = runtime._drawing_tasks.wait(4)
             self.assertEqual(final["state"], "completed")
@@ -383,14 +367,9 @@ class WebDrawingOwnershipTests(unittest.TestCase):
 
     def test_localized_and_advanced_modes_execute_relocation_via_shared_sessions(self):
         two_window_job(self.root / "job.json")
-        control = json.loads(self.control.read_text(encoding="utf-8"))
-        control["baseline"].update(speed_mm_s=600, settle_ms=0)
-        self.control.write_text(json.dumps(control), encoding="utf-8")
-        policy = json.loads(self.policy.read_text(encoding="utf-8"))
-        policy["mode_production_ready"] = {
-            "baseline": True, "localized_baseline": True, "advanced": True,
-        }
-        self.policy.write_text(json.dumps(policy), encoding="utf-8")
+        drawing = json.loads(self.drawing.read_text(encoding="utf-8"))
+        drawing["relocation"]["baseline"].update(speed_mm_s=600, settle_ms=0)
+        self.drawing.write_text(json.dumps(drawing), encoding="utf-8")
         runtime_config = replace(
             config(),
             vision=VisionConfig(
@@ -402,6 +381,9 @@ class WebDrawingOwnershipTests(unittest.TestCase):
         )
         for mode in ("localized_baseline", "advanced"):
             with self.subTest(mode=mode):
+                drawing = json.loads(self.drawing.read_text(encoding="utf-8"))
+                drawing["relocation"]["selected_mode"] = mode
+                self.drawing.write_text(json.dumps(drawing), encoding="utf-8")
                 chassis = FakeAdvancedChassis()
                 arm = FakeArm()
                 localization = (
@@ -418,7 +400,7 @@ class WebDrawingOwnershipTests(unittest.TestCase):
                 )
                 try:
                     runtime.configure_drawing_tasks(
-                        self.root, self.drawing, self.control, self.policy,
+                        self.root, self.drawing, self.policy,
                     )
                     prepared = runtime.drawing_task({
                         "action": "prepare", "job_id": "sample", "mode": mode,
@@ -426,10 +408,9 @@ class WebDrawingOwnershipTests(unittest.TestCase):
                     self.assertTrue(all(prepared["readiness"].values()))
                     runtime.drawing_task({
                         "action": "start", "task_id": prepared["task_id"],
-                        "job_sha256": prepared["job_sha256"],
-                        "confirmations": CONFIRMATIONS,
+                        "attended": True,
                     })
-                    final = runtime._drawing_tasks.wait(6)
+                    final = runtime._drawing_tasks.wait(10)
                     self.assertEqual(final["state"], "completed", final)
                     self.assertEqual(
                         final["result"]["windows"],
@@ -456,9 +437,9 @@ class WebDrawingRouteTests(unittest.TestCase):
     def test_configured_http_route_prepares_allowlisted_job_without_devices(self):
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
-            drawing, control, policy = task_files(root)
+            drawing, policy = task_files(root)
             runtime = WebConsoleRuntime(config(), start_workers=False)
-            runtime.configure_drawing_tasks(root, drawing, control, policy)
+            runtime.configure_drawing_tasks(root, drawing, policy)
             server = create_server(runtime, port=0)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()

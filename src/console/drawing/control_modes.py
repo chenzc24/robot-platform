@@ -97,15 +97,12 @@ class DrawingControlConfig:
 @dataclass(frozen=True)
 class RelocationAdmission:
     attended: bool
-    emergency_stop_ready: bool
     arm_safe: bool
     chassis_state: str
 
     def validate(self):
         if not self.attended:
             raise DrawingError("relocation_requires_attended_operator")
-        if not self.emergency_stop_ready:
-            raise DrawingError("relocation_requires_emergency_stop")
         if not self.arm_safe:
             raise DrawingError("relocation_requires_arm_safe")
         if self.chassis_state != "enabled_stopped":
@@ -414,7 +411,6 @@ class LocalizedBaselineRelocator(BaselineRelocator):
         if (
             stopped.service_state != "ready"
             or stopped.chassis_state != "enabled_stopped"
-            or not stopped.authenticated
             or not stopped.motion_permitted
             or stopped.last_error != "none"
         ):

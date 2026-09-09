@@ -110,3 +110,12 @@ chassis movement followed by a fresh one-dimensional AprilTag lock and exact
 checkpoint resume. Baseline is open-loop and Advanced remains physically
 unvalidated; neither is an automatic fallback. Before hardware use, rehearse
 the coordinate and window sequence with `app/localized_baseline_sim.py`.
+
+All drawing-site constants now have one authoritative local source:
+`config/drawing.local.json`, copied from `config/drawing.example.json`. It owns
+image contain-fit margin, the 700 x 200 mm Home-relative canvas, pen/rack and arm
+motion values, physical rail datum/travel, AprilTag-derived JSON origin `r0`, rail
+scale, relocation settings, localization thresholds, camera intrinsics and Tag
+world corners. `config/console.local.json` contains only device/video endpoints
+and manual-console limits; the current trusted-LAN chassis protocol has no
+runtime credential.

@@ -5,7 +5,6 @@ import hashlib
 import json
 import sys
 import time
-from dataclasses import replace
 from pathlib import Path
 
 
@@ -21,8 +20,7 @@ from drawing import (
     RelocationAdmission,
     build_drawing_plan,
     execute_drawing,
-    load_drawing_config,
-    load_drawing_control_config,
+    load_drawing_site_config,
     load_drawing_job,
     process_image_to_artifacts,
     validate_job_canvas,
@@ -43,9 +41,7 @@ from vision.worker import create_vision_worker
 def parser():
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument("input_path", type=Path, help="image/SVG or exported stroke JSON")
-    result.add_argument("--mode", choices=("baseline", "localized_baseline", "advanced"))
-    result.add_argument("--drawing-config", type=Path, default=ROOT / "config" / "drawing.local.json")
-    result.add_argument("--control-config", type=Path, default=ROOT / "config" / "drawing-control.local.json")
+    result.add_argument("--site-config", type=Path, default=ROOT / "config" / "drawing.local.json")
     result.add_argument("--runtime-config", type=Path, default=ROOT / "config" / "console.local.json")
     result.add_argument("--stroke-api-url", default="http://127.0.0.1:8000")
     result.add_argument("--stroke-provider", default="classic")
@@ -57,13 +53,7 @@ def parser():
     )
     result.add_argument("--stroke-timeout", type=float, default=600.0)
     result.add_argument("--execute", action="store_true")
-    result.add_argument("--confirm-job-sha256")
-    result.add_argument("--confirm-auto-review", action="store_true")
-    result.add_argument("--confirm-operator-present", action="store_true")
-    result.add_argument("--confirm-emergency-stop-ready", action="store_true")
-    result.add_argument("--confirm-area-clear", action="store_true")
-    result.add_argument("--confirm-arm-profile-reviewed", action="store_true")
-    result.add_argument("--confirm-chassis-profile-reviewed", action="store_true")
+    result.add_argument("--attended", action="store_true")
     result.add_argument("--log", type=Path)
     return result
 
@@ -95,7 +85,7 @@ def _artifact_dir(args, config, parameters):
     )
 
 
-def _prepare_job(args, config):
+def _prepare_job(args, config, image_config):
     is_json = args.input_path.suffix.lower() == ".json"
     artifact = None
     drawing_path = args.input_path
@@ -106,6 +96,7 @@ def _prepare_job(args, config):
             _artifact_dir(args, config, parameters),
             config.geometry.canvas_width_mm,
             config.geometry.canvas_height_mm,
+            content_margin_mm=image_config.short_edge_margin_mm,
             provider=args.stroke_provider,
             base_url=args.stroke_api_url,
             extra_parameters=parameters,
@@ -133,8 +124,7 @@ def _summary(job, drawing_config, control_config, board, artifact):
         "generated_audit_path": None if artifact is None else str(artifact["audit_path"]),
         "job_sha256": job.canonical_sha256,
         "drawing_config_sha256": drawing_config.canonical_sha256,
-        "drawing_production_ready": drawing_config.production_ready,
-        "control_production_ready": control_config.production_ready,
+        "production_ready": drawing_config.production_ready,
         "drawing_board": board,
         "groups": len(job.groups),
         "strokes": job.stroke_count,
@@ -151,42 +141,27 @@ def main(argv=None):
     chassis_enabled = False
     try:
         args = parser().parse_args(argv)
-        drawing_config = load_drawing_config(args.drawing_config)
-        control_config = load_drawing_control_config(args.control_config)
-        configured_mode = control_config.selected_mode
-        if args.mode is not None:
-            control_config = replace(control_config, selected_mode=args.mode)
-        job, board, artifact, is_json = _prepare_job(args, drawing_config)
+        site = load_drawing_site_config(args.site_config)
+        drawing_config = site.drawing
+        control_config = site.control
+        job, board, artifact, is_json = _prepare_job(
+            args, drawing_config,
+            site.image_to_json,
+        )
         summary = _summary(job, drawing_config, control_config, board, artifact)
-        summary["configured_mode"] = configured_mode
         if not args.execute:
             print(json.dumps({**summary, "execute": False}, ensure_ascii=False, indent=2, sort_keys=True))
             print("DRY_RUN no device connection or motion")
             return 0
 
-        if control_config.selected_mode != configured_mode:
-            raise DrawingError("selected_mode_config_mismatch")
-        if args.confirm_job_sha256 != job.canonical_sha256:
-            raise DrawingError("job_hash_confirmation_required")
-        if not is_json and not args.confirm_auto_review:
-            raise DrawingError("auto_review_confirmation_required")
-        if args.log is None:
-            raise DrawingError("execution_log_required")
-        execution_admission = DrawingExecutionAdmission(
-            args.confirm_operator_present,
-            args.confirm_emergency_stop_ready,
-            args.confirm_area_clear,
-            args.confirm_arm_profile_reviewed,
-        )
+        execution_admission = DrawingExecutionAdmission(args.attended)
         execution_admission.require()
-        if not args.confirm_chassis_profile_reviewed:
-            raise DrawingError("chassis_profile_confirmation_required")
-        if not drawing_config.production_ready:
-            raise DrawingError("drawing_not_production_ready")
-        if not control_config.production_ready:
-            raise DrawingError("drawing_control_not_production_ready")
+        if not site.production_ready:
+            raise DrawingError("drawing_site_not_production_ready")
 
         runtime_config = load_runtime_config(args.runtime_config)
+        if site is not None:
+            runtime_config = site.apply_runtime(runtime_config)
         localized = control_config.selected_mode != "baseline"
         if localized:
             if not runtime_config.vision.complete or not runtime_config.localization.complete:
@@ -194,7 +169,14 @@ def main(argv=None):
             if runtime_config.localization.json_mm_per_rail_mm != control_config.json_mm_per_rail_mm:
                 raise DrawingError("localized_runtime_scale_mismatch")
 
-        log = EventLog(args.log)
+        log_path = args.log or ROOT / "logs" / "drawing" / (
+            "%s-%s-%s.jsonl" % (
+                time.strftime("%Y%m%d-%H%M%S"),
+                control_config.selected_mode,
+                job.canonical_sha256[:8],
+            )
+        )
+        log = EventLog(log_path)
         log.emit({"event": "execution_requested", **summary})
         raw_chassis = default_chassis_factory(runtime_config.chassis)
         raw_chassis.enable()
@@ -203,7 +185,6 @@ def main(argv=None):
         if (
             status.service_state != "ready"
             or status.chassis_state != "enabled_stopped"
-            or not status.authenticated
             or not status.motion_permitted
             or status.last_error != "none"
         ):
@@ -233,7 +214,7 @@ def main(argv=None):
         result = execute_drawing(
             ArmWithChassisGuard(arm, chassis), chassis, localization,
             job, drawing_config, control_config, execution_admission,
-            RelocationAdmission(True, True, True, "enabled_stopped"),
+            RelocationAdmission(args.attended, True, "enabled_stopped"),
             "drawing-" + job.canonical_sha256[:16], log.emit,
         )
         log.emit({"event": "execution_done", **result})

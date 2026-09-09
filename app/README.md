@@ -9,8 +9,8 @@ relocation strategy.
 
 `run_drawing.py` is the common PC entry point. It accepts an exported stroke
 JSON directly, or sends PNG/JPEG/WebP/SVG input to the loopback StrokeReview
-API. Image input always uses the physical canvas dimensions from
-`drawing.local.json`; generated `strokes.json`, `audit.json`, the full response
+API. Image input always uses the physical canvas dimensions and contain-fit
+margin from the unified `drawing.local.json`; generated `strokes.json`, `audit.json`, the full response
 and an input manifest are retained under ignored `dataset/generated/` by
 default and are never silently overwritten.
 
@@ -18,25 +18,21 @@ Start StrokeReview before using an image:
 
 ```powershell
 .\stroke-review.cmd -SkipModels
-python app/run_drawing.py .\picture.png --mode baseline
-python app/run_drawing.py .\picture.png --mode localized_baseline
-python app/run_drawing.py .\picture.png --mode advanced
+python app/run_drawing.py .\picture.png
 ```
 
 The default is a no-device dry run. Existing reviewed JSON uses the same entry:
 
 ```powershell
 python app/run_drawing.py dataset/dobot-generation-1.json `
-  --mode localized_baseline --allow-uniform-canvas-rescale
+  --allow-uniform-canvas-rescale
 ```
 
 The runner rejects a JSON whose `target_width_mm` or `target_height_mm` differs
 from the configured physical canvas, preventing silent scale or aspect-ratio
 changes. A legacy JSON with the same aspect ratio may be deliberately mapped to
 the configured board with `--allow-uniform-canvas-rescale`; non-uniform stretch
-is always rejected. For image execution, the normal job-hash and attended-motion gates are
-supplemented by `--confirm-auto-review`; operators may instead review/edit and
-export JSON in the StrokeReview UI, then run that JSON without this extra flag.
+is always rejected. The produced or loaded JSON hash is recorded automatically.
 
 All modes use the same device deployment. `baseline` begins with
 `baseline.initial_json_axis_offset_mm` and subsequently trusts commanded direct
@@ -44,8 +40,8 @@ travel. `localized_baseline` uses direct travel plus a fresh AprilTag lock.
 `advanced` uses ESP32 line following plus a fresh lock. There is no automatic
 fallback between modes. Localized Baseline remains the only production
 candidate until the other strategies receive their own physical validation.
-Dry-run may preview any `--mode`; real execution additionally requires that
-mode to equal `selected_mode` in the reviewed local control configuration.
+The single `relocation.selected_mode` value in `drawing.local.json` selects the
+strategy for both dry-run and execution.
 
 ## Grouped drawing preview
 
@@ -62,17 +58,16 @@ python app/drawing_task.py dataset/dobot-generation-1.json `
 sends no motion. The formal configuration uses the selected 700 x 200 mm
 canvas while preserving the coworker project's parameterized User-Y/Z mapping,
 51 mm pen travel, home joints, P1-P4 rack poses, 60/30 mm rack depths, 60/1 mm
-gripper widths, drawing `v=12`, and `cp=100`. Its 700 mm width exceeds the
+gripper widths, drawing speed 35%, and `cp=100`. Its 700 mm width exceeds the
 retained `-200..180` mm User-Y window, so normal Localized Baseline execution
 must divide the job into reachable windows and relocate the chassis. Motions
 without a source-explicit speed use the project owner's clarified 50% default,
 and every arm motion uses 20% acceleration.
 
-`baseline_run.py` adds a separate guarded arm-only execution entry point. Its
-default is still dry-run. Real execution accepts only a complete plan with no
-reposition barrier, requires `production_ready=true`, an exact job-hash
-confirmation, four explicit attended-safety flags and a new durable log path,
-then requires ready YOLO status and valid feedback before the first motion. It
+`baseline_run.py` remains an internal arm-only diagnostic. Its default is
+dry-run. Real execution accepts only a complete plan with no reposition barrier,
+requires the site's single `production_ready=true` plus `--attended`, then
+requires ready YOLO status and valid feedback before the first motion. It
 opens no chassis session. Every command must return `DONE`; fault, rejection,
 unknown outcome or disconnect stops all later commands without retry or
 automatic resume.
@@ -94,7 +89,7 @@ through the exact window/checkpoint sequence:
 
 ```powershell
 python app/localized_baseline_sim.py dataset/dobot-generation-1.json `
-  --drawing-config config/drawing.example.json `
+  --site-config config/drawing.example.json `
   --simulated-reachable-min-mm -60 `
   --simulated-reachable-max-mm 60 `
   --force --open
@@ -116,23 +111,21 @@ python app/baseline_run.py dataset/dobot-generation-1.json `
   --config config/drawing.local.json
 ```
 
-After a reviewed local config has `production_ready=true`, a real run additionally
-requires `--execute`, the exact dry-run `job_sha256`, a new `--log` path, and all
-four `--confirm-*` safety flags shown by `--help`. Never reuse an existing log or
-resume automatically after an unknown outcome.
+After a reviewed local config has `production_ready=true`, the normal real-run
+command is `python app/run_drawing.py <input> --execute --attended`. The runner
+generates a unique JSONL log path automatically. It never resumes automatically
+after an unknown outcome.
 
-Localized Baseline dry-run also requires the schema-2 drawing-control file, but
-does not load runtime configuration or connect to a device:
+Localized Baseline dry-run reads the same unified site file, but does not load
+endpoint configuration or connect to a device:
 
 ```powershell
 python app/localized_baseline_run.py dataset/dobot-generation-1.json `
-  --drawing-config config/drawing.local.json `
-  --control-config config/drawing-control.local.json
+  --site-config config/drawing.local.json
 ```
 
-For real execution, review `--help`. In addition to the Baseline gates it needs
-the ignored schema-5 console configuration with production-ready AprilTag files,
-`selected_mode: localized_baseline`, and explicit chassis-profile confirmation.
+Localized execution additionally needs the endpoint-only console configuration,
+enabled inline AprilTag data, and `selected_mode: localized_baseline`.
 Do not connect the UI manual chassis/arm sessions concurrently with the script.
 
 ## AprilTag localization

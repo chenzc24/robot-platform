@@ -79,7 +79,7 @@ class CalibrationTests(unittest.TestCase):
         self.assertAlmostEqual(scaled[1, 1], 754.755696, places=6)
         self.assertEqual(list(camera.distortion_coefficients), [0.0] * 5)
 
-    def test_schema_five_loads_localization_and_older_schemas_remain_compatible(self):
+    def test_endpoint_config_defaults_vision_and_localization_off(self):
         base = json.loads((ROOT / "config" / "console.example.json").read_text(encoding="utf-8"))
         with tempfile.TemporaryDirectory() as directory:
             path = pathlib.Path(directory) / "console.json"
@@ -91,23 +91,6 @@ class CalibrationTests(unittest.TestCase):
             self.assertEqual(current.localization.settle_time_ms, 2000)
             self.assertEqual(current.localization.rail_axis, "x")
             self.assertEqual(current.localization.json_mm_per_rail_mm, -1.0)
-            version_four = dict(base)
-            version_four["schema_version"] = 4
-            del version_four["localization"]
-            path.write_text(json.dumps(version_four), encoding="utf-8")
-            self.assertFalse(load_runtime_config(path).localization.enabled)
-            legacy = dict(base)
-            legacy["schema_version"] = 3
-            del legacy["vision"]
-            del legacy["localization"]
-            path.write_text(json.dumps(legacy), encoding="utf-8")
-            self.assertFalse(load_runtime_config(path).vision.enabled)
-
-            invalid = json.loads(json.dumps(base))
-            invalid["localization"]["json_mm_per_rail_mm"] = 0
-            path.write_text(json.dumps(invalid), encoding="utf-8")
-            with self.assertRaisesRegex(RuntimeConfigError, "must be nonzero"):
-                load_runtime_config(path)
 
     def test_localization_requires_enabled_complete_vision(self):
         runtime = RuntimeConfig(

@@ -7,9 +7,11 @@ unvalidated. They share the same device deployment and planner, and there is no
 runtime fallback between them.
 
 The drawing system uses one planner and one explicit PC-selected relocation
-strategy. Copy `config/drawing-control.example.json` to the ignored
-`config/drawing-control.local.json`; keep `production_ready` false until the
-selected strategy has completed its own L3/L4 validation.
+strategy. Copy `config/drawing.example.json` to the ignored
+`config/drawing.local.json`; keep its top-level `production_ready` false until
+the selected strategy and physical constants have completed L3/L4 validation.
+The `relocation` section replaces the former normal-operation
+`drawing-control.local.json` input.
 
 The full JSON canvas is immutable. `drawing.geometry.canvas_width_mm` and
 `canvas_height_mm` define the physical drawing region. Its physical mapping is
@@ -26,7 +28,7 @@ have the same scale. It never allows silent non-uniform stretching.
 
 `selected_mode: baseline` does not read line sensors or AprilTag results. Given
 a planner-requested JSON-axis delta, it converts back to rail distance using
-`json_mm_per_rail_mm`, sends the existing direct `VELOCITY` command at the
+the single `rail.json_mm_per_rail_mm`, sends the existing direct `VELOCITY` command at the
 configured speed, refreshes before the ESP32 hold expires, and always attempts
 `STOP`. It then waits the configured settling interval and adds the requested
 delta to the previous JSON offset.
@@ -88,17 +90,20 @@ station; station placement determines the coarse distance.
 
 ## Admission and failure
 
-All three strategies require explicit structured admission stating that an
-operator is present, the physical emergency stop is ready, the arm is safe and
-the chassis is `enabled_stopped`. The local control configuration must also be
-`production_ready: true`. These software checks supplement rather than replace
-the physical L3/L4 gate.
+All three strategies use one attended-run admission. Dynamic interlocks still
+require the arm-safe barrier and chassis `enabled_stopped`. The single site
+configuration must also be `production_ready: true`.
 
 Mode selection occurs before movement. Localized Baseline or Advanced sensor /
 AprilTag failure stops and returns an error; neither silently falls back to
 another mode. A new operator/task decision may explicitly start a different
 mode afterward. State-changing requests are not retried after an unknown
 outcome.
+
+For localized operation, the first stable lock directly computes offset from
+`rail.json_origin_rail_position_mm`; it need not start near that reference
+position. Baseline has no position sensor and relies on its configured initial
+offset.
 
 The relocation strategies are implemented in
 `src/console/drawing/control_modes.py` with injected chassis and localization
@@ -114,9 +119,9 @@ structured relocation evidence.
 input and all three explicit strategies. `app/localized_baseline_run.py` remains
 a compatibility entry point. Dry-run is the default and opens no runtime
 configuration or device connection. Real execution
-requires the selected mode, production-ready drawing/control/vision/localization
-configuration, exact job hash, a new durable log, arm and chassis profile
-confirmations, current attended safety gates, and an initial AprilTag lock. It
+requires the selected mode, the single production-ready site configuration,
+one `--attended` confirmation and, for localized modes, an initial AprilTag
+lock. It
 then repeats:
 
 ```text

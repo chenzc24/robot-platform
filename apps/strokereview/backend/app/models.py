@@ -53,6 +53,7 @@ class ProcessingParameters(BaseModel):
     smoothing: int = Field(default=25, ge=0, le=100)
     target_width_mm: float = Field(default=210.0, gt=0, le=5000)
     target_height_mm: float | None = Field(default=None, gt=0, le=5000)
+    content_margin_mm: float = Field(default=0.0, ge=0, le=1000)
     pen_width_mm: float = Field(default=0.5, gt=0, le=100)
     effective_resolution_mm: float = Field(default=0.25, gt=0, le=100)
     spur_prune_length_mm: float = Field(default=1.2, ge=0, le=100)

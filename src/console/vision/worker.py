@@ -165,8 +165,11 @@ def create_vision_worker(config, callback, decoder_factory=None):
     """Build the worker only after explicit vision enablement."""
     if not config.vision.complete:
         raise ValueError("vision_configuration_incomplete")
-    board = load_board_layout(config.vision.board_layout_path)
-    camera = load_camera_calibration(config.vision.camera_calibration_path)
+    board = config.vision.board_layout
+    camera = config.vision.camera_calibration
+    if board is None or camera is None:
+        board = load_board_layout(config.vision.board_layout_path)
+        camera = load_camera_calibration(config.vision.camera_calibration_path)
     if board.dictionary != config.vision.dictionary:
         raise ValueError("vision_dictionary_mismatch")
     localizer = AprilTagBoardLocalizer(

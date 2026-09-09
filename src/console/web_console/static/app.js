@@ -137,9 +137,7 @@ function renderDrawing(drawing, owner) {
   const state = String(drawing.state || "unconfigured");
   const active = state === "running" || state === "stopping";
   syncSelect($("#drawing-job"), drawing.available_jobs || []);
-  syncSelect($("#drawing-mode"), drawing.available_modes || ["baseline", "localized_baseline", "advanced"]);
   if (!drawingSelectionDirty && drawing.job_id) $("#drawing-job").value = drawing.job_id;
-  if (!drawingSelectionDirty && drawing.mode) $("#drawing-mode").value = drawing.mode;
   textState($("#drawing-state"), state, state === "completed", state === "failed");
   $("#drawing-mode-state").textContent = String(drawing.mode || "—").toUpperCase();
   $("#drawing-phase").textContent = String(drawing.phase || "—").toUpperCase();
@@ -156,11 +154,10 @@ function renderDrawing(drawing, owner) {
     : "—";
   $("#drawing-last-event").textContent = drawing.last_event?.event || drawing.error || "—";
   $("#drawing-job").disabled = active || !drawing.configured;
-  $("#drawing-mode").disabled = active || !drawing.configured;
   $("#drawing-prepare").disabled = active || !drawing.configured || !(drawing.available_jobs || []).length;
   $("#drawing-start").disabled = state !== "prepared" || drawingSelectionDirty || !Object.values(readiness).every(Boolean);
   $("#drawing-cancel").disabled = !["prepared", "running", "stopping"].includes(state);
-  $$('[data-drawing-confirm]').forEach(node => node.disabled = state !== "prepared");
+  $("#drawing-attended").disabled = state !== "prepared";
   document.body.classList.toggle("drawing-owned", owner === "drawing");
 }
 
@@ -400,29 +397,26 @@ function bind() {
   $("#set-gripper").onclick=()=>armCommand("gripper",{width_mm:Number($("#gripper-width").value)});
   $("#drawing-prepare").onclick=async()=>{
     const requestedJob = $("#drawing-job").value;
-    const requestedMode = $("#drawing-mode").value;
     drawingSelectionDirty = false;
     const ok = await act("/api/drawing/task", {
-      action:"prepare", job_id:requestedJob, mode:requestedMode,
+      action:"prepare", job_id:requestedJob,
     }, "drawing task prepared");
     if (ok) {
-      $$('[data-drawing-confirm]').forEach(node => node.checked = false);
+      $("#drawing-attended").checked = false;
     } else {
       drawingSelectionDirty = true;
       $("#drawing-job").value = requestedJob;
-      $("#drawing-mode").value = requestedMode;
       if (currentState) renderDrawing(currentState.drawing, currentState.control_owner);
     }
   };
-  [$("#drawing-job"), $("#drawing-mode")].forEach(node => node.onchange=()=>{
+  [$("#drawing-job")].forEach(node => node.onchange=()=>{
     drawingSelectionDirty = true;
     if (currentState) renderDrawing(currentState.drawing, currentState.control_owner);
   });
   $("#drawing-start").onclick=()=>act("/api/drawing/task", {
     action:"start",
     task_id:currentState?.drawing.task_id,
-    job_sha256:currentState?.drawing.job_sha256,
-    confirmations:Object.fromEntries($$('[data-drawing-confirm]').map(node => [node.dataset.drawingConfirm, node.checked])),
+    attended:$("#drawing-attended").checked,
   }, "drawing task started");
   $("#drawing-cancel").onclick=()=>act("/api/drawing/task", {
     action:"cancel", task_id:currentState?.drawing.task_id,

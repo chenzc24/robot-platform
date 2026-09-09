@@ -46,45 +46,11 @@ class DrawingTaskCliTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        self.config.write_text(
-            json.dumps(
-                {
-                    "production_ready": False,
-                    "flat_group_name": "default",
-                    "group_pen_slots": {"default": "P1"},
-                    "pen_rack": {
-                        "change_depth_mm": 60,
-                        "final_return_depth_mm": 30,
-                        "gripper_open_mm": 60,
-                        "gripper_closed_mm": 1,
-                        "slots": {
-                            "P1": {"joint_deg": [1, 2, 3, 4, 5, 6]},
-                            "P2": {"joint_deg": [2, 3, 4, 5, 6, 7]},
-                            "P3": {"joint_deg": [3, 4, 5, 6, 7, 8]},
-                            "P4": {"joint_deg": [4, 5, 6, 7, 8, 9]}
-                        }
-                    },
-                    "geometry": {
-                        "canvas_width_mm": 100,
-                        "canvas_height_mm": 100,
-                        "user_y_offset_mm": -50,
-                        "user_z_offset_mm": -50,
-                        "home_pose_user_y_mm": 0,
-                        "reachable_user_y_min_mm": -100,
-                        "reachable_user_y_max_mm": 100,
-                        "pen_travel_x_mm": 20,
-                        "home_joints_deg": [-120, 0, -90, -90, -30, 90],
-                        "user": 0,
-                        "tool": 0,
-                        "draw_speed_pct": 12,
-                        "draw_blend_pct": 100,
-                        "travel_speed_pct": 50,
-                        "accel_pct": 20,
-                    },
-                }
-            ),
-            encoding="utf-8",
+        site = json.loads(
+            (ROOT / "config" / "drawing.example.json").read_text(encoding="utf-8")
         )
+        site["drawing"]["group_pen_slots"]["default"] = "P1"
+        self.config.write_text(json.dumps(site), encoding="utf-8")
 
     def tearDown(self):
         self.temp.cleanup()

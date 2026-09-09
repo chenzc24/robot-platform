@@ -15,13 +15,13 @@ from drawing import (
     DrawingError,
     PlanCheckpoint,
     build_drawing_plan,
-    load_drawing_config,
+    load_drawing_site_config,
     load_drawing_job,
 )
 
 
 def build_preview(drawing_path, config_path, json_axis_offset_mm=0.0, checkpoint=None):
-    config = load_drawing_config(config_path)
+    config = load_drawing_site_config(config_path).drawing
     job = load_drawing_job(drawing_path, flat_group_name=config.flat_group_name)
     plan = build_drawing_plan(
         job,

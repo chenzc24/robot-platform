@@ -114,7 +114,6 @@
         </div>
         <div class="drawing-form">
           <label>JOB<select id="drawing-job"></select></label>
-          <label>MODE<select id="drawing-mode"><option value="baseline">BASELINE</option><option value="localized_baseline">LOCALIZED BASELINE</option><option value="advanced">ADVANCED</option></select></label>
         </div>
         <div class="action-row"><button class="primary" id="drawing-prepare">PREPARE / DRY-RUN</button><button class="danger" id="drawing-cancel">CANCEL &amp; STOP</button></div>
         <section class="drawing-audit">
@@ -122,15 +121,11 @@
           <dl><dt>TASK</dt><dd id="drawing-task-id">—</dd><dt>JOB SHA-256</dt><dd id="drawing-hash">—</dd><dt>READINESS</dt><dd id="drawing-readiness">—</dd><dt>LAST EVENT</dt><dd id="drawing-last-event">—</dd></dl>
         </section>
         <fieldset class="drawing-confirmations">
-          <legend>CURRENT ATTENDED SAFETY CONFIRMATIONS</legend>
-          <label><input type="checkbox" data-drawing-confirm="operator_present"> Operator present</label>
-          <label><input type="checkbox" data-drawing-confirm="emergency_stop_ready"> Physical emergency stop ready</label>
-          <label><input type="checkbox" data-drawing-confirm="area_clear"> Full arm/chassis area clear</label>
-          <label><input type="checkbox" data-drawing-confirm="arm_profile_reviewed"> Arm profile reviewed</label>
-          <label><input type="checkbox" data-drawing-confirm="chassis_profile_reviewed"> Chassis profile reviewed</label>
+          <legend>ATTENDED RUN</legend>
+          <label><input type="checkbox" id="drawing-attended"> Operator and physical emergency stop are ready; the agreed workspace and motion envelope are unchanged</label>
         </fieldset>
         <button class="primary full drawing-start" id="drawing-start">START PREPARED TASK</button>
-        <p class="drawing-note">Mode is locked after START. To change mode, cancel or finish the current task, then PREPARE again. Software stop does not replace the physical emergency stop.</p>
+        <p class="drawing-note">Mode comes from drawing.local.json and is frozen by PREPARE. Software stop does not replace the physical emergency stop.</p>
       </div>
     </section>
   </main>

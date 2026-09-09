@@ -14,8 +14,7 @@ if str(CONSOLE_SOURCE) not in sys.path:
 
 from drawing import (
     DrawingError,
-    load_drawing_control_config,
-    load_drawing_config,
+    load_drawing_site_config,
     load_drawing_job,
     simulate_localized_baseline,
 )
@@ -42,21 +41,16 @@ def argument_parser():
         default=ROOT / "dataset" / "dobot-generation-1.json",
     )
     result.add_argument(
-        "--drawing-config",
+        "--site-config",
         type=Path,
         default=ROOT / "config" / "drawing.example.json",
-    )
-    result.add_argument(
-        "--control-config",
-        type=Path,
-        default=ROOT / "config" / "drawing-control.example.json",
     )
     result.add_argument(
         "--output",
         type=Path,
         default=ROOT / "tmp" / "localized-baseline-rehearsal.html",
     )
-    result.add_argument("--rail-reference-mm", type=float, default=0.0)
+    result.add_argument("--rail-reference-mm", type=float)
     result.add_argument("--initial-rail-position-mm", type=float)
     result.add_argument("--json-mm-per-rail-mm", type=float)
     result.add_argument("--simulated-reachable-min-mm", type=float)
@@ -75,8 +69,9 @@ def argument_parser():
 
 
 def build_rehearsal(args):
-    config = load_drawing_config(args.drawing_config)
-    control_config = load_drawing_control_config(args.control_config)
+    site = load_drawing_site_config(args.site_config)
+    config = site.drawing
+    control_config = site.control
     job = load_drawing_job(
         args.drawing_path, flat_group_name=config.flat_group_name
     )
@@ -84,7 +79,10 @@ def build_rehearsal(args):
         job,
         config,
         control_config,
-        rail_reference_mm=args.rail_reference_mm,
+        rail_reference_mm=(
+            site.rail.json_origin_rail_position_mm
+            if args.rail_reference_mm is None else args.rail_reference_mm
+        ),
         initial_rail_position_mm=args.initial_rail_position_mm,
         json_mm_per_rail_mm=args.json_mm_per_rail_mm,
         reachable_min_mm=args.simulated_reachable_min_mm,
@@ -92,8 +90,16 @@ def build_rehearsal(args):
         motion_gain=args.motion_gain,
         stop_overshoot_mm=args.stop_overshoot_mm,
         localization_errors_mm=args.localization_errors_mm,
-        rail_min_mm=args.rail_min_mm,
-        rail_max_mm=args.rail_max_mm,
+        rail_min_mm=(
+            (site.rail.physical_start_mm
+             if site.rail.physical_travel_mm is not None
+             else None) if args.rail_min_mm is None
+            else args.rail_min_mm
+        ),
+        rail_max_mm=((
+            None if site.rail.physical_travel_mm is None
+            else site.rail.physical_start_mm + site.rail.physical_travel_mm
+        ) if args.rail_max_mm is None else args.rail_max_mm),
         max_windows=args.max_windows,
     )
 

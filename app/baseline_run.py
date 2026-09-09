@@ -20,7 +20,7 @@ from drawing import (
     build_drawing_plan,
     execute_drawing_plan,
     flatten_plan_steps,
-    load_drawing_config,
+    load_drawing_site_config,
     load_drawing_job,
 )
 from maixcam_arm_client import MaixCamArmClient, open_connection
@@ -34,11 +34,7 @@ def parser():
     result.add_argument("--arm-port", type=int, default=8780)
     result.add_argument("--connect-timeout", type=float, default=5.0)
     result.add_argument("--execute", action="store_true")
-    result.add_argument("--confirm-job-sha256")
-    result.add_argument("--confirm-operator-present", action="store_true")
-    result.add_argument("--confirm-emergency-stop-ready", action="store_true")
-    result.add_argument("--confirm-area-clear", action="store_true")
-    result.add_argument("--confirm-arm-profile-reviewed", action="store_true")
+    result.add_argument("--attended", action="store_true")
     result.add_argument("--log", type=Path)
     return result
 
@@ -69,8 +65,12 @@ class EventLog:
     def emit(self, event):
         event = {"time_ms": int(time.time() * 1000), **event}
         self.stream.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
-        self.stream.flush()
-        os.fsync(self.stream.fileno())
+        if event.get("event") in {
+            "execution_requested", "execution_done", "execution_failed",
+            "execution_stopped",
+        }:
+            self.stream.flush()
+            os.fsync(self.stream.fileno())
 
     def close(self):
         self.stream.close()
@@ -80,7 +80,7 @@ def main(argv=None):
     client = log = None
     try:
         args = parser().parse_args(argv)
-        config = load_drawing_config(args.config)
+        config = load_drawing_site_config(args.config).drawing
         job = load_drawing_job(args.drawing_path, flat_group_name=config.flat_group_name)
         plan = build_drawing_plan(job, config)
         summary = _summary(job, config, plan)
@@ -88,20 +88,16 @@ def main(argv=None):
             print(json.dumps({**summary, "execute": False}, ensure_ascii=False, indent=2, sort_keys=True))
             print("DRY_RUN no device connection or motion")
             return 0
-        if args.confirm_job_sha256 != job.canonical_sha256:
-            raise DrawingExecutionError("job_hash_confirmation_required")
-        if args.log is None:
-            raise DrawingExecutionError("execution_log_required")
-        admission = DrawingExecutionAdmission(
-            args.confirm_operator_present,
-            args.confirm_emergency_stop_ready,
-            args.confirm_area_clear,
-            args.confirm_arm_profile_reviewed,
-        )
+        admission = DrawingExecutionAdmission(args.attended)
         admission.require()
         if not config.production_ready:
             raise DrawingExecutionError("drawing_not_production_ready")
-        log = EventLog(args.log)
+        log_path = args.log or ROOT / "logs" / "drawing" / (
+            "%s-baseline-arm-%s.jsonl" % (
+                time.strftime("%Y%m%d-%H%M%S"), job.canonical_sha256[:8]
+            )
+        )
+        log = EventLog(log_path)
         log.emit({"event": "execution_requested", **summary})
         connection = open_connection(args.arm_host, args.arm_port, args.connect_timeout)
         client = MaixCamArmClient(connection, "baseline-drawing")

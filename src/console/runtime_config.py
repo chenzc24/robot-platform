@@ -63,13 +63,15 @@ class VisionConfig:
     min_confidence: float = 0.55
     stale_after_ms: int = 1200
     log_path: str = ""
+    board_layout: object = None
+    camera_calibration: object = None
 
     @property
     def complete(self):
         return bool(
             self.enabled
-            and self.board_layout_path
-            and self.camera_calibration_path
+            and ((self.board_layout is not None and self.camera_calibration is not None)
+                 or (self.board_layout_path and self.camera_calibration_path))
             and self.dictionary == "DICT_APRILTAG_36H11"
         )
 

@@ -57,6 +57,7 @@ def process_image_to_artifacts(
     output_dir,
     canvas_width_mm,
     canvas_height_mm,
+    content_margin_mm=0.0,
     provider="classic",
     base_url="http://127.0.0.1:8000",
     extra_parameters=None,
@@ -78,6 +79,7 @@ def process_image_to_artifacts(
         "provider": provider,
         "target_width_mm": float(canvas_width_mm),
         "target_height_mm": float(canvas_height_mm),
+        "content_margin_mm": float(content_margin_mm),
     })
     body, content_type = _multipart(image_path, parameters)
     request = Request(

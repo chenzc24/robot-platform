@@ -19,20 +19,10 @@ class DrawingExecutionError(RuntimeError):
 
 @dataclass(frozen=True)
 class DrawingExecutionAdmission:
-    operator_present: bool
-    emergency_stop_ready: bool
-    area_clear: bool
-    arm_profile_reviewed: bool
+    attended: bool
 
     def require(self):
-        if not all(
-            (
-                self.operator_present,
-                self.emergency_stop_ready,
-                self.area_clear,
-                self.arm_profile_reviewed,
-            )
-        ):
+        if not self.attended:
             raise DrawingExecutionError("execution_admission_required")
 
 

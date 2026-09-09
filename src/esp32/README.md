@@ -28,3 +28,17 @@ Run the local source check from VS Code (`ESP32: Check Python sources`) or Power
 ```
 
 USB and WebREPL procedures are documented in [ESP32 Development](../../docs/esp32/development.md).
+
+For routine changes to the three production RCP modules, use the incremental
+COM7 updater instead of rebuilding and copying a full release package:
+
+```powershell
+python tools/esp32/fast_update.py --dry-run
+python tools/esp32/fast_update.py --port COM7
+```
+
+It interrupts the resident loop, identifies ESP32-S3 MicroPython, compares
+hashes, backs up only changed resident files, uploads only those files, compiles
+and verifies each readback, then resets once. It never reads local secrets or
+sends a chassis command. Full filesystem/package verification remains a release
+operation rather than a per-edit requirement.

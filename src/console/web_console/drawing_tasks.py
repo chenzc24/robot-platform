@@ -11,21 +11,13 @@ from pathlib import Path
 from drawing import (
     DrawingError,
     build_drawing_plan,
-    load_drawing_config,
-    load_drawing_control_config,
+    load_drawing_site_config,
     load_drawing_job,
     validate_job_canvas,
 )
 
 
 MODES = ("baseline", "localized_baseline", "advanced")
-CONFIRMATIONS = (
-    "operator_present",
-    "emergency_stop_ready",
-    "area_clear",
-    "arm_profile_reviewed",
-    "chassis_profile_reviewed",
-)
 
 
 class DrawingTaskError(RuntimeError):
@@ -42,6 +34,7 @@ class PreparedDrawing:
     task_id: str
     job_id: str
     mode: str
+    site_config: object
     job: object
     drawing_config: object
     control_config: object
@@ -62,7 +55,7 @@ def _contained_path(root, raw, label):
 
 
 def load_drawing_web_policy(path, repository_root):
-    """Load the Web-only job allowlist and independent per-mode release gates."""
+    """Load the Web-only job allowlist and log location."""
     try:
         raw = json.loads(Path(path).read_text(encoding="utf-8-sig"))
     except FileNotFoundError:
@@ -70,19 +63,14 @@ def load_drawing_web_policy(path, repository_root):
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise DrawingTaskError("cannot_read_drawing_web_config") from error
     if not isinstance(raw, dict) or set(raw) != {
-        "version", "jobs", "mode_production_ready", "execution_log_directory",
+        "version", "jobs", "execution_log_directory",
     }:
         raise DrawingTaskError("invalid_drawing_web_config")
     if isinstance(raw["version"], bool) or raw["version"] != 1:
         raise DrawingTaskError("unsupported_drawing_web_config_version")
     jobs = raw["jobs"]
-    readiness = raw["mode_production_ready"]
     if not isinstance(jobs, dict) or not jobs:
         raise DrawingTaskError("drawing_web_jobs_required")
-    if not isinstance(readiness, dict) or set(readiness) != set(MODES):
-        raise DrawingTaskError("drawing_web_mode_readiness_invalid")
-    if any(type(readiness[mode]) is not bool for mode in MODES):
-        raise DrawingTaskError("drawing_web_mode_readiness_invalid")
     clean_jobs = {}
     for job_id, relative_path in jobs.items():
         if not isinstance(job_id, str) or not job_id.strip():
@@ -96,7 +84,6 @@ def load_drawing_web_policy(path, repository_root):
     )
     return {
         "jobs": clean_jobs,
-        "mode_production_ready": dict(readiness),
         "execution_log_directory": log_directory,
     }
 
@@ -107,8 +94,7 @@ class DrawingTaskManager:
     def __init__(
         self,
         repository_root,
-        drawing_config_path,
-        control_config_path,
+        site_config_path,
         policy_path,
         execute_callback,
         acquire_callback,
@@ -119,8 +105,7 @@ class DrawingTaskManager:
         thread_factory=None,
     ):
         self.root = Path(repository_root).resolve()
-        self.drawing_config_path = Path(drawing_config_path)
-        self.control_config_path = Path(control_config_path)
+        self.site_config_path = Path(site_config_path)
         self.policy_path = Path(policy_path)
         self.execute_callback = execute_callback
         self.acquire_callback = acquire_callback
@@ -165,11 +150,6 @@ class DrawingTaskManager:
             result = dict(self._state)
             result["readiness"] = dict(self._state["readiness"])
             result["available_jobs"] = [] if self._policy is None else sorted(self._policy["jobs"])
-            result["available_modes"] = list(MODES)
-            result["mode_release"] = (
-                {mode: False for mode in MODES}
-                if self._policy is None else dict(self._policy["mode_production_ready"])
-            )
             return result
 
     def _require_configured(self):
@@ -179,27 +159,25 @@ class DrawingTaskManager:
     def _readiness(self, mode, drawing_config, control_config):
         runtime = self.prerequisites_callback(mode, control_config)
         return {
-            "drawing_config": bool(drawing_config.production_ready),
-            "control_config": bool(control_config.production_ready),
-            "mode_released": bool(self._policy["mode_production_ready"][mode]),
+            "site_config": bool(drawing_config.production_ready),
             "runtime": bool(runtime),
         }
 
     def prepare(self, request):
         self._require_configured()
-        mode = request.get("mode")
         job_id = request.get("job_id")
-        if mode not in MODES:
-            raise DrawingTaskError("invalid_drawing_mode", 400)
         if job_id not in self._policy["jobs"]:
             raise DrawingTaskError("drawing_job_not_allowed", 400)
         with self._lock:
             if self._state["state"] in ("running", "stopping"):
                 raise DrawingTaskError("drawing_mode_locked_while_active")
         try:
-            drawing_config = load_drawing_config(self.drawing_config_path)
+            site_config = load_drawing_site_config(self.site_config_path)
+            drawing_config = site_config.drawing
+            loaded_control = site_config.control
+            mode = loaded_control.selected_mode
             control_config = replace(
-                load_drawing_control_config(self.control_config_path),
+                loaded_control,
                 selected_mode=mode,
             )
             if mode == "localized_baseline" and control_config.localized_baseline is None:
@@ -221,6 +199,7 @@ class DrawingTaskManager:
             uuid.uuid4().hex,
             job_id,
             mode,
+            site_config,
             job,
             drawing_config,
             control_config,
@@ -256,25 +235,15 @@ class DrawingTaskManager:
         self._changed()
         return self.snapshot()
 
-    @staticmethod
-    def _confirmations(request):
-        raw = request.get("confirmations")
-        if not isinstance(raw, dict) or set(raw) != set(CONFIRMATIONS):
-            raise DrawingTaskError("drawing_confirmations_required", 400)
-        if not all(raw[name] is True for name in CONFIRMATIONS):
-            raise DrawingTaskError("drawing_confirmations_required")
-        return dict(raw)
-
     def start(self, request):
-        confirmations = self._confirmations(request)
+        if request.get("attended") is not True:
+            raise DrawingTaskError("drawing_attended_confirmation_required", 400)
         with self._lock:
             prepared = self._prepared
             if self._state["state"] != "prepared" or prepared is None:
                 raise DrawingTaskError("drawing_task_not_prepared")
             if request.get("task_id") != prepared.task_id:
                 raise DrawingTaskError("drawing_task_id_mismatch", 400)
-            if request.get("job_sha256") != prepared.job.canonical_sha256:
-                raise DrawingTaskError("drawing_job_hash_mismatch", 400)
             if not all(prepared.readiness.values()):
                 raise DrawingTaskError("drawing_mode_not_production_ready")
         self.acquire_callback(prepared)
@@ -294,7 +263,7 @@ class DrawingTaskManager:
                 )
                 self._thread = self.thread_factory(
                     target=self._run,
-                    args=(prepared, confirmations, log_path),
+                    args=(prepared, True, log_path),
                     name="web-drawing-task",
                     daemon=True,
                 )
@@ -315,14 +284,21 @@ class DrawingTaskManager:
         record = {"time_ms": int(time.time() * 1000), **dict(event)}
         line = json.dumps(record, ensure_ascii=False, sort_keys=True)
         log_stream.write(line + "\n")
-        log_stream.flush()
-        os.fsync(log_stream.fileno())
+        name = str(record.get("event") or record.get("state") or "")
+        if (
+            name.startswith("drawing_task_")
+            or name in {"execution_stopped", "execution_failed"}
+            or name.endswith("_window_done")
+            or name.endswith("_relocation_done")
+        ):
+            log_stream.flush()
+            os.fsync(log_stream.fileno())
         with self._lock:
             self._state["phase"] = str(record.get("event") or record.get("state") or "running")
             self._state["last_event"] = record
         self._changed()
 
-    def _run(self, prepared, confirmations, log_path):
+    def _run(self, prepared, attended, log_path):
         terminal = "failed"
         result = None
         error_code = "drawing_execution_failed"
@@ -337,7 +313,7 @@ class DrawingTaskManager:
                     "job_sha256": prepared.job.canonical_sha256,
                 })
                 result = self.execute_callback(
-                    prepared, confirmations, self._cancel,
+                    prepared, attended, self._cancel,
                     lambda event: self._emit(stream, event),
                 )
                 terminal = "cancelled" if self._cancel.is_set() else "completed"

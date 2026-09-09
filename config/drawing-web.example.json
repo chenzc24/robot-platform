@@ -3,10 +3,5 @@
   "jobs": {
     "dobot-generation-1": "dataset/dobot-generation-1.json"
   },
-  "mode_production_ready": {
-    "baseline": false,
-    "localized_baseline": false,
-    "advanced": false
-  },
   "execution_log_directory": "logs/drawing/web"
 }

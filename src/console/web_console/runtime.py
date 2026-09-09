@@ -405,8 +405,7 @@ class WebConsoleRuntime:
     def configure_drawing_tasks(
         self,
         repository_root,
-        drawing_config_path,
-        control_config_path,
+        site_config_path,
         policy_path,
         manager_factory=DrawingTaskManager,
         thread_factory=None,
@@ -415,8 +414,7 @@ class WebConsoleRuntime:
             raise ValueError("drawing_tasks_already_configured")
         self._drawing_tasks = manager_factory(
             repository_root,
-            drawing_config_path,
-            control_config_path,
+            site_config_path,
             policy_path,
             self._execute_drawing_task,
             self._acquire_drawing_control,
@@ -542,7 +540,7 @@ class WebConsoleRuntime:
             self._drawing_tasks.sleep(settings.poll_ms / 1000.0)
         raise DrawingTaskError("initial_localization_timeout")
 
-    def _execute_drawing_task(self, prepared, confirmations, _cancel, emit):
+    def _execute_drawing_task(self, prepared, attended, _cancel, emit):
         chassis_session = False
         try:
             with self._chassis_io:
@@ -560,7 +558,6 @@ class WebConsoleRuntime:
             if (
                 status.service_state != "ready"
                 or status.chassis_state != "enabled_stopped"
-                or not status.authenticated
                 or not status.motion_permitted
                 or status.last_error != "none"
             ):
@@ -578,18 +575,8 @@ class WebConsoleRuntime:
                 prepared.job,
                 prepared.drawing_config,
                 prepared.control_config,
-                DrawingExecutionAdmission(
-                    confirmations["operator_present"],
-                    confirmations["emergency_stop_ready"],
-                    confirmations["area_clear"],
-                    confirmations["arm_profile_reviewed"],
-                ),
-                RelocationAdmission(
-                    confirmations["operator_present"],
-                    confirmations["emergency_stop_ready"],
-                    True,
-                    "enabled_stopped",
-                ),
+                DrawingExecutionAdmission(attended),
+                RelocationAdmission(attended, True, "enabled_stopped"),
                 "web-drawing-" + prepared.task_id[:16],
                 emit,
                 sleep_func=self._drawing_tasks.sleep,

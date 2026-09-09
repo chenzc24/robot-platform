@@ -47,14 +47,19 @@ def fit_canvas_layout(
         if parameters.target_height_mm is not None
         else round(target_width_mm * coordinate_height / coordinate_width, 4)
     )
+    margin_mm = float(parameters.content_margin_mm)
+    if margin_mm * 2 >= min(target_width_mm, target_height_mm):
+        raise ValueError("Content margin leaves no drawable canvas area")
+    available_width_mm = target_width_mm - 2 * margin_mm
+    available_height_mm = target_height_mm - 2 * margin_mm
     scale = min(
-        target_width_mm / coordinate_width,
-        target_height_mm / coordinate_height,
+        available_width_mm / coordinate_width,
+        available_height_mm / coordinate_height,
     )
     content_width_mm = coordinate_width * scale
     content_height_mm = coordinate_height * scale
-    offset_x_mm = (target_width_mm - content_width_mm) / 2
-    offset_y_mm = (target_height_mm - content_height_mm) / 2
+    offset_x_mm = margin_mm + (available_width_mm - content_width_mm) / 2
+    offset_y_mm = margin_mm + (available_height_mm - content_height_mm) / 2
     normalization_mm = max(target_width_mm, target_height_mm)
     metadata_width = source_width or max(1, round(coordinate_width))
     metadata_height = source_height or max(1, round(coordinate_height))

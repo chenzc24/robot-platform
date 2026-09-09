@@ -60,7 +60,7 @@ def plan():
     ), True, None, {"barriers": 0})
 
 
-ADMISSION = DrawingExecutionAdmission(True, True, True, True)
+ADMISSION = DrawingExecutionAdmission(True)
 
 
 class FakeClient:
@@ -121,7 +121,7 @@ class DrawingExecutorTests(unittest.TestCase):
     def test_admission_and_production_ready_are_required_before_preflight(self):
         client = FakeClient()
         with self.assertRaisesRegex(DrawingExecutionError, "execution_admission_required"):
-            execute_drawing_plan(client, plan(), config(), DrawingExecutionAdmission(False, True, True, True))
+            execute_drawing_plan(client, plan(), config(), DrawingExecutionAdmission(False))
         with self.assertRaisesRegex(DrawingExecutionError, "drawing_not_production_ready"):
             execute_drawing_plan(client, plan(), config(False), ADMISSION)
         self.assertEqual(client.calls, [])

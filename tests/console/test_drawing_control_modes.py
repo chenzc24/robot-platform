@@ -180,7 +180,6 @@ class ScriptedLocalization:
 def admission(**overrides):
     values = {
         "attended": True,
-        "emergency_stop_ready": True,
         "arm_safe": True,
         "chassis_state": "enabled_stopped",
     }

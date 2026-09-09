@@ -29,8 +29,7 @@ it without a simulated reach override:
 
 ```powershell
 python app/localized_baseline_sim.py dataset/dobot-generation-1.json `
-  --drawing-config config/drawing.example.json `
-  --control-config config/drawing-control.example.json `
+  --site-config config/drawing.example.json `
   --motion-gain 0.96 `
   --stop-overshoot-mm 1.5 `
   --localization-errors-mm 0.4 `

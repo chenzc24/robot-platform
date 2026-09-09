@@ -21,8 +21,7 @@ from drawing import (
     RelocationAdmission,
     build_drawing_plan,
     execute_localized_drawing,
-    load_drawing_config,
-    load_drawing_control_config,
+    load_drawing_site_config,
     load_drawing_job,
 )
 from localization import create_localization_state_machine
@@ -35,16 +34,10 @@ from vision.worker import create_vision_worker
 def parser():
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument("drawing_path", type=Path)
-    result.add_argument("--drawing-config", type=Path, default=ROOT / "config" / "drawing.local.json")
-    result.add_argument("--control-config", type=Path, default=ROOT / "config" / "drawing-control.local.json")
+    result.add_argument("--site-config", type=Path, default=ROOT / "config" / "drawing.local.json")
     result.add_argument("--runtime-config", type=Path, default=ROOT / "config" / "console.local.json")
     result.add_argument("--execute", action="store_true")
-    result.add_argument("--confirm-job-sha256")
-    result.add_argument("--confirm-operator-present", action="store_true")
-    result.add_argument("--confirm-emergency-stop-ready", action="store_true")
-    result.add_argument("--confirm-area-clear", action="store_true")
-    result.add_argument("--confirm-arm-profile-reviewed", action="store_true")
-    result.add_argument("--confirm-chassis-profile-reviewed", action="store_true")
+    result.add_argument("--attended", action="store_true")
     result.add_argument("--log", type=Path)
     return result
 
@@ -60,8 +53,18 @@ class EventLog:
         line = json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n"
         with self._lock:
             self.stream.write(line)
-            self.stream.flush()
-            os.fsync(self.stream.fileno())
+            name = str(event.get("event") or event.get("state") or "")
+            if (
+                name in {
+                    "execution_requested", "execution_done", "execution_failed",
+                    "execution_stopped", "baseline_done",
+                    "localized_baseline_done", "advanced_done",
+                }
+                or name.endswith("_window_done")
+                or name.endswith("_relocation_done")
+            ):
+                self.stream.flush()
+                os.fsync(self.stream.fileno())
 
     def close(self):
         self.stream.close()
@@ -173,8 +176,7 @@ def _wait_for_initial_lock(localization, chassis, timeout_ms, poll_ms, emit):
 def _summary(job, drawing_config, control_config, first_plan):
     return {
         "mode": control_config.selected_mode,
-        "drawing_production_ready": drawing_config.production_ready,
-        "control_production_ready": control_config.production_ready,
+        "production_ready": drawing_config.production_ready,
         "job_sha256": job.canonical_sha256,
         "drawing_config_sha256": drawing_config.canonical_sha256,
         "groups": len(job.groups),
@@ -194,8 +196,9 @@ def main(argv=None):
     chassis_enabled = False
     try:
         args = parser().parse_args(argv)
-        drawing_config = load_drawing_config(args.drawing_config)
-        control_config = load_drawing_control_config(args.control_config)
+        site = load_drawing_site_config(args.site_config)
+        drawing_config = site.drawing
+        control_config = site.control
         if control_config.selected_mode != "localized_baseline":
             raise DrawingError("localized_baseline_mode_required")
         job = load_drawing_job(
@@ -207,30 +210,24 @@ def main(argv=None):
             print(json.dumps({**summary, "execute": False}, ensure_ascii=False, indent=2, sort_keys=True))
             print("DRY_RUN no device connection or motion")
             return 0
-        if args.confirm_job_sha256 != job.canonical_sha256:
-            raise DrawingError("job_hash_confirmation_required")
-        if args.log is None:
-            raise DrawingError("execution_log_required")
-        execution_admission = DrawingExecutionAdmission(
-            args.confirm_operator_present,
-            args.confirm_emergency_stop_ready,
-            args.confirm_area_clear,
-            args.confirm_arm_profile_reviewed,
-        )
+        execution_admission = DrawingExecutionAdmission(args.attended)
         execution_admission.require()
-        if not args.confirm_chassis_profile_reviewed:
-            raise DrawingError("chassis_profile_confirmation_required")
-        if not drawing_config.production_ready:
-            raise DrawingError("drawing_not_production_ready")
-        if not control_config.production_ready:
-            raise DrawingError("drawing_control_not_production_ready")
+        if not site.production_ready:
+            raise DrawingError("drawing_site_not_production_ready")
         runtime_config = load_runtime_config(args.runtime_config)
+        if site is not None:
+            runtime_config = site.apply_runtime(runtime_config)
         if not runtime_config.vision.complete or not runtime_config.localization.complete:
             raise DrawingError("localized_runtime_configuration_incomplete")
         if runtime_config.localization.json_mm_per_rail_mm != control_config.json_mm_per_rail_mm:
             raise DrawingError("localized_baseline_localization_scale_mismatch")
 
-        log = EventLog(args.log)
+        log_path = args.log or ROOT / "logs" / "drawing" / (
+            "%s-localized_baseline-%s.jsonl" % (
+                time.strftime("%Y%m%d-%H%M%S"), job.canonical_sha256[:8]
+            )
+        )
+        log = EventLog(log_path)
         log.emit({"event": "execution_requested", **summary})
         localization = create_localization_state_machine(runtime_config)
         raw_chassis = default_chassis_factory(runtime_config.chassis)
@@ -240,7 +237,6 @@ def main(argv=None):
         if (
             status.service_state != "ready"
             or status.chassis_state != "enabled_stopped"
-            or not status.authenticated
             or not status.motion_permitted
             or status.last_error != "none"
         ):
@@ -262,7 +258,7 @@ def main(argv=None):
         result = execute_localized_drawing(
             ArmWithChassisGuard(arm, chassis), chassis, localization,
             job, drawing_config, control_config, execution_admission,
-            RelocationAdmission(True, True, True, "enabled_stopped"),
+            RelocationAdmission(args.attended, True, "enabled_stopped"),
             "drawing-" + job.canonical_sha256[:16], log.emit,
         )
         log.emit({"event": "execution_done", **result})

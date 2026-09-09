@@ -62,7 +62,7 @@
         {
           "id": "stroke_manual_dbadaeb7_1",
           "order": 2,
-          "points": [[0.9, 0], [0.9, 0]],
+          "points": [[0.9, 0], [0.9, 0.3]],
           "closed": false
         }
       ]

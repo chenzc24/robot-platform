@@ -1960,3 +1960,29 @@ entry format:
   `.vscode/settings.json` user change was not modified or staged. Real-device L4
   acceptance remains separately safety-gated. Commit status was pending at
   log-entry time on `main`.
+
+## 2026-09-09 - Queue continuous drawing strokes at the controller
+
+- Replaced PC-per-point drawing execution with a bounded staged stroke protocol
+  across the PC client, MaixCam gateway and generated RPA2 controller project.
+  A stroke stages 1--8-segment frames up to 128 deltas, then the controller
+  executes anchor, pen-down, continuous CP deltas and pen-up under one terminal
+  lifecycle. Ordinary same-pen strokes now move from the prior lifted endpoint
+  rather than returning Home; pen changes, checkpoint/relocation paths and the
+  final return retain Home barriers.
+- A previously started attended Baseline job was stopped on the operator's
+  request while the PC awaited a relative arm command. The PC interruption did
+  not claim a controller cancel and sent no automatic recovery motion. Local
+  production gates were returned to false before the offline redesign.
+- L1 passed 72 focused tests across controller runtime, MaixCam service, PC
+  client, planner, executor, localized coordinator, protocol, project-builder
+  and app entry points; compilation, a unified real-sample dry run, a
+  439-stroke / 3,903-point 13-window simulation, and
+  `git diff --check` also passed. The simulator completed 442 queued stroke
+  transactions (three cross a window barrier) with 607 PC-side arm calls. No
+  post-change device connection, deployment,
+  service restart or motion occurred.
+- The staged protocol is incompatible with the current deployed arm project.
+  Its whole-stroke timing against the 60-second lifecycle TTL requires a
+  separately confirmed low-speed L3 single-stroke test before any L4 task.
+  Commit status was pending at log-entry time on `main`.

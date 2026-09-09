@@ -174,6 +174,25 @@ def _inside(geometry, home_relative_y):
     )
 
 
+def _stroke_payload(geometry, anchor_translation, segments):
+    """One lifted-to-lifted controller-side stroke transaction."""
+    return {
+        "anchor_translation_mm": list(anchor_translation),
+        "pen_down_translation_mm": list(geometry.pen_down_delta_from_lift_mm),
+        "pen_up_translation_mm": [
+            _clean(-value) for value in geometry.pen_down_delta_from_lift_mm
+        ],
+        "segments_mm": [list(segment) for segment in segments],
+        "user": geometry.user,
+        "tool": geometry.tool,
+        "accel_pct": geometry.accel_pct,
+        "travel_speed_pct": geometry.travel_speed_pct,
+        "draw_speed_pct": geometry.draw_speed_pct,
+        "draw_blend_pct": geometry.draw_blend_pct,
+        "purpose": "queued_stroke",
+    }
+
+
 def _reposition_step(checkpoint, absolute_user_y_values, geometry):
     lowest = min(absolute_user_y_values)
     highest = max(absolute_user_y_values)
@@ -256,18 +275,19 @@ def build_drawing_plan(job, config, json_axis_offset_mm=0.0, checkpoint=None):
     pen_changes = 0
     active_slot = None
     active_group_name = None
+    current_lift_position = None
 
     def add(kind, label, payload):
         nonlocal arm_commands, pen_changes
         steps.append(PlanStep(kind, label, payload))
-        if kind in ("arm.home", "arm.relative"):
+        if kind in ("arm.home", "arm.relative", "arm.stroke"):
             arm_commands += 1
         elif kind == "pen.select":
             pen_changes += 1
 
     def prepare_reposition(prefix):
         """Leave no pen held so checkpoint replanning remains stateless."""
-        nonlocal active_slot, active_group_name
+        nonlocal active_slot, active_group_name, current_lift_position
         if active_slot is not None:
             add(
                 "arm.home",
@@ -297,6 +317,7 @@ def build_drawing_plan(job, config, json_axis_offset_mm=0.0, checkpoint=None):
                 "purpose": "reposition_safe_pose",
             },
         )
+        current_lift_position = None
 
     for group_index in range(start.group_index, len(job.groups)):
         group = job.groups[group_index]
@@ -349,6 +370,7 @@ def build_drawing_plan(job, config, json_axis_offset_mm=0.0, checkpoint=None):
                     )
                     active_slot = slot
                     active_group_name = group.name
+                    current_lift_position = None
                 elif active_slot.name != slot.name:
                     add(
                         "pen.return",
@@ -367,41 +389,30 @@ def build_drawing_plan(job, config, json_axis_offset_mm=0.0, checkpoint=None):
                     )
                     active_slot = slot
                     active_group_name = group.name
+                    current_lift_position = None
                 else:
                     active_group_name = group.name
                 pen_selected = True
             prefix = "%s/%s" % (group.name, stroke.id)
-            add(
-                "arm.home",
-                "%s: home" % prefix,
-                {
-                    **_joint_payload(geometry, geometry.home_joints_deg),
-                    "purpose": "stroke_start",
-                },
-            )
-            add("sleep", "%s: home pause" % prefix, {"seconds": 0.2})
-            add(
-                "arm.relative",
-                "%s: anchor point %d" % (prefix, anchor_index),
-                _move_payload(
-                    geometry,
-                    anchor,
-                    geometry.travel_speed_pct,
-                    "stroke_anchor",
-                ),
-            )
-            add(
-                "arm.relative",
-                "%s: pen down" % prefix,
-                _move_payload(
-                    geometry,
-                    geometry.pen_down_delta_from_lift_mm,
-                    geometry.travel_speed_pct,
-                    "pen_down",
-                ),
-            )
-            planned_points += 1
+            if current_lift_position is None:
+                add(
+                    "arm.home",
+                    "%s: Home reference" % prefix,
+                    {
+                        **_joint_payload(geometry, geometry.home_joints_deg),
+                        "purpose": "stroke_reference_home",
+                    },
+                )
+                anchor_translation = anchor
+            else:
+                anchor_translation = tuple(
+                    _clean(anchor[index] - current_lift_position[index])
+                    for index in range(3)
+                )
+            segments = []
             previous = anchor
+            planned_points += 1
+            blocked = None
             for point_index in range(anchor_index + 1, len(stroke.points)):
                 if point_index < resume_index:
                     continue
@@ -409,70 +420,77 @@ def build_drawing_plan(job, config, json_axis_offset_mm=0.0, checkpoint=None):
                     job, geometry, stroke.points[point_index], json_axis_offset_mm
                 )
                 if not _inside(geometry, point[1]):
-                    add(
-                        "arm.relative",
-                        "%s: pen up for reposition" % prefix,
-                        _move_payload(
-                            geometry,
-                            tuple(-value for value in geometry.pen_down_delta_from_lift_mm),
-                            geometry.travel_speed_pct,
-                            "pen_up",
-                        ),
-                    )
-                    prepare_reposition(prefix)
                     blocked = PlanCheckpoint(group_index, stroke_index, point_index)
-                    steps.append(
-                        _reposition_step(
-                            blocked,
-                            (previous[1], point[1]),
-                            geometry,
-                        )
+                    blocked_point = point
+                    break
+                segments.append(
+                    tuple(
+                        _clean(point[index] - previous[index])
+                        for index in range(3)
                     )
-                    return DrawingPlan(
-                        job.canonical_sha256,
-                        config.canonical_sha256,
-                        json_axis_offset_mm,
-                        tuple(steps),
-                        False,
-                        blocked,
-                        {
-                            "planned_groups": group_index - start.group_index,
-                            "planned_strokes": planned_strokes,
-                            "planned_points": planned_points,
-                            "arm_commands": arm_commands,
-                            "pen_changes": pen_changes,
-                            "barriers": 1,
-                            "job_bounds": job_bounds,
-                        },
-                    )
-                add(
-                    "arm.relative",
-                    "%s: point %d" % (prefix, point_index),
-                    _move_payload(
-                        geometry,
-                        (
-                            _clean(point[0] - previous[0]),
-                            _clean(point[1] - previous[1]),
-                            _clean(point[2] - previous[2]),
-                        ),
-                        geometry.draw_speed_pct,
-                        "draw_segment",
-                        geometry.draw_blend_pct,
-                    ),
                 )
                 planned_points += 1
                 previous = point
+            if not segments:
+                if blocked is None:
+                    raise DrawingError("stroke_has_no_draw_segments")
+                prepare_reposition(prefix)
+                steps.append(
+                    _reposition_step(
+                        blocked,
+                        (anchor[1], blocked_point[1]),
+                        geometry,
+                    )
+                )
+                return DrawingPlan(
+                    job.canonical_sha256,
+                    config.canonical_sha256,
+                    json_axis_offset_mm,
+                    tuple(steps),
+                    False,
+                    blocked,
+                    {
+                        "planned_groups": group_index - start.group_index,
+                        "planned_strokes": planned_strokes,
+                        "planned_points": planned_points,
+                        "arm_commands": arm_commands,
+                        "pen_changes": pen_changes,
+                        "barriers": 1,
+                        "job_bounds": job_bounds,
+                    },
+                )
             add(
-                "arm.relative",
-                "%s: pen up" % prefix,
-                _move_payload(
-                    geometry,
-                tuple(-value for value in geometry.pen_down_delta_from_lift_mm),
-                    geometry.travel_speed_pct,
-                    "pen_up",
-                ),
+                "arm.stroke",
+                "%s: queued points %d-%d" % (prefix, anchor_index, anchor_index + len(segments)),
+                _stroke_payload(geometry, anchor_translation, segments),
             )
-            add("sleep", "%s: end pause" % prefix, {"seconds": 0.3})
+            current_lift_position = previous
+            if blocked is not None:
+                prepare_reposition(prefix)
+                steps.append(
+                    _reposition_step(
+                        blocked,
+                        (previous[1], blocked_point[1]),
+                        geometry,
+                    )
+                )
+                return DrawingPlan(
+                    job.canonical_sha256,
+                    config.canonical_sha256,
+                    json_axis_offset_mm,
+                    tuple(steps),
+                    False,
+                    blocked,
+                    {
+                        "planned_groups": group_index - start.group_index,
+                        "planned_strokes": planned_strokes,
+                        "planned_points": planned_points,
+                        "arm_commands": arm_commands,
+                        "pen_changes": pen_changes,
+                        "barriers": 1,
+                        "job_bounds": job_bounds,
+                    },
+                )
             planned_strokes += 1
     if active_slot is not None:
         add(

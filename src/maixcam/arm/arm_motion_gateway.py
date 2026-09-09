@@ -132,6 +132,55 @@ def arm_payload(name, payload):
         if set(payload) != {"pose", "user", "tool", "accel_pct", "speed_pct"} or not isinstance(payload["pose"], (list, tuple)) or len(payload["pose"]) != 6:
             raise ArmMotionGatewayError("invalid_payload_fields")
         return "MOVEL", encode_fields((("pose", ",".join(str(item) for item in payload["pose"])), ("user", payload["user"]), ("tool", payload["tool"]), ("accel_pct", payload["accel_pct"]), ("speed_pct", payload["speed_pct"]), ("blend_mm", 0)))
+    if name == "arm.stroke_begin":
+        required = {
+            "anchor_translation_mm", "pen_down_translation_mm",
+            "pen_up_translation_mm", "user", "tool", "accel_pct",
+            "travel_speed_pct", "draw_speed_pct", "draw_blend_pct",
+        }
+        if set(payload) != required:
+            raise ArmMotionGatewayError("invalid_payload_fields")
+        vectors = (
+            "anchor_translation_mm", "pen_down_translation_mm",
+            "pen_up_translation_mm",
+        )
+        if any(
+            not isinstance(payload[name], (list, tuple))
+            or len(payload[name]) != 3
+            for name in vectors
+        ):
+            raise ArmMotionGatewayError("invalid_payload_fields")
+        if type(payload["draw_blend_pct"]) is not int or not 0 <= payload["draw_blend_pct"] <= 100:
+            raise ArmMotionGatewayError("invalid_blend")
+        return "STROKE_BEGIN", encode_fields((
+            ("anchor_translation_mm", ",".join(str(item) for item in payload["anchor_translation_mm"])),
+            ("pen_down_translation_mm", ",".join(str(item) for item in payload["pen_down_translation_mm"])),
+            ("pen_up_translation_mm", ",".join(str(item) for item in payload["pen_up_translation_mm"])),
+            ("user", payload["user"]), ("tool", payload["tool"]),
+            ("accel_pct", payload["accel_pct"]),
+            ("travel_speed_pct", payload["travel_speed_pct"]),
+            ("draw_speed_pct", payload["draw_speed_pct"]),
+            ("draw_blend_pct", payload["draw_blend_pct"]),
+        ))
+    if name == "arm.stroke_append":
+        if set(payload) != {"segments_mm"} or not isinstance(payload["segments_mm"], (list, tuple)):
+            raise ArmMotionGatewayError("invalid_payload_fields")
+        segments = payload["segments_mm"]
+        if not 1 <= len(segments) <= 8 or any(
+            not isinstance(segment, (list, tuple)) or len(segment) != 3
+            for segment in segments
+        ):
+            raise ArmMotionGatewayError("invalid_payload_fields")
+        return "STROKE_APPEND", encode_fields((
+            ("segments_mm", "/".join(
+                ",".join(str(value) for value in segment)
+                for segment in segments
+            )),
+        ))
+    if name == "arm.stroke_execute":
+        if payload:
+            raise ArmMotionGatewayError("invalid_payload_fields")
+        return "STROKE_EXECUTE", ""
     if name == "arm.gripper":
         if set(payload) != {"width_mm"}: raise ArmMotionGatewayError("invalid_payload_fields")
         return "GRIPPER", encode_fields((("width_mm", payload["width_mm"]),))

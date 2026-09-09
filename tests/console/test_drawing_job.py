@@ -198,25 +198,19 @@ class DrawingPlannerTests(unittest.TestCase):
         self.assertTrue(plan.complete)
         self.assertEqual(plan.statistics["planned_strokes"], 2)
         self.assertEqual(plan.statistics["planned_points"], 5)
-        self.assertEqual(plan.statistics["arm_commands"], 11)
+        self.assertEqual(plan.statistics["arm_commands"], 4)
         self.assertEqual(plan.statistics["pen_changes"], 2)
         self.assertEqual(plan.statistics["job_bounds"]["relative_user_y_mm"], [-50.0, 50.0])
         self.assertEqual(plan.statistics["job_bounds"]["relative_user_z_mm"], [-20.0, 24.0])
-        moves = [step for step in plan.steps if step.kind == "arm.relative"]
-        self.assertEqual(moves[0].payload["translation_mm"], [0.0, -50.0, 20.0])
-        self.assertEqual(moves[1].payload["translation_mm"], [-20.0, 0.0, 0.0])
-        self.assertEqual(moves[2].payload["translation_mm"], [0.0, 50.0, -20.0])
-        self.assertEqual(moves[3].payload["translation_mm"], [0.0, 50.0, -20.0])
-        self.assertEqual(moves[4].payload["translation_mm"], [20.0, 0.0, 0.0])
-        draw_moves = [
-            step for step in moves if step.payload.get("purpose") == "draw_segment"
-        ]
-        self.assertEqual(draw_moves[0].payload["speed_pct"], 12)
-        self.assertEqual(draw_moves[0].payload["blend_pct"], 100)
-        self.assertEqual(draw_moves[0].payload["accel_pct"], 20)
-        self.assertEqual(moves[0].payload["speed_pct"], 50)
-        self.assertEqual(moves[0].payload["accel_pct"], 20)
-        self.assertNotIn("blend_pct", moves[0].payload)
+        strokes = [step for step in plan.steps if step.kind == "arm.stroke"]
+        self.assertEqual(strokes[0].payload["anchor_translation_mm"], [0.0, -50.0, 20.0])
+        self.assertEqual(strokes[0].payload["pen_down_translation_mm"], [-20.0, 0.0, 0.0])
+        self.assertEqual(strokes[0].payload["segments_mm"], [[0.0, 50.0, -20.0], [0.0, 50.0, -20.0]])
+        self.assertEqual(strokes[0].payload["pen_up_translation_mm"], [20.0, 0.0, 0.0])
+        self.assertEqual(strokes[0].payload["draw_speed_pct"], 12)
+        self.assertEqual(strokes[0].payload["draw_blend_pct"], 100)
+        self.assertEqual(strokes[0].payload["accel_pct"], 20)
+        self.assertEqual(strokes[0].payload["travel_speed_pct"], 50)
         pen_steps = [step for step in plan.steps if step.kind.startswith("pen.")]
         self.assertEqual(
             [step.kind for step in pen_steps],
@@ -239,9 +233,9 @@ class DrawingPlannerTests(unittest.TestCase):
 
     def test_json_axis_offset_changes_anchor_not_segment_delta(self):
         plan = build_drawing_plan(self.job, self.config, json_axis_offset_mm=10)
-        moves = [step for step in plan.steps if step.kind == "arm.relative"]
-        self.assertEqual(moves[0].payload["translation_mm"][1], -40.0)
-        self.assertEqual(moves[2].payload["translation_mm"][1], 50.0)
+        stroke_step = next(step for step in plan.steps if step.kind == "arm.stroke")
+        self.assertEqual(stroke_step.payload["anchor_translation_mm"][1], -40.0)
+        self.assertEqual(stroke_step.payload["segments_mm"][0][1], 50.0)
 
     def test_first_point_outside_range_homes_before_reposition_barrier(self):
         config = parse_drawing_config(
@@ -281,11 +275,26 @@ class DrawingPlannerTests(unittest.TestCase):
             json_axis_offset_mm=-10,
             checkpoint=plan.next_checkpoint,
         )
-        first_anchor = next(
-            step for step in resumed.steps if step.payload.get("purpose") == "stroke_anchor"
-        )
-        self.assertIn("anchor point 1", first_anchor.label)
-        self.assertEqual(first_anchor.payload["translation_mm"][1], -10.0)
+        first_stroke = next(step for step in resumed.steps if step.kind == "arm.stroke")
+        self.assertIn("queued points 1", first_stroke.label)
+        self.assertEqual(first_stroke.payload["anchor_translation_mm"][1], -10.0)
+
+    def test_same_pen_strokes_continue_from_lift_position_without_home(self):
+        document = grouped_document()
+        document["groups"] = [{
+            "name": "red",
+            "strokes": [
+                stroke("s1", 1, [[0, 0.25], [0.5, 0.5]]),
+                stroke("s2", 2, [[0.25, 0.5], [0.5, 0.75]]),
+            ],
+        }]
+        job = parse_drawing_document(document)
+        plan = build_drawing_plan(job, self.config)
+        homes = [step for step in plan.steps if step.kind == "arm.home"]
+        strokes = [step for step in plan.steps if step.kind == "arm.stroke"]
+        self.assertEqual(len(homes), 1)
+        self.assertEqual(len(strokes), 2)
+        self.assertEqual(strokes[1].payload["anchor_translation_mm"], [0.0, -25.0, 0.0])
 
     def test_segment_wider_than_range_is_rejected(self):
         document = grouped_document()

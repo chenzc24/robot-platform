@@ -198,6 +198,9 @@ class _SimulationArm:
     def jog_xyz(self, *_args, **_kwargs):
         return self._motion("jog_xyz")
 
+    def draw_stroke(self, *_args, **_kwargs):
+        return self._motion("draw_stroke")
+
     def gripper(self, *_args, **_kwargs):
         return self._motion("gripper")
 
@@ -505,8 +508,13 @@ def _result(
             "relocalization_requests": localization.calls.count(
                 "request_relocalization"
             ),
-            "arm_motion_calls": sum(
+            "queued_stroke_calls": arm.calls.count("draw_stroke"),
+            "direct_arm_motion_calls": sum(
                 call in ("move_joint", "jog_xyz", "gripper")
+                for call in arm.calls
+            ),
+            "arm_motion_calls": sum(
+                call in ("move_joint", "jog_xyz", "draw_stroke", "gripper")
                 for call in arm.calls
             ),
         },

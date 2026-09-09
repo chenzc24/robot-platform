@@ -79,6 +79,7 @@ class FakeClient:
     def move_joint(self, *args, **kwargs): return self._motion("move_joint", *args, **kwargs)
     def jog_xyz(self, *args, **kwargs): return self._motion("jog_xyz", *args, **kwargs)
     def gripper(self, *args, **kwargs): return self._motion("gripper", *args, **kwargs)
+    def draw_stroke(self, *args, **kwargs): return self._motion("draw_stroke", *args, **kwargs)
 
 
 class DrawingExecutorTests(unittest.TestCase):
@@ -96,6 +97,26 @@ class DrawingExecutorTests(unittest.TestCase):
             execute_drawing_plan(client, plan(), config(), ADMISSION, sleep_func=lambda _: None)
         self.assertEqual(caught.exception.completed_commands, 1)
         self.assertEqual(len(client.calls), 2)
+
+    def test_queued_stroke_is_one_terminal_execution_step(self):
+        queued = DrawingPlan("job", "config", 0.0, (
+            PlanStep("arm.stroke", "queued", {
+                "anchor_translation_mm": [0, 1, 2],
+                "pen_down_translation_mm": [-20, 0, 0],
+                "pen_up_translation_mm": [20, 0, 0],
+                "segments_mm": [[0, 2, 0], [0, 3, 0]],
+                "user": 0, "tool": 0, "accel_pct": 20,
+                "travel_speed_pct": 50, "draw_speed_pct": 35,
+                "draw_blend_pct": 100,
+            }),
+        ), True, None, {"barriers": 0})
+        client = FakeClient()
+        result = execute_drawing_plan(
+            client, queued, config(), ADMISSION, sleep_func=lambda _: None
+        )
+        self.assertEqual(result["completed_commands"], 1)
+        self.assertEqual([call[0] for call in client.calls], ["draw_stroke"])
+        self.assertEqual(client.calls[0][2]["draw_speed_pct"], 35)
 
     def test_admission_and_production_ready_are_required_before_preflight(self):
         client = FakeClient()

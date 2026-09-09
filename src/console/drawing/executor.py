@@ -67,7 +67,7 @@ def flatten_plan_window(plan):
 def _flatten_steps(steps):
     flattened = []
     for step in steps:
-        if step.kind in ("arm.home", "arm.relative", "sleep"):
+        if step.kind in ("arm.home", "arm.relative", "arm.stroke", "sleep"):
             kind = "arm.move_joint" if step.kind == "arm.home" else step.kind
             flattened.append((step.label, kind, dict(step.payload)))
             continue
@@ -134,6 +134,18 @@ def _execute_atomic(client, kind, payload, sleep_func):
             accel_pct=payload["accel_pct"],
             speed_pct=payload["speed_pct"],
             blend_pct=payload.get("blend_pct", 0),
+        )
+    if kind == "arm.stroke":
+        return client.draw_stroke(
+            payload["anchor_translation_mm"],
+            payload["pen_down_translation_mm"],
+            payload["pen_up_translation_mm"],
+            payload["segments_mm"],
+            user=payload["user"], tool=payload["tool"],
+            accel_pct=payload["accel_pct"],
+            travel_speed_pct=payload["travel_speed_pct"],
+            draw_speed_pct=payload["draw_speed_pct"],
+            draw_blend_pct=payload["draw_blend_pct"],
         )
     if kind == "arm.gripper":
         return client.gripper(payload["width_mm"])

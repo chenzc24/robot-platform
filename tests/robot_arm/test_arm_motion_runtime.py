@@ -112,6 +112,38 @@ class ArmRuntimeTests(unittest.TestCase):
             ("relative_linear_user", [0.0, -5.0, 0.0, 0, 0, 0], {"user": 0, "tool": 0, "a": 6, "v": 7, "cp": 100}),
         ])
 
+    def test_staged_stroke_executes_inside_controller_with_continuous_draw_cp(self):
+        service, raw = self.service(yolo=True)
+        begin = encode_fields((
+            ("anchor_translation_mm", "0,-10,20"),
+            ("pen_down_translation_mm", "-51,0,0"),
+            ("pen_up_translation_mm", "51,0,0"),
+            ("user", 0), ("tool", 0), ("accel_pct", 20),
+            ("travel_speed_pct", 50), ("draw_speed_pct", 35),
+            ("draw_blend_pct", 100),
+        ))
+        append = encode_fields((("segments_mm", "0,2,0/0,3,0"),))
+        self.assertEqual(
+            decode_frame(service.feed(encode_frame("RPA2", "STROKE_BEGIN", 1, 60000, begin))[0][-1])["type"],
+            "DONE",
+        )
+        service.feed(encode_frame("RPA2", "STROKE_APPEND", 2, 60000, append))
+        replies, _ = service.feed(encode_frame("RPA2", "STROKE_EXECUTE", 3, 60000))
+        self.assertEqual(decode_frame(replies[-1])["type"], "DONE")
+        calls = [call for call in raw.calls if call[0] == "relative_linear_user"]
+        self.assertEqual(len(calls), 5)
+        self.assertEqual(calls[0][1], [0.0, -10.0, 20.0, 0, 0, 0])
+        self.assertEqual(calls[2][2]["cp"], 100)
+        self.assertEqual(calls[3][2]["cp"], 100)
+        self.assertEqual(calls[-1][1], [51.0, 0.0, 0.0, 0, 0, 0])
+
+    def test_stroke_append_requires_a_staged_stroke(self):
+        service, raw = self.service(yolo=True)
+        append = encode_fields((("segments_mm", "0,2,0"),))
+        replies, _ = service.feed(encode_frame("RPA2", "STROKE_APPEND", 1, 60000, append))
+        self.assertIn("error_code=stroke_queue_not_started", decode_frame(replies[-1])["payload"])
+        self.assertEqual(raw.calls, [])
+
     def test_legacy_zero_blend_mm_remains_accepted(self):
         service, raw = self.service(yolo=True)
         request = encode_fields((("translation_mm", "0,-5,0"), ("user", 0), ("tool", 0), ("accel_pct", 6), ("speed_pct", 7), ("blend_mm", 0)))

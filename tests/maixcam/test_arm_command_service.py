@@ -73,6 +73,27 @@ class ArmCommandServiceTests(unittest.TestCase):
         self.assertEqual(result[-1]["payload"]["error_code"], "invalid_blend")
         self.assertEqual(self.writes, [])
 
+    def test_stroke_queue_maps_bounded_stage_and_execute_commands(self):
+        service = ArmCommandService(self.gateway, admission=lambda _message: True)
+        begin = {
+            "anchor_translation_mm": [0, -10, 20],
+            "pen_down_translation_mm": [-51, 0, 0],
+            "pen_up_translation_mm": [51, 0, 0],
+            "user": 0, "tool": 0, "accel_pct": 20,
+            "travel_speed_pct": 50, "draw_speed_pct": 35,
+            "draw_blend_pct": 100,
+        }
+        service.feed_computer(encode_message(command("arm.stroke_begin", begin, sequence=1)))
+        self.assertEqual(decode_frame(self.writes[-1])["type"], "STROKE_BEGIN")
+        service.feed_uart(encode_frame("RPA2", "ACK", 1, 0))
+        service.feed_uart(encode_frame("RPA2", "DONE", 1, 0))
+        service.feed_computer(encode_message(command("arm.stroke_append", {"segments_mm": [[0, 2, 0]]}, sequence=2)))
+        self.assertEqual(decode_frame(self.writes[-1])["type"], "STROKE_APPEND")
+        service.feed_uart(encode_frame("RPA2", "ACK", 2, 0))
+        service.feed_uart(encode_frame("RPA2", "DONE", 2, 0))
+        service.feed_computer(encode_message(command("arm.stroke_execute", {}, sequence=3)))
+        self.assertEqual(decode_frame(self.writes[-1])["type"], "STROKE_EXECUTE")
+
     def test_status_preserves_measured_feedback_payload(self):
         self.service.feed_computer(encode_message(command("arm.status")))
         downstream = "service_state=ready;motion_enabled=1;control_mode=yolo;active_sequence=0;last_error=none;terminal_position_supported=0;cancel_supported=0;feedback_valid=1;feedback_error=none;joint_deg=1,2,3,4,5,6;pose=101,202,303,1.5,2.5,3.5;pose_user=0;pose_tool=0;sample_id=9;sample_time_ms=1234"

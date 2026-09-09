@@ -39,6 +39,15 @@ to `RelMovLUser(..., {"cp": blend_pct})`. The controller accepts the earlier
 `STATUS` now samples `GetAngle()` and `GetPose(0, 0)`. The fixed state payload
 marks the sample valid only when both calls normalize to six finite values; a
 read or shape failure is reported as unavailable without stopping the service.
+
+For drawing throughput, the RPA2 project additionally accepts a bounded staged
+stroke protocol. `STROKE_BEGIN` records travel/draw options and the lifted
+anchor/pen vectors; one or more `STROKE_APPEND` frames add 1–8 relative draw
+segments each, up to 128 total; `STROKE_EXECUTE` clears the staging buffer then
+runs anchor, pen down, continuous `RelMovLUser(..., {"cp": 100})` segments and
+pen up inside the controller process. Staging itself has no motion side effect.
+This is a new controller-project protocol and is not compatible with the
+previous deployed project until it is rebuilt, imported and separately tested.
 Live normalized joint/pose feedback passed the
 [2026-09-03 L2 check](../../../docs/deployment/2026-09-03-esp32-maixcam.md), and
 the later [attended drawing](../../../plan/2026-09-03-pc-json-drawing-l3/plan.md)

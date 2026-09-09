@@ -21,6 +21,13 @@ runner, in ignored local directory `build/drawing-d2469eb`. The package record
 remains the immutable preparation baseline; deployment evidence is recorded
 separately below.
 
+The repository may contain newer drawing-runtime changes after that frozen
+package. In particular, the staged-stroke RPA2 protocol requires a matched
+controller project, MaixCam gateway and PC client; it is not present on a
+device merely because the computer workspace has been updated. Treat it as an
+incompatible stopped-task release and follow the cross-device release order
+below before any hardware test.
+
 The [2026-09-09 device record](2026-09-09-maixcam-esp32-d2469eb.md) records
 publication of the current package's MaixCam and ESP32 payloads, preserved local
 configuration, stopped status and recovery backups. The controller-project

@@ -97,14 +97,20 @@ vectors with taught Home-relative values. The JSON axis offset is supplied per
 localization generation; it changes each stroke's anchor but cancels from
 within-stroke deltas.
 
-The shared motion profile follows the local drawing configuration. Stroke
-segments carry its `draw_speed_pct` and `blend_pct=100`; Home, anchor,
-pen-down/up and rack movements carry
-`speed_pct=50`, and every arm motion carries `accel_pct=20`. Baseline,
-Localized Baseline and Advanced consume this same plan; only their chassis
-relocation strategy differs. The upgraded primitive route carries
-`blend_pct=100` through MaixCam
-and RPA2 to the controller's `RelMovLUser` `cp` option.
+The shared motion profile follows the local drawing configuration. A normal
+stroke is now one staged controller transaction: its anchor and pen-down/up
+use `travel_speed_pct=50`, its draw deltas use `draw_speed_pct` and
+`blend_pct=100`, and every part uses `accel_pct=20`. The PC uploads no more
+than eight deltas per RPA2 frame and the controller accepts at most 128 deltas
+for one stroke, then runs the complete sequence through `RelMovLUser` in its
+own process. This avoids a PC/MaixCam terminal wait between every draw point.
+
+Home establishes the first stroke's reference after a pen select, a checkpoint
+resume, or a chassis relocation. Once a stroke has lifted its pen, the next
+ordinary stroke with the same selected pen anchors relative to that lifted
+endpoint; it does not return Home. Pen-rack changes, relocations and the final
+return still finish at Home. Baseline, Localized Baseline and Advanced consume
+this same plan; only their chassis relocation strategy differs.
 
 ## Preview
 

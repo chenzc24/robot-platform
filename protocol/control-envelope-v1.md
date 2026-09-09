@@ -13,9 +13,18 @@ RECEIVED → REJECTED
 `UNKNOWN` means that an arm-affecting result cannot be established. It is never retried automatically. A TCP write, UART write, or TCP232 write is not `DONE`.
 
 The command names are `arm.ping`, `arm.status`, `arm.jog_joint`, `arm.jog_xyz`,
-`arm.move_joint`, `arm.move_linear`, and `arm.gripper`. The endpoint validates
+`arm.move_joint`, `arm.move_linear`, `arm.gripper`, `arm.stroke_begin`,
+`arm.stroke_append`, and `arm.stroke_execute`. The endpoint validates
 exact payload fields, target/name consistency, one-in-flight transport ordering,
 and remaining TTL before it creates an RPA2 request.
+
+`arm.stroke_begin` and `arm.stroke_append` only stage a bounded controller-side
+stroke; they do not move the arm. One append carries 1–8 relative draw segments
+and one staged stroke holds at most 128. `arm.stroke_execute` is the only
+motion-producing stroke request: it performs the staged anchor, pen-down,
+continuous CP draw segments and pen-up as one controller-side transaction.
+The client must stop on any non-`DONE` result and must not retry an uncertain
+execution.
 
 Site policy is not carried in commands. The committed templates remain
 default-deny. A device-local `YOLO_MODE=true` deployment enables repeatable

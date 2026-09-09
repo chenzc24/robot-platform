@@ -15,6 +15,12 @@ The engineering project sets `YOLO_MODE=true` and accepts repeatable commands:
   100 and maps directly to the Dobot `cp` motion option. A controller upgraded
   first also accepts the legacy `blend_mm=0` form until MaixCam is upgraded.
 - `MOVEJ`, `MOVEL`, and `GRIPPER` remain available to programmatic clients.
+- `STROKE_BEGIN`, `STROKE_APPEND`, and `STROKE_EXECUTE` stage then execute one
+  lifted-to-lifted drawing stroke. Begin replaces only an unexecuted staged
+  queue; append carries 1–8 draw deltas and the controller accepts at most 128
+  cumulative deltas. Execute clears the staged queue before calling the
+  controller and issues anchor, pen-down, all draw deltas with `cp`, then
+  pen-up in the controller process. A non-`DONE` execution is never retried.
 
 Acceleration and speed are integer percentages from 1 through 100. Relative
 linear blending is the integer percentage described above; other primitive

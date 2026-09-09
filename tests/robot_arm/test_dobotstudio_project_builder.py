@@ -51,6 +51,8 @@ class DobotStudioProjectBuilderTests(unittest.TestCase):
             main = (output / "main.py").read_text(encoding="utf-8")
             self.assertIn("RelJointMovJ", main)
             self.assertIn("RelMovLUser", main)
+            self.assertIn("STROKE_BEGIN", main)
+            self.assertIn("STROKE_EXECUTE", main)
 
 
 if __name__ == "__main__":

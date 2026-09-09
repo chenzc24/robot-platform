@@ -128,3 +128,22 @@ class MaixCamArmClientTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid_gripper_width"):
             MaixCamArmClient(connection).gripper(60.5)
         self.assertEqual(connection.requests, [])
+
+    def test_draw_stroke_stages_bounded_chunks_before_one_execute(self):
+        client = MaixCamArmClient(object())
+        calls = []
+        client.command = lambda name, payload=None, ttl_ms=5000: calls.append((name, payload, ttl_ms)) or [{"lifecycle": "DONE"}]
+        segments = [[0, 1, 0]] * 17
+        client.draw_stroke([0, -10, 20], [-51, 0, 0], [51, 0, 0], segments,
+                           accel_pct=20, travel_speed_pct=50, draw_speed_pct=35)
+        self.assertEqual([call[0] for call in calls], [
+            "arm.stroke_begin", "arm.stroke_append", "arm.stroke_append",
+            "arm.stroke_append", "arm.stroke_execute",
+        ])
+        self.assertEqual([len(call[1]["segments_mm"]) for call in calls[1:4]], [8, 8, 1])
+        self.assertEqual(calls[-1][2], 60000)
+
+    def test_draw_stroke_rejects_more_than_controller_queue_capacity(self):
+        client = MaixCamArmClient(object())
+        with self.assertRaisesRegex(ValueError, "invalid_stroke_segments"):
+            client.draw_stroke([0, 0, 0], [-1, 0, 0], [1, 0, 0], [[0, 1, 0]] * 129)

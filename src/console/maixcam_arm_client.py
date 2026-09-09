@@ -2,12 +2,15 @@
 
 import socket
 import time
+import math
 
 from control_envelope import EnvelopeStreamDecoder, encode_message
 
 
 QUERY_TTL_MS = 5000
 RESPONSE_MARGIN_SECONDS = 1.0
+STROKE_APPEND_SEGMENT_LIMIT = 8
+STROKE_SEGMENT_LIMIT = 128
 
 
 class MaixCamArmClientError(RuntimeError):
@@ -60,7 +63,10 @@ class MaixCamArmClient:
         message_id = "%s-%d" % (self.session_id, sequence)
         command = {"version": 1, "kind": "command", "message_id": message_id, "sequence": sequence,
                    "target": "arm", "name": name, "ttl_ms": ttl_ms, "payload": payload or {}}
-        state_changing = name in ("arm.move_joint", "arm.move_linear", "arm.jog_joint", "arm.jog_xyz", "arm.gripper")
+        state_changing = name in (
+            "arm.move_joint", "arm.move_linear", "arm.jog_joint", "arm.jog_xyz",
+            "arm.gripper", "arm.stroke_execute",
+        )
         get_timeout = getattr(self.connection, "gettimeout", None)
         set_timeout = getattr(self.connection, "settimeout", None)
         restore_timeout = callable(get_timeout) and callable(set_timeout)
@@ -110,6 +116,42 @@ class MaixCamArmClient:
         ):
             raise ValueError("invalid_gripper_width")
         return self.command("arm.gripper", {"width_mm": int(width_mm)}, ttl_ms)
+
+    @staticmethod
+    def _stroke_vector(value, name):
+        if not isinstance(value, (list, tuple)) or len(value) != 3:
+            raise ValueError("invalid_%s" % name)
+        result = []
+        for item in value:
+            if isinstance(item, bool) or not isinstance(item, (int, float)) or not math.isfinite(item):
+                raise ValueError("invalid_%s" % name)
+            result.append(float(item))
+        return result
+
+    def draw_stroke(
+        self, anchor_translation_mm, pen_down_translation_mm,
+        pen_up_translation_mm, segments_mm, user=0, tool=0, accel_pct=5,
+        travel_speed_pct=5, draw_speed_pct=5, draw_blend_pct=100,
+        ttl_ms=60000,
+    ):
+        """Stage one bounded stroke, then execute it as one controller action."""
+        if not isinstance(segments_mm, (list, tuple)) or not 1 <= len(segments_mm) <= STROKE_SEGMENT_LIMIT:
+            raise ValueError("invalid_stroke_segments")
+        segments = [self._stroke_vector(value, "stroke_segment") for value in segments_mm]
+        self.command("arm.stroke_begin", {
+            "anchor_translation_mm": self._stroke_vector(anchor_translation_mm, "stroke_anchor"),
+            "pen_down_translation_mm": self._stroke_vector(pen_down_translation_mm, "pen_down"),
+            "pen_up_translation_mm": self._stroke_vector(pen_up_translation_mm, "pen_up"),
+            "user": user, "tool": tool, "accel_pct": accel_pct,
+            "travel_speed_pct": travel_speed_pct,
+            "draw_speed_pct": draw_speed_pct,
+            "draw_blend_pct": draw_blend_pct,
+        }, ttl_ms)
+        for index in range(0, len(segments), STROKE_APPEND_SEGMENT_LIMIT):
+            self.command("arm.stroke_append", {
+                "segments_mm": segments[index:index + STROKE_APPEND_SEGMENT_LIMIT],
+            }, ttl_ms)
+        return self.command("arm.stroke_execute", {}, ttl_ms)
 
 
 def open_connection(host, port, timeout_seconds=3):

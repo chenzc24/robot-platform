@@ -71,6 +71,9 @@ class Arm:
     def jog_xyz(self, *args, **kwargs):
         return self._move("jog_xyz", *args, **kwargs)
 
+    def draw_stroke(self, *args, **kwargs):
+        return self._move("draw_stroke", *args, **kwargs)
+
     def gripper(self, *args, **kwargs):
         return self._move("gripper", *args, **kwargs)
 

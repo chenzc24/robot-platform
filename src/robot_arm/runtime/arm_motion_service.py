@@ -9,6 +9,7 @@ from motion_link import FrameStreamDecoder, MotionLinkError, decode_fields, enco
 MARKER = "RPA2"
 PHYSICAL_JOINT_MIN = (-360.0, -135.0, -154.0, -160.0, -173.0, -360.0)
 PHYSICAL_JOINT_MAX = (360.0, 135.0, 154.0, 160.0, 173.0, 360.0)
+MAX_STROKE_SEGMENTS = 128
 
 
 def _clock_ms():
@@ -36,6 +37,15 @@ def _vector(value, length, code):
     if len(values) != length:
         raise ValueError(code)
     return tuple(_number(item, code) for item in values)
+
+
+def _segments(value, code):
+    if not isinstance(value, str) or not value:
+        raise ValueError(code)
+    values = value.split("/")
+    if not 1 <= len(values) <= 8:
+        raise ValueError(code)
+    return tuple(_vector(item, 3, code) for item in values)
 
 
 def _feedback_vector(value, container_name, component_names, code):
@@ -195,6 +205,32 @@ class DobotControllerApi:
         options = {"user": user, "tool": tool, "a": accel, "v": speed, "cp": blend}
         self.rel_movl_user(list(translation_mm) + [0, 0, 0], options)
 
+    def draw_stroke(self, stroke):
+        """Issue a complete lifted-to-lifted stroke inside the controller.
+
+        The controller sees consecutive CP draw calls without a computer, UART,
+        or RPA2 completion wait between them. The caller has already validated
+        every vector and policy option before this method is entered.
+        """
+        self.jog_xyz(
+            stroke["anchor_translation_mm"], stroke["user"], stroke["tool"],
+            stroke["accel_pct"], stroke["travel_speed_pct"], 0,
+        )
+        self.jog_xyz(
+            stroke["pen_down_translation_mm"], stroke["user"], stroke["tool"],
+            stroke["accel_pct"], stroke["travel_speed_pct"], 0,
+        )
+        for segment in stroke["segments_mm"]:
+            self.jog_xyz(
+                segment, stroke["user"], stroke["tool"],
+                stroke["accel_pct"], stroke["draw_speed_pct"],
+                stroke["draw_blend_pct"],
+            )
+        self.jog_xyz(
+            stroke["pen_up_translation_mm"], stroke["user"], stroke["tool"],
+            stroke["accel_pct"], stroke["travel_speed_pct"], 0,
+        )
+
     def read_feedback(self, user=0, tool=0):
         joints = _feedback_vector(
             self.get_angle(), "joint", ("j1", "j2", "j3", "j4", "j5", "j6"),
@@ -217,6 +253,7 @@ class ArmMotionService:
         self.last_sequence, self.last_fingerprint, self.last_responses = 0, None, None
         self.service_state, self.error_code, self.active_sequence = "ready", None, None
         self.feedback_sample_id = 0
+        self.stroke_queue = None
 
     def _response(self, request, kind, payload=""):
         return encode_frame(MARKER, kind, request["sequence"], 0, payload)
@@ -313,6 +350,48 @@ class ArmMotionService:
                 speed = _integer(values["speed_pct"], 1, 100, "invalid_speed")
                 self.policy.relative(accel, speed)
                 return self._run(request, lambda: self.api.jog_xyz(translation, user, tool, accel, speed, blend), "primitive=jog_xyz;blend_pct=%d;terminal_position=unknown" % blend)
+            if kind == "STROKE_BEGIN":
+                values = decode_fields(request["payload"], (
+                    "anchor_translation_mm", "pen_down_translation_mm",
+                    "pen_up_translation_mm", "user", "tool", "accel_pct",
+                    "travel_speed_pct", "draw_speed_pct", "draw_blend_pct",
+                ))
+                stroke = {
+                    "anchor_translation_mm": _vector(values["anchor_translation_mm"], 3, "invalid_stroke_vector"),
+                    "pen_down_translation_mm": _vector(values["pen_down_translation_mm"], 3, "invalid_stroke_vector"),
+                    "pen_up_translation_mm": _vector(values["pen_up_translation_mm"], 3, "invalid_stroke_vector"),
+                    "user": _integer(values["user"], 0, 9, "invalid_user"),
+                    "tool": _integer(values["tool"], 0, 9, "invalid_tool"),
+                    "accel_pct": _integer(values["accel_pct"], 1, 100, "invalid_acceleration"),
+                    "travel_speed_pct": _integer(values["travel_speed_pct"], 1, 100, "invalid_speed"),
+                    "draw_speed_pct": _integer(values["draw_speed_pct"], 1, 100, "invalid_speed"),
+                    "draw_blend_pct": _integer(values["draw_blend_pct"], 0, 100, "invalid_blend"),
+                    "segments_mm": [],
+                }
+                self.policy.relative(stroke["accel_pct"], stroke["travel_speed_pct"])
+                self.policy.relative(stroke["accel_pct"], stroke["draw_speed_pct"])
+                # Replacing an unexecuted queue is safe: it has no controller
+                # side effect and prevents stale segments surviving a restart.
+                self.stroke_queue = stroke
+                return self._run(request, lambda: None, "stroke_queue=ready")
+            if kind == "STROKE_APPEND":
+                values = decode_fields(request["payload"], ("segments_mm",))
+                if self.stroke_queue is None:
+                    raise ValueError("stroke_queue_not_started")
+                segments = _segments(values["segments_mm"], "invalid_stroke_segments")
+                if len(self.stroke_queue["segments_mm"]) + len(segments) > MAX_STROKE_SEGMENTS:
+                    raise ValueError("stroke_queue_full")
+                self.stroke_queue["segments_mm"].extend(segments)
+                return self._run(request, lambda: None, "stroke_segments=%d" % len(self.stroke_queue["segments_mm"]))
+            if kind == "STROKE_EXECUTE":
+                decode_fields(request["payload"], ())
+                if self.stroke_queue is None or not self.stroke_queue["segments_mm"]:
+                    raise ValueError("stroke_queue_empty")
+                stroke, self.stroke_queue = self.stroke_queue, None
+                return self._run(
+                    request, lambda: self.api.draw_stroke(stroke),
+                    "primitive=draw_stroke;segments=%d;terminal_position=unknown" % len(stroke["segments_mm"]),
+                )
             if kind == "GRIPPER":
                 values = decode_fields(request["payload"], ("width_mm",))
                 width = _integer(values["width_mm"], 0, 70, "invalid_gripper")

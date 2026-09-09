@@ -1,0 +1,49 @@
+{
+  "version": "1.0",
+  "coordinate_space": "normalized",
+  "axis": {
+    "origin": "top-left",
+    "x_positive": "right",
+    "y_positive": "down"
+  },
+  "canvas": {
+    "width": 1,
+    "height": 1,
+    "source_width": 700,
+    "source_height": 200,
+    "source_aspect_ratio": 3.5,
+    "target_width_mm": 700,
+    "target_height_mm": 200
+  },
+  "groups": [
+    {
+      "name": "黄色",
+      "strokes": [
+        {
+          "id": "rectangle_left",
+          "order": 1,
+          "points": [
+            [0.45, 0.15],
+            [0.65, 0.15],
+            [0.65, 0.35],
+            [0.45, 0.35],
+            [0.45, 0.15]
+          ],
+          "closed": true
+        },
+        {
+          "id": "rectangle_right",
+          "order": 2,
+          "points": [
+            [0.75, 0.15],
+            [0.95, 0.15],
+            [0.95, 0.35],
+            [0.75, 0.35],
+            [0.75, 0.15]
+          ],
+          "closed": true
+        }
+      ]
+    }
+  ]
+}

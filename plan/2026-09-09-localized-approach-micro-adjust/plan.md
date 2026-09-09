@@ -111,3 +111,8 @@ for the Drawing tab to remain a valid execution route.
 ```text
 feat(drawing): approach localized windows with micro-adjustment
 ```
+
+## Submission
+
+- Implementation commit `02c1f5a` was pushed to `origin/main`. The unrelated
+  user settings file and active MaixCam deployment work remain unstaged.

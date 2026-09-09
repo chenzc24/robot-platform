@@ -14,7 +14,7 @@ from unittest import mock
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src" / "console"))
 
-from tests.console.test_web_console import FakeArm, FakeChassis, config
+from test_web_console import FakeArm, FakeChassis, config
 from runtime_config import LocalizationConfig, VisionConfig
 from web_console.drawing_tasks import DrawingTaskError, DrawingTaskManager
 from web_console.runtime import WebConsoleError, WebConsoleRuntime

@@ -6,6 +6,9 @@
 # Temporary document extraction and inspection output
 /tmp/
 
+# Optional local task notes (not repository state)
+/plan/
+
 # Local drawing point datasets
 /dataset/
 

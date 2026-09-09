@@ -5,10 +5,9 @@
 - Excludes: normal task commands and runtime behavior; see [Runtime Baseline](../runtime/README.md)
 
 The [dated deployment record](2026-09-03-esp32-maixcam.md) and its file manifest
-record publication, readback and feedback evidence. Later
-[attended drawing acceptance](../../plan/2026-09-03-pc-json-drawing-l3/plan.md)
-is separate from deployment. Git consolidation does not upload files, restart
-services or replace the operator's controller project.
+record publication, readback and feedback evidence. Later attended drawing
+acceptance is separate from deployment. Git consolidation does not upload
+files, restart services or replace the operator's controller project.
 
 The older [2026-09-08 Baseline candidate](2026-09-08-baseline-candidate.md)
 freezes commit `301320c` and its generated arm-project hashes. It is retained as

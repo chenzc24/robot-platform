@@ -4,10 +4,10 @@
 - Scope: normal operation of the computer, MaixCam, ESP32-S3, TCP232, and Magician 6 robot arm
 - Excludes: source deployment, firmware recovery, teaching, and device parameter configuration; see [Deployment and Maintenance](../deployment/README.md)
 
-Evidence: [dated deployment and feedback](../deployment/2026-09-03-esp32-maixcam.md),
-[console behavior](../console/control-console-ui.md), and
-[attended drawing](../../plan/2026-09-03-pc-json-drawing-l3/plan.md). These records
-describe observation-time results, not the current power or connection state.
+Evidence: [dated deployment and feedback](../deployment/2026-09-03-esp32-maixcam.md)
+and [console behavior](../console/control-console-ui.md). A subsequent attended
+four-stroke drawing validation is historical observation-time evidence, not the
+current power or connection state.
 
 ## 1. Runtime Topology
 

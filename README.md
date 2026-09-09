@@ -30,8 +30,8 @@ Subsystem and operating documentation:
 
 As of 2026-09-03, the [dated deployment record](docs/deployment/2026-09-03-esp32-maixcam.md)
 records the ESP32 v3 service, MaixCam arm/video activation and measured arm
-feedback. The [attended drawing test](plan/2026-09-03-pc-json-drawing-l3/plan.md)
-completed four strokes, with operator confirmation of drawing completeness.
+feedback. A subsequent attended drawing test completed four strokes, with
+operator confirmation of drawing completeness.
 These are bounded L2/L3 results, not coordinated L4, metrology, cold-start or
 automatic recovery acceptance. A Git update does not deploy or start hardware.
 
@@ -51,24 +51,20 @@ Launch the unified console from the repository root:
 ```
 
 It opens `http://127.0.0.1:8080/`, starts with both device sessions disconnected,
-and reads only the ignored `config/console.local.json` plus environment-held
-credentials. The previous PySide6 interface remains a temporary fallback.
+and reads only the ignored `config/console.local.json`. The previous PySide6
+interface remains a temporary fallback.
 
 `connect` currently starts only a missing MaixCam video service or computer-side relay and reports ESP32 WebREPL as a maintenance check. It does not start the new ESP32 runtime service, deploy code, enter the ESP32 REPL, or reset a device. See [the development-session guide](docs/development-session.md) for maintenance commands and protection rules.
 
 ## Development Workflow
 
-The project uses a bounded development loop:
+Keep changes bounded, review the current worktree, validate in proportion to
+risk, and commit only the relevant files. See [the agent and collaborator
+rules](AGENTS.md). Per-task plan files and factual logs are not required.
 
-```text
-Goal plan → bounded implementation → L0-L4 validation → factual log → Git commit
-```
-
-- [Agent and collaborator rules](AGENTS.md)
-- [Goal-planning method and template](plan/README.md)
-- [Factual work log](plan/log.md)
-
-Runtime code, device configuration, shared protocols, and real-device operations require a goal plan first. Real motion of one device is L3; coordinated motion across devices is L4. Both require explicit confirmation from an on-site person who can operate the physical emergency stop.
+Real motion of one device is L3; coordinated motion across devices is L4. Both
+require explicit confirmation from an on-site person who can operate the
+physical emergency stop.
 
 ## Resource Management
 

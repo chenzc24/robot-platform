@@ -1,6 +1,6 @@
 # Publish the staged-stroke MaixCam gateway
 
-- Status: blocked (MaixCam vendor launcher holds UART0 in uninterruptible sleep)
+- Status: complete (MaixCam gateway is active; controller-downstream response remains a separate dependency)
 - Responsible: joint
 - Highest validation level: L2
 
@@ -89,8 +89,23 @@ explicitly safety-gated work.
 
 ## Blocker and recovery
 
-The authorized reboot did not clear the vendor-launcher failure. On-site
-vendor-launcher recovery or diagnosis is required before retry; do not repeat
-the deployment or reboot automatically. Afterwards, verify launcher ownership,
-start only the newest guarded release, then perform PING/STATUS before any
-controller or motion work.
+The first authorized reboot did not clear the vendor-launcher failure. A later
+operator power-cycle followed by stopping the visual application did recover
+the launcher and permit the guarded gateway release. The remaining dependency
+is the separately managed controller service: restore it and validate only
+PING/STATUS before any controller or motion work.
+
+## Power-cycle recovery validation
+
+- The operator power-cycled the MaixCam and then stopped its `num` visual
+  application. The verified vendor launcher again became the sole UART0 owner
+  in a normal running state, and the guarded `69ecd3a-arm-r3` release was
+  launched without the force option.
+- The release now owns UART0 and listens on TCP port 8780. A PC command reached
+  `RECEIVED` and `ACCEPTED` on the MaixCam, proving the PC-to-gateway link.
+- Non-motion `arm.ping` and `arm.status`, each with a two-second TTL, both
+  ended in `FAULT` / `response_timeout` from the downstream controller. This
+  is expected while the separately managed controller service is suspended;
+  it is not a motion attempt. No controller deployment or arm/chassis command
+  was issued. Restore and validate the controller service in its own goal
+  before exercising the new staged-stroke protocol.

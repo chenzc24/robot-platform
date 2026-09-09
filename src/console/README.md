@@ -1,16 +1,5 @@
 # Computer Runtime Source
 
-`chassis_tcp_client.py` and `chassis_tcp_probe.py` implement the first non-motion computer-to-ESP32 runtime proof. They use RCP1/TCP on the configured LAN port and do not use WebREPL.
-
-The current allowlist is only `HELLO`, `PING`, and `STATUS`. No motion command exists, and the client does not retry automatically. Run the probe only while the matching bounded ESP32 probe is active:
-
-```powershell
-python src/console/chassis_tcp_probe.py --host <current-esp32-ip>
-```
-
-The legacy v1 probe remains non-motion. Production motion uses the separate v3
-client described below.
-
 ## Direct Chassis Motion Foundation
 
 `chassis_motion_tcp_client.py` implements the RCP/TCP v3 computer session. It

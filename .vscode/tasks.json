@@ -167,53 +167,6 @@
       "presentation": {"reveal": "always", "panel": "dedicated", "focus": true}
     },
     {
-      "label": "MaixCam Arm: UART owner status",
-      "type": "process",
-      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
-      "args": ["${workspaceFolder}\\tools\\maixcam\\arm_link_l2.py", "status"],
-      "problemMatcher": []
-    },
-    {
-      "label": "MaixCam Arm: Prepare remote directory",
-      "type": "process",
-      "command": "ssh",
-      "args": ["robot-maixcam", "mkdir -p /root/robot-platform/arm"],
-      "hide": true,
-      "problemMatcher": []
-    },
-    {
-      "label": "MaixCam Arm: Upload validation tools",
-      "type": "process",
-      "command": "scp",
-      "args": [
-        "-p",
-        "${workspaceFolder}\\src\\maixcam\\arm\\link_protocol.py",
-        "${workspaceFolder}\\src\\maixcam\\arm\\arm_gateway.py",
-        "${workspaceFolder}\\src\\maixcam\\arm\\posix_uart.py",
-        "${workspaceFolder}\\src\\maixcam\\arm\\l2_probe.py",
-        "${workspaceFolder}\\src\\maixcam\\arm\\l3_probe.py",
-        "${workspaceFolder}\\src\\maixcam\\arm\\run_guarded_l2.sh",
-        "${workspaceFolder}\\src\\maixcam\\arm\\run_guarded_l3.sh",
-        "robot-maixcam:/root/robot-platform/arm/"
-      ],
-      "dependsOrder": "sequence",
-      "dependsOn": ["MaixCam Arm: Prepare remote directory"],
-      "problemMatcher": []
-    },
-    {
-      "label": "MaixCam Arm: Run guarded L2 probe",
-      "type": "process",
-      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
-      "args": [
-        "${workspaceFolder}\\tools\\maixcam\\arm_link_l2.py",
-        "probe",
-        "--arm-confirmation",
-        "${input:armDisabledConfirmation}"
-      ],
-      "problemMatcher": [],
-      "presentation": {"reveal": "always", "panel": "dedicated", "focus": true}
-    },
-    {
       "label": "MaixCam Video: Prepare directory",
       "type": "process",
       "command": "ssh",
@@ -374,17 +327,17 @@
       "problemMatcher": []
     },
     {
-      "label": "Robot Arm: Check diagnostic sources",
+      "label": "Robot Arm: Check runtime sources",
       "type": "process",
       "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
       "args": [
         "${workspaceFolder}\\tools\\dev\\check_python.py",
-        "src/robot_arm/diagnostics"
+        "src/robot_arm/runtime"
       ],
       "problemMatcher": []
     },
     {
-      "label": "Robot Arm: Run diagnostic tests",
+      "label": "Robot Arm: Run runtime tests",
       "type": "process",
       "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
       "args": [
@@ -432,7 +385,7 @@
         "ESP32: Run safety tests",
         "MaixCam: Run runtime tests",
         "Protocol: Run contract tests",
-        "Robot Arm: Run diagnostic tests",
+        "Robot Arm: Run runtime tests",
         "Robot: Run CLI tests"
       ],
       "problemMatcher": []
@@ -443,7 +396,7 @@
       "dependsOn": [
         "ESP32: Check Python sources",
         "MaixCam: Check Python sources",
-        "Robot Arm: Check diagnostic sources",
+        "Robot Arm: Check runtime sources",
         "Robot: Validate workspace",
         "Robot: Run all local tests"
       ],
@@ -556,7 +509,6 @@
     {"id": "remoteEsp32File", "type": "promptString", "description": "Remote MicroPython file path", "default": "main.py"},
     {"id": "localDownloadPath", "type": "promptString", "description": "Local destination for a downloaded device file", "default": "device-backups\\main.py"},
     {"id": "firmwarePath", "type": "promptString", "description": "Local MicroPython firmware image (inspection only)", "default": "ESP32\\MicroPython1.27.bin"},
-    {"id": "esp32Host", "type": "promptString", "description": "Current ESP32 IPv4 address"},
-    {"id": "armDisabledConfirmation", "type": "promptString", "description": "Type ARM_DISABLED after the arm diagnostic project is running without motion"}
+    {"id": "esp32Host", "type": "promptString", "description": "Current ESP32 IPv4 address"}
   ]
 }

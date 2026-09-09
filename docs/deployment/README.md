@@ -110,7 +110,7 @@ the committed example remains false. Restart the MaixCam arm service after
 deployment, then verify `arm.status` reports `control_mode=yolo` and
 `motion_enabled=1`. No application lease or one-use authorization is involved.
 
-After the project is saved and started, LAN2 can be unplugged and runtime data continues through MaixCam-TCP232-LAN1. RPA1 has passed PING and one fixed action with LAN2 physically disconnected.
+After the project is saved and started, LAN2 can be unplugged and runtime data continues through MaixCam-TCP232-LAN1.
 
 Do not infer automatic project start from cold boot. The current power-on sequence requires an on-site person to verify the initial pose, enable the arm, start the project using the configured controller button, and wait for MaixCam's non-motion handshake. Any future auto-start mode requires a separate vendor-supported safety-validation goal.
 
@@ -172,7 +172,7 @@ The computer aggregates independently reported ESP32 and arm state into the syst
 
 | Target | Available now | Still required |
 |---|---|---|
-| ESP32 | USB/readback-backed v3 deployment manifest and authenticated runtime readiness; historical WebREPL maintenance | Atomic upload, cold-start/rollback acceptance, post-release WebREPL recovery verification |
+| ESP32 | USB/readback-backed v3 deployment manifest and runtime readiness; historical WebREPL maintenance | Atomic upload, cold-start/rollback acceptance, post-release WebREPL recovery verification |
 | MaixCam | Hash-verified arm/video activation, measured arm route, video decode and stop/start evidence | Unified atomic release, auto-start, version switching, unified resource recovery |
 | Robot arm | Generated RPA2 project, live normalized feedback, attended drawing primitives; historical LAN2-disconnected operation | Controller project readback, independent terminal-position verification, cold-start and rollback acceptance |
 | TCP232 | Existing parameters carry RPA2 feedback and drawing | Archived configuration export and automated read-only pre-release verification |

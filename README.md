@@ -21,7 +21,6 @@ Subsystem and operating documentation:
 - [Computer-to-ESP32 chassis TCP link](docs/esp32/chassis-tcp.md)
 - [Daily development session and troubleshooting](docs/development-session.md)
 - [Shared runtime foundation](docs/runtime-foundation.md)
-- [MaixCam-to-arm LAN1 diagnostics and controlled L3 validation](docs/robot-arm/lan1-diagnostic.md)
 - [Robot-arm YOLO manual control](docs/robot-arm/yolo-manual-control.md)
 - [One-dimensional AprilTag rail lock and task interface](docs/console/localization-state-machine.md)
 - [Baseline and advanced drawing relocation modes](docs/console/drawing-control-modes.md)

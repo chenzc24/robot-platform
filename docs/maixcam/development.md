@@ -91,13 +91,4 @@ Restoring priority:
 
 - Visual recognition, calibration and image overloading; see base RTSP video link [`video.md`](video.md).
 - The retired MaixCam UART link to ESP32; chassis runtime now uses the direct computer-to-ESP32 TCP service.
-- MaixCam's UART link to TCP232/Mechanic arm LAN1.
 - Unified console status and video interface.
-
-(b) Any test that may trigger a chassis or robot arm movement must be upgraded to the L3/L4 security door.
-
-Robot arm LAN1 diagnostic program, one-time fixed action, UART0 occupancy protection and VS Code entrance.
-[`../robot-arm/lan1-diagnostic.md`](../robot-arm/lan1-diagnostic.md)The portal is only available for users
-Confirm that the robot arm diagnostic project is operational and that the corresponding L2/L3 site safety conditions are met;
-Launcher, release `/dev/ttyS0`, restore launcher. motion in exit processor after a single request
-The request does not automatically retry, and the results are not known until the actual condition of the arm is manually confirmed.

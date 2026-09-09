@@ -9,7 +9,6 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "protocol"))
 
-import chassis_tcp
 from chassis_tcp_v3 import (
     MAX_FRAME_BYTES,
     ChassisTcpV3FrameError,
@@ -33,18 +32,6 @@ class ChassisTcpV3ContractTests(unittest.TestCase):
             )
             self.assertEqual(encoded.decode("ascii"), vector["frame"])
             self.assertEqual(decode_message(encoded)["payload"], vector["payload"])
-
-    def test_v1_contract_remains_non_motion_and_versioned_separately(self):
-        self.assertEqual(chassis_tcp.PROTOCOL_VERSION, 1)
-        with self.assertRaises(chassis_tcp.ChassisTcpFrameError):
-            chassis_tcp.encode_message(
-                "VELOCITY",
-                1,
-                500,
-                {"vx_mm_s": 0, "vy_mm_s": 0, "omega_mrad_s": 0, "hold_ms": 250},
-            )
-        with self.assertRaises(ChassisTcpV3FrameError):
-            decode_message(chassis_tcp.encode_message("PING", 1, 1000, {}))
 
     def test_fragmented_combined_and_oversized_streams(self):
         first = encode_message("PING", 2, 1000, {})

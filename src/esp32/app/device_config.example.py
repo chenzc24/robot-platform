@@ -5,7 +5,7 @@ DEVICE_NAME = "chassis-esp32"
 CONTROL_PORT = 8765
 RUNTIME_HEALTH_TIMEOUT_MS = 2000
 
-# `tcp_v3_l2` may serve only authenticated PING/STATUS diagnostics because its
+# `tcp_v3_l2` may serve only PING/STATUS diagnostics because its
 # composition uses NoMotionChassis. `tcp_v3_l3` is present for a separately
 # authorized CAN deployment. `safe_idle` remains the committed default.
 RUNTIME_MODE = "safe_idle"  # allowed: safe_idle, tcp_v3_l2, tcp_v3_l3

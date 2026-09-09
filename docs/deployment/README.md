@@ -1,6 +1,6 @@
 # Deployment and Maintenance Baseline
 
-- Status (2026-09-03): ESP32 v3 and MaixCam arm/video publication and bounded live checks are recorded; atomic release, cold-start and rollback acceptance remain incomplete
+- Status (2026-09-09): d2469eb ESP32 and MaixCam arm/video payloads are deployed and hash-verified; robot-arm import, motion, coordinated L4, cold-start and rollback acceptance remain incomplete
 - Scope: publishing code from the computer to ESP32, MaixCam, and the robot arm; configuring TCP232; startup, health checks, and recovery
 - Excludes: normal task commands and runtime behavior; see [Runtime Baseline](../runtime/README.md)
 
@@ -17,8 +17,14 @@ historical preparation evidence, not a current package or deployment record.
 The newer [current drawing package](2026-09-08-current-drawing-package.md)
 supersedes that candidate for tomorrow's work. It freezes commit `d2469eb`,
 including the compatible MaixCam/controller `blend_pct` path and unified PC
-runner, in ignored local directory `build/drawing-d2469eb`. It is also
-preparation evidence only; nothing in that package has yet been deployed.
+runner, in ignored local directory `build/drawing-d2469eb`. The package record
+remains the immutable preparation baseline; deployment evidence is recorded
+separately below.
+
+The [2026-09-09 device record](2026-09-09-maixcam-esp32-d2469eb.md) records
+publication of the current package's MaixCam and ESP32 payloads, preserved local
+configuration, stopped status and recovery backups. The controller-project
+portion remains undeployed.
 
 ## 1. Deployment Topology
 

@@ -12,9 +12,12 @@ The final ZIP SHA-256 is stored beside the archive in
 `drawing-d2469eb.zip.sha256`; it is intentionally outside the ZIP to avoid a
 self-referential archive hash.
 
-It is prepared and L1-validated only. It has not been uploaded, imported,
-started or tested on hardware. The adjacent `manifest.json` identifies every
-payload file. Real local configuration and secrets are deliberately absent.
+It was prepared and L1-validated before device work. On 2026-09-09 its MaixCam
+arm/video and ESP32 payloads were uploaded, activated and read back as recorded
+in the [dated deployment record](2026-09-09-maixcam-esp32-d2469eb.md). The
+DobotStudio project was not imported, so the full package remains marked
+`deployed=false`. The adjacent `manifest.json` identifies every payload file.
+Real local configuration and secrets are deliberately absent.
 
 ## Package layout
 

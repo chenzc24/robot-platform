@@ -1862,3 +1862,27 @@ entry format:
   action, configuration write or motion occurred. Site offset measurement and
   stopped L2/L3/L4 gates remain outstanding. Commit status was pending at
   log-entry time on `main`.
+
+## 2026-09-09 - Deploy d2469eb payloads to MaixCam and ESP32
+
+- Verified MaixCam Pro identity, backed up 32 arm and 12 video files, staged
+  `/root/robot-platform/releases/20260909-d2469eb`, preserved the real arm
+  configuration and verified all 15 staged/active payload hashes. The guarded
+  arm gateway became the sole UART0 owner on TCP 8780 and RTSP started on 8554;
+  PC status reported the camera online.
+- Verified COM7 as the CH340 path to ESP32_GENERIC_S3-SPIRAM_OCT/MicroPython
+  1.27, backed up all 43 device files, uploaded all 14 manifest payloads,
+  compiled them on-device and verified readback hashes. `device_config.py` and
+  `secrets.py` were preserved byte-for-byte.
+- After one ESP32 reset, authenticated RCP/TCP v3 status reported service
+  `ready`, chassis `disabled`, `motion_permitted=true`, zero hold remaining and
+  no error. The preserved configuration uses `RUNTIME_MODE=tcp_v3_l3` and
+  `L3_MOTION_PERMITTED=True`; current `main.py` starts that runtime independently
+  of the `RUN_MODE=safe_idle` application-status prelude.
+- Final L2 checks kept MaixCam 8780/8554 active, UART0 owned, ESP32 disabled and
+  COM7 available for recovery. All 162 applicable ESP32/MaixCam/protocol tests
+  and `git diff --check` passed.
+- The operator reported the robot-arm controller service suspended. No arm
+  PING/STATUS, arm motion, gripper, chassis ENABLE/VELOCITY/STOP/DISABLE or
+  line-follow command was sent. Baseline offset and any motion remain separately
+  gated L3/L4 work. Commit status was pending at log-entry time on `main`.

@@ -123,19 +123,26 @@ class DeviceLifecycleScriptTests(unittest.TestCase):
     def _script(self, name):
         return (VIDEO_DIR / name).read_text(encoding="ascii")
 
-    def test_start_refuses_vendor_launcher_before_importing_maixpy(self):
+    def test_start_uses_launcher_ownership_wrapper(self):
         script = self._script("start.sh")
-        refusal = script.index("RTSP_START_REFUSED launcher_active")
-        launch = script.index('nohup python3 -u "$video_dir/rtsp_server.py"')
-        self.assertLess(refusal, launch)
-        self.assertIn('readlink "$proc_path/exe"', script)
+        self.assertIn('nohup "$service_runner"', script)
+        self.assertIn("run_video_service.sh", script)
+
+    def test_runner_stops_and_restores_only_its_launcher_supervisor(self):
+        runner = self._script("run_video_service.sh")
+        self.assertIn('kill -STOP "$supervisor_pid"', runner)
+        self.assertIn("owns_supervisor_stop=1", runner)
+        self.assertIn('[ "$owns_supervisor_stop" = 1 ]', runner)
+        self.assertIn('kill -CONT "$supervisor_pid"', runner)
+        self.assertIn('python3 -u "$service"', runner)
+        self.assertNotIn("kill -KILL", runner)
 
     def test_start_waits_for_a_structured_ready_event(self):
         start = self._script("start.sh")
         self.assertIn("pid_matches_server", start)
         self.assertIn('"event": "rtsp_started"', start)
         self.assertIn("RTSP_START_TIMEOUT", start)
-        self.assertIn('nohup python3 -u "$video_dir/rtsp_server.py"', start)
+        self.assertIn('nohup "$service_runner"', start)
 
     def test_start_timeout_retains_live_process_ownership(self):
         start = self._script("start.sh")

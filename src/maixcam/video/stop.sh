@@ -3,12 +3,13 @@ set -eu
 
 video_dir=/root/robot-platform/video
 pid_file="$video_dir/rtsp.pid"
+service_runner="$video_dir/run_video_service.sh"
 
 pid_matches_server() {
     candidate_pid=$1
     test -r "/proc/$candidate_pid/cmdline" || return 1
     tr '\000' ' ' <"/proc/$candidate_pid/cmdline" |
-        grep -F -q "$video_dir/rtsp_server.py"
+        grep -F -q "$service_runner"
 }
 
 if ! test -f "$pid_file"; then

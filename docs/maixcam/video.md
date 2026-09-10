@@ -35,13 +35,13 @@ UART0, and the default key listener turns the physical OK key into application
 exit. The headless video service removes both before starting the camera. The
 video service does not read, write, or forward robot-arm commands.
 
-`video/start.sh` also checks the real process table before importing MaixPy. If
-the vendor launcher is still active it returns
-`RTSP_START_REFUSED launcher_active` immediately. This process-level check is
-required because the Python `ResourceRegistry` only coordinates owners inside
-one process; it cannot see the launcher. The refusal leaves the ISP untouched,
-so the operator can exit the startup app and retry without first contaminating
-camera state.
+`video/start.sh` launches `run_video_service.sh`, which coordinates the real
+launcher processes before importing MaixPy. It pauses the verified launcher
+supervisor, gracefully releases a verified launcher process, and restores the
+supervisor when video exits. If the arm runtime already holds the supervisor in
+the stopped state, the video wrapper preserves that ownership and does not
+resume it. This process-level handoff is required because the Python
+`ResourceRegistry` only coordinates owners inside one process.
 
 ## 3. Computer prerequisites
 
@@ -80,7 +80,7 @@ Do not commit a temporary DHCP address. The device source is resolved from `maix
 
 ## 4. Normal operating flow
 
-From the repository root, after the startup application has exited:
+From the repository root:
 
 ```powershell
 # Start or confirm the MaixCam source. This is idempotent for an owned video PID.
@@ -147,7 +147,7 @@ No chassis, CAN, robot-arm, UART, or TCP232 command was sent during this validat
 | Symptom | Check and response |
 |---|---|
 | Device port 8554 is closed | Check SSH and the device video log, then run the owned `start.sh`. Do not kill an unknown camera process. |
-| `RTSP_START_REFUSED launcher_active` | Exit the startup application, release the OK key, and start again. The headless video service ignores later OK presses. |
+| `VIDEO_START_REFUSED launcher_release_failed` | Exit the startup application and start again. The wrapper never escalates a launcher handoff to SIGKILL. |
 | Relay says `NOT_RUNNING` | Confirm the source RTSP first, then start the relay. |
 | Relay says `NOT_READY` | Inspect `logs/mediamtx/ffmpeg-stderr.log` and MediaMTX logs; stop the owned pair before retrying. |
 | Immediate RTSP 404 after startup | The current script waits for path readiness. Treat a recurrence as a relay-start defect and retain the logs. |

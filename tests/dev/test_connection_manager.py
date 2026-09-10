@@ -73,7 +73,7 @@ class FakeRunner:
                 return CommandResult(
                     3,
                     "",
-                    "RTSP_START_REFUSED launcher_active pid=123",
+                    "VIDEO_START_REFUSED launcher_release_failed",
                 )
             if self.remote_video_start_succeeds:
                 self.network.open_ports.add((self.network.maixcam_ipv4, 8554))
@@ -224,7 +224,7 @@ class ConnectionManagerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         remote_script = self.runner.calls[-1][2]
         self.assertIn("/proc/$pid/cmdline", remote_script)
-        self.assertIn("rtsp_server.py", remote_script)
+        self.assertIn("run_video_service.sh", remote_script)
         self.assertIn("kill -KILL", remote_script)
         self.assertNotIn("killall", remote_script)
 

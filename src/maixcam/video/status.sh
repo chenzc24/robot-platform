@@ -4,6 +4,7 @@ set -eu
 video_dir=/root/robot-platform/video
 pid_file="$video_dir/rtsp.pid"
 log_file="$video_dir/rtsp.log"
+service_runner="$video_dir/run_video_service.sh"
 
 if ! test -f "$pid_file"; then
     echo "RTSP_NOT_RUNNING"
@@ -24,7 +25,7 @@ if ! kill -0 "$pid" 2>/dev/null; then
 fi
 
 if ! test -r "/proc/$pid/cmdline" ||
-    ! tr '\000' ' ' <"/proc/$pid/cmdline" | grep -F -q "$video_dir/rtsp_server.py"; then
+    ! tr '\000' ' ' <"/proc/$pid/cmdline" | grep -F -q "$service_runner"; then
     echo "RTSP_NOT_RUNNING ownership_mismatch=$pid"
     exit 1
 fi

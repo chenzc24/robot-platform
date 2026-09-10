@@ -451,7 +451,7 @@ class ConnectionManager:
             start_result = self.remote_video_start()
             video_start_owner_busy = (
                 start_result.returncode == 3
-                and "launcher_active" in "%s\n%s" % (
+                and "VIDEO_START_REFUSED" in "%s\n%s" % (
                     start_result.stdout,
                     start_result.stderr,
                 )
@@ -484,12 +484,12 @@ class ConnectionManager:
                 )
             )
             detail = (
-                "vendor launcher still owns the MaixCam runtime"
+                "the MaixCam launcher could not be handed off cleanly"
                 if video_start_owner_busy
                 else "device RTSP is unavailable"
             )
             action = (
-                "Exit the startup app before starting the headless video service"
+                "Exit the startup app or inspect the verified launcher owner"
                 if video_start_owner_busy
                 else "Inspect MaixCam video logs, then run: .\\robot connect"
             )
@@ -557,7 +557,7 @@ if ! test -f "$pid_file"; then echo RTSP_NOT_RUNNING; exit 0; fi
 pid=$(cat "$pid_file")
 case "$pid" in ''|*[!0-9]*) echo RTSP_STOP_REFUSED_INVALID_PID >&2; exit 3;; esac
 if ! kill -0 "$pid" 2>/dev/null; then rm -f "$pid_file"; echo RTSP_NOT_RUNNING; exit 0; fi
-if ! test -r "/proc/$pid/cmdline" || ! tr '\\000' ' ' <"/proc/$pid/cmdline" | grep -F -q "$video_dir/rtsp_server.py"; then
+if ! test -r "/proc/$pid/cmdline" || ! tr '\\000' ' ' <"/proc/$pid/cmdline" | grep -F -q "$video_dir/run_video_service.sh"; then
   echo RTSP_STOP_REFUSED_OWNERSHIP_MISMATCH >&2
   exit 3
 fi

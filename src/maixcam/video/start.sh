@@ -4,13 +4,13 @@ set -eu
 video_dir=/root/robot-platform/video
 pid_file="$video_dir/rtsp.pid"
 log_file="$video_dir/rtsp.log"
-launcher_exe=/maixapp/apps/launcher/launcher
+service_runner="$video_dir/run_video_service.sh"
 
 pid_matches_server() {
     candidate_pid=$1
     test -r "/proc/$candidate_pid/cmdline" || return 1
     tr '\000' ' ' <"/proc/$candidate_pid/cmdline" |
-        grep -F -q "$video_dir/rtsp_server.py"
+        grep -F -q "$service_runner"
 }
 
 if test -f "$pid_file"; then
@@ -33,34 +33,28 @@ if test -f "$pid_file"; then
     esac
 fi
 
-# The in-process ResourceRegistry cannot see a different MaixCam process.
-# Refuse before importing MaixPy when the vendor launcher is still active;
-# attempting camera initialization in that state can leave the ISP unable to
-# reacquire frames until a physical restart.
-for proc_path in /proc/[0-9]*; do
-    if [ "$(readlink "$proc_path/exe" 2>/dev/null || true)" = "$launcher_exe" ]; then
-        echo "RTSP_START_REFUSED launcher_active pid=${proc_path#/proc/}" >&2
-        exit 3
-    fi
-done
-
-for required_file in maix_runtime_status.py resource_guard.py video_service.py rtsp_server.py; do
+for required_file in maix_runtime_status.py resource_guard.py video_service.py rtsp_server.py run_video_service.sh; do
     if ! test -f "$video_dir/$required_file"; then
         echo "RTSP_START_FAILED missing_file=$required_file" >&2
         exit 1
     fi
 done
 
-nohup python3 -u "$video_dir/rtsp_server.py" >"$log_file" 2>&1 &
+nohup "$service_runner" >"$log_file" 2>&1 &
 new_pid=$!
 echo "$new_pid" >"$pid_file"
 wait_count=0
 while test "$wait_count" -lt 30; do
     if ! kill -0 "$new_pid" 2>/dev/null; then
+        if wait "$new_pid"; then
+            result=1
+        else
+            result=$?
+        fi
         echo "RTSP_START_FAILED pid=$new_pid" >&2
         cat "$log_file" >&2
         rm -f "$pid_file"
-        exit 1
+        exit "$result"
     fi
     if grep -q '"event": "rtsp_started"' "$log_file" 2>/dev/null; then
         echo "RTSP_STARTED pid=$new_pid wait_seconds=$wait_count"

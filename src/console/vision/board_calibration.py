@@ -229,6 +229,31 @@ def _frame_image_to_board(frame, world_points, excluded_id):
     return _homography(image_points, board_points)
 
 
+def _frame_center_to_board(frame, world_centers, excluded_id):
+    image_points = []
+    board_points = []
+    for tag_id, corners_px in frame["observations"].items():
+        if tag_id == excluded_id or tag_id not in world_centers:
+            continue
+        image_points.append(corners_px.mean(axis=0))
+        board_points.append(world_centers[tag_id])
+    if len(image_points) < 3:
+        return None
+    image_points = np.asarray(image_points, dtype=np.float64)
+    board_points = np.asarray(board_points, dtype=np.float64)
+    if (
+        np.linalg.matrix_rank(image_points - image_points.mean(axis=0), tol=1e-9) < 2
+        or np.linalg.matrix_rank(board_points - board_points.mean(axis=0), tol=1e-9) < 2
+    ):
+        return None
+    if len(image_points) >= 4:
+        return _homography(image_points, board_points)
+    affine = cv2.getAffineTransform(
+        image_points.astype(np.float32), board_points.astype(np.float32)
+    )
+    return np.vstack((affine, np.asarray([0.0, 0.0, 1.0])))
+
+
 def _fit_square(raw_corners, tag_size_mm, fixed_center=None):
     template = np.asarray(
         [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]],
@@ -278,6 +303,188 @@ def _robust_square(candidates, tag_size_mm, outlier_threshold_mm, fixed_center=N
         for candidate in candidates
     ]
     return fitted, accepted_indexes, final_errors
+
+
+def _robust_center_square(candidates, tag_size_mm, outlier_threshold_mm, fixed_center=None):
+    if not candidates:
+        return None, [], []
+    centers = np.stack([candidate.mean(axis=0) for candidate in candidates])
+    preliminary = (
+        np.median(centers, axis=0)
+        if fixed_center is None
+        else np.asarray(fixed_center, dtype=np.float64)
+    )
+    errors = np.linalg.norm(centers - preliminary, axis=1)
+    median = float(np.median(errors))
+    mad = float(np.median(np.abs(errors - median)))
+    robust_limit = median + 3.0 * max(1.4826 * mad, 0.2)
+    limit = min(float(outlier_threshold_mm), max(1.0, robust_limit))
+    accepted_indexes = [index for index, error in enumerate(errors) if error <= limit]
+    if not accepted_indexes:
+        return None, [], errors.tolist()
+    accepted = [candidates[index] for index in accepted_indexes]
+    center = (
+        np.median(np.stack([candidate.mean(axis=0) for candidate in accepted]), axis=0)
+        if fixed_center is None
+        else np.asarray(fixed_center, dtype=np.float64)
+    )
+    fitted = _fit_square(
+        np.median(np.stack(accepted), axis=0), tag_size_mm, center
+    )
+    final_errors = np.linalg.norm(centers - center, axis=1).tolist()
+    return fitted, accepted_indexes, final_errors
+
+
+def _center_candidate_squares(frames, world_centers, tag_id):
+    candidates = []
+    stations = []
+    for frame in frames:
+        if tag_id not in frame["observations"]:
+            continue
+        image_to_board = _frame_center_to_board(frame, world_centers, tag_id)
+        if image_to_board is None:
+            continue
+        candidates.append(_project(frame["observations"][tag_id], image_to_board))
+        stations.append(frame["station"] or "frame-%d" % frame["index"])
+    return candidates, stations
+
+
+def _solve_from_center_anchor_homographies(
+    frames,
+    center_constraints,
+    requested_ids,
+    tag_size_mm,
+    min_samples_per_tag,
+    min_stations_per_tag,
+    outlier_threshold_mm,
+    refinement_iterations,
+):
+    """Use co-visible anchor centers, then grow through three-center views."""
+    anchor_ids = set(center_constraints)
+    if len(anchor_ids) < 4:
+        return None
+    complete_anchor_frames = [
+        frame for frame in frames
+        if anchor_ids.issubset(frame["observations"])
+    ]
+    if not complete_anchor_frames:
+        return None
+
+    direct_candidates = defaultdict(list)
+    direct_stations = defaultdict(list)
+    ordered_anchors = sorted(anchor_ids)
+    anchor_centers = [center_constraints[tag_id] for tag_id in ordered_anchors]
+    for frame in complete_anchor_frames:
+        image_centers = [
+            frame["observations"][tag_id].mean(axis=0)
+            for tag_id in ordered_anchors
+        ]
+        image_to_board = _homography(image_centers, anchor_centers)
+        if image_to_board is None:
+            continue
+        for tag_id, corners_px in frame["observations"].items():
+            if tag_id not in requested_ids:
+                continue
+            direct_candidates[tag_id].append(_project(corners_px, image_to_board))
+            direct_stations[tag_id].append(
+                frame["station"] or "frame-%d" % frame["index"]
+            )
+    if not all(direct_candidates[tag_id] for tag_id in anchor_ids):
+        return None
+
+    world_points = {}
+    world_centers = {
+        tag_id: np.asarray(center, dtype=np.float64).copy()
+        for tag_id, center in center_constraints.items()
+    }
+    for tag_id in sorted(anchor_ids):
+        fitted, _, _ = _robust_center_square(
+            direct_candidates[tag_id],
+            tag_size_mm,
+            outlier_threshold_mm,
+            fixed_center=center_constraints[tag_id],
+        )
+        if fitted is None:
+            return None
+        world_points[tag_id] = fitted
+
+    estimated_ids = sorted(requested_ids - anchor_ids)
+    for tag_id in estimated_ids:
+        candidates = direct_candidates[tag_id]
+        fitted, accepted, _ = _robust_center_square(
+            candidates, tag_size_mm, outlier_threshold_mm
+        )
+        if fitted is not None and len(accepted) >= min_samples_per_tag:
+            world_points[tag_id] = fitted
+            world_centers[tag_id] = fitted.mean(axis=0)
+
+    for _ in range(len(estimated_ids) + 1):
+        added = False
+        for tag_id in estimated_ids:
+            if tag_id in world_points:
+                continue
+            candidates, _ = _center_candidate_squares(frames, world_centers, tag_id)
+            fitted, accepted, _ = _robust_center_square(
+                candidates, tag_size_mm, outlier_threshold_mm
+            )
+            if fitted is not None and len(accepted) >= min_samples_per_tag:
+                world_points[tag_id] = fitted
+                world_centers[tag_id] = fitted.mean(axis=0)
+                added = True
+        if not added:
+            break
+    unresolved = sorted(requested_ids - set(world_points))
+    if unresolved:
+        return None
+
+    for _ in range(max(1, refinement_iterations)):
+        maximum_shift = 0.0
+        for tag_id in estimated_ids:
+            candidates, _ = _center_candidate_squares(frames, world_centers, tag_id)
+            fitted, accepted, _ = _robust_center_square(
+                candidates, tag_size_mm, outlier_threshold_mm
+            )
+            if fitted is None or len(accepted) < min_samples_per_tag:
+                continue
+            previous = world_centers[tag_id]
+            world_points[tag_id] = fitted
+            world_centers[tag_id] = fitted.mean(axis=0)
+            maximum_shift = max(
+                maximum_shift,
+                float(np.linalg.norm(world_centers[tag_id] - previous)),
+            )
+        if maximum_shift < 1e-5:
+            break
+
+    tag_stats = {}
+    all_center_errors = []
+    for tag_id in sorted(requested_ids):
+        candidates, stations = _center_candidate_squares(frames, world_centers, tag_id)
+        fitted, accepted, errors = _robust_center_square(
+            candidates,
+            tag_size_mm,
+            outlier_threshold_mm,
+            fixed_center=(center_constraints[tag_id] if tag_id in anchor_ids else None),
+        )
+        accepted_stations = {stations[index] for index in accepted}
+        tag_stats[tag_id] = (len(candidates), accepted, errors, accepted_stations)
+        all_center_errors.extend(errors[index] for index in accepted)
+        if tag_id in estimated_ids:
+            if fitted is None or len(accepted) < min_samples_per_tag:
+                raise BoardCalibrationError(
+                    "insufficient_center_samples_for_tag:%d" % tag_id
+                )
+            if len(accepted_stations) < min_stations_per_tag:
+                raise BoardCalibrationError(
+                    "insufficient_distinct_stations_for_tag:%d" % tag_id
+                )
+            world_points[tag_id] = fitted
+            world_centers[tag_id] = fitted.mean(axis=0)
+    center_rmse = (
+        math.sqrt(sum(error * error for error in all_center_errors) / len(all_center_errors))
+        if all_center_errors else None
+    )
+    return world_points, tag_stats, center_rmse
 
 
 def _connectivity(frames, target_ids, anchor_ids):
@@ -508,6 +715,35 @@ def solve_board_layout(
     }
     estimated_ids = sorted(requested_ids - anchor_ids)
     tag_stats = {}
+    center_cross_validated_rmse_mm = None
+    center_solution = None
+
+    if center_anchor_constraints:
+        center_solution = _solve_from_center_anchor_homographies(
+            frames,
+            center_anchor_constraints,
+            requested_ids,
+            size,
+            min_samples_per_tag,
+            min_stations_per_tag,
+            outlier_threshold_mm,
+            refinement_iterations,
+        )
+        if center_solution is not None:
+            world_points, tag_stats, center_cross_validated_rmse_mm = center_solution
+
+    # Center-anchor layouts constrain positions but intentionally leave each
+    # tag's in-plane rotation free. Estimate those rotations before using
+    # anchor corners to project unknown tags into board coordinates.
+    if center_anchor_constraints and center_solution is None:
+        world_points, _anchor_seed_rmse_px = _bundle_refine_center_anchors(
+            frames,
+            world_points,
+            center_anchor_constraints,
+            [],
+            size,
+            max(1, refinement_iterations),
+        )
 
     # Grow outward through overlapping frames, keeping measured anchors immutable.
     for _ in range(len(estimated_ids) + 1):
@@ -539,7 +775,7 @@ def solve_board_layout(
         )
 
     # Refine inferred tags against the current anchors before the optional joint fit.
-    for _ in range(refinement_iterations):
+    for _ in range(refinement_iterations if center_solution is None else 0):
         maximum_shift = 0.0
         updates = {}
         for tag_id in estimated_ids:
@@ -573,7 +809,7 @@ def solve_board_layout(
             break
 
     bundle_reprojection_rmse_px = None
-    if center_anchor_constraints:
+    if center_anchor_constraints and center_solution is None:
         world_points, bundle_reprojection_rmse_px = _bundle_refine_center_anchors(
             frames,
             world_points,
@@ -585,7 +821,11 @@ def solve_board_layout(
 
     # Recompute sample diagnostics against the final layout rather than an
     # intermediate propagation estimate.
-    for tag_id in estimated_ids + sorted(center_anchor_constraints):
+    diagnostic_ids = (
+        estimated_ids + sorted(center_anchor_constraints)
+        if center_solution is None else []
+    )
+    for tag_id in diagnostic_ids:
         candidates = []
         candidate_stations = []
         for frame in frames:
@@ -624,7 +864,7 @@ def solve_board_layout(
 
     held_out_errors = defaultdict(list)
     usable_frames = set()
-    for frame in frames:
+    for frame in (frames if center_solution is None else []):
         visible = sorted(set(frame["observations"]).intersection(world_points))
         if len(visible) < 2:
             continue
@@ -666,6 +906,10 @@ def solve_board_layout(
                 "rejected_frame_count": sample_count - len(accepted_indexes),
                 "accepted_station_count": len(accepted_stations),
                 "accepted_stations": sorted(accepted_stations),
+                "fit_sample_metric": (
+                    "center_distance_mm"
+                    if center_solution is not None else "corner_rms_mm"
+                ),
                 "fit_sample_rmse_mm": round(
                     math.sqrt(sum(error * error for error in accepted_errors) / len(accepted_errors)), 6
                 ),
@@ -702,6 +946,14 @@ def solve_board_layout(
             "measured_centers_with_fitted_in_plane_rotation"
             if center_anchor_constraints else "measured_four_corners"
         ),
+        "solve_method": (
+            "center_homography_propagation"
+            if center_solution is not None else "corner_homography_bundle"
+        ),
+        "cross_validated_center_rmse_mm": (
+            round(center_cross_validated_rmse_mm, 6)
+            if center_cross_validated_rmse_mm is not None else None
+        ),
         "bundle_reprojection_rmse_px": (
             round(bundle_reprojection_rmse_px, 6)
             if bundle_reprojection_rmse_px is not None else None
@@ -723,6 +975,11 @@ def solve_board_layout(
             (
                 "Measured anchor centers were held fixed; anchor rotations were fitted."
                 if center_anchor_constraints else "Measured anchor corners were held fixed."
+            ),
+            (
+                "Unknown tag centers were propagated through co-visible center homographies."
+                if center_solution is not None
+                else "Unknown tag corners were propagated through co-visible corner homographies."
             ),
             "Estimated tags were constrained to one rigid square on the anchor plane.",
             "production_ready remains false until physical review and runtime validation.",

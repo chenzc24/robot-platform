@@ -99,14 +99,26 @@ MaixCam 命令服务或机械臂，也不会发出任何运动命令。
   --report logs\vision\apriltag-board-fit-report.local.json
 ```
 
+若观测文件包含早期试拍或边缘残缺站，可保留原始文件并只选择合格站参与
+求解：
+
+```powershell
+  --stations stop-01,stop-03,stop-05
+```
+
+`--outlier-threshold-mm` 控制板坐标中的离群门限。门限应与锚点测量精度、
+镜头畸变和现场目标精度一致，并在报告中保留实际残差，不能仅为通过求解而
+持续放宽。
+
 求解器执行以下物理约束：
 
-1. 锚点世界中心保持原值，锚点自身的平面旋转参与联合拟合；
-2. 每帧用已连接 Tag 建立“像素平面 → drawing_board 平面”单应变换；
-3. 未知 Tag 通过相邻重叠帧逐段接入；
-4. 每个 Tag 是边长 37.5 mm 的刚性正方形，但允许独立的平面旋转；
-5. 多帧结果采用稳健汇总，并报告被拒绝的离群帧；
-6. 最后逐 Tag 留一交叉验证，报告世界坐标角点残差。
+1. 锚点世界中心保持原值，锚点自身的平面旋转由观测确定；
+2. 四个或更多中心锚点同屏时，先用中心建立“像素平面 → drawing_board
+   平面”单应变换，再通过至少三个非共线的已知中心逐段传播；
+3. 没有完整中心锚点同屏时，兼容路径仍用已连接 Tag 的角点单应与联合拟合；
+4. 未知 Tag 通过相邻重叠帧逐段接入；
+5. 每个 Tag 是边长 37.5 mm 的刚性正方形，但允许独立的平面旋转；
+6. 多帧结果采用稳健汇总，并报告被拒绝的离群帧。
 
 中心锚点文件直接提供实际黑框边长。使用旧式四角锚点文件时，工具默认取
 锚点边长中位数；两种方式都可用 `--tag-size-mm` 显式覆盖。
@@ -119,9 +131,16 @@ MaixCam 命令服务或机械臂，也不会发出任何运动命令。
 - `accepted_frame_count` / `rejected_frame_count`：每个未知 Tag 的有效样本；
 - `accepted_station_count`：有效样本覆盖的不同停车位置数，默认至少为 2；
 - `fit_sample_rmse_mm`：多帧反投影在板坐标中的一致性；
+- `fit_sample_metric`：该 RMSE 使用中心距离还是角点 RMS；
+- `solve_method`：本次使用中心传播还是兼容的角点联合拟合；
+- `cross_validated_center_rmse_mm`：中心传播路径的综合中心残差；
 - `held_out_corner_rmse_mm`：不使用当前 Tag 建立变换时，对它的四角预测误差；
 - `cross_validated_corner_rmse_mm`：全部可交叉验证角点的综合值。
 - `bundle_reprojection_rmse_px`：中心锚点、自由 Tag 和逐帧单应联合拟合后的像素残差。
+
+中心传播路径不会把中心残差冒充角点精度，因此
+`cross_validated_corner_rmse_mm` 和 `bundle_reprojection_rmse_px` 为 `null`；
+应以 `cross_validated_center_rmse_mm` 和各 Tag 的中心距离残差判断本次布局。
 
 工具不内置虚假的统一“合格阈值”。先检查每个未知 Tag 至少覆盖多个停车
 位置、残差没有随轨道位置单向增大，再用卷尺复核输出中心距与上下排间距。

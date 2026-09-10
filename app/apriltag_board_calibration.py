@@ -52,6 +52,13 @@ def _parse_ids(value):
     return ids
 
 
+def _parse_stations(value):
+    stations = [item.strip() for item in value.split(",") if item.strip()]
+    if not stations:
+        raise argparse.ArgumentTypeError("stations must be comma-separated non-empty labels")
+    return stations
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(
         description="Observation-only planar AprilTag board calibration; never sends robot commands."
@@ -84,6 +91,12 @@ def parse_args(argv=None):
     solve.add_argument("--min-stations-per-tag", type=_positive_int, default=2)
     solve.add_argument("--outlier-threshold-mm", type=_positive_float, default=5.0)
     solve.add_argument("--refinement-iterations", type=int, default=8)
+    solve.add_argument(
+        "--stations",
+        type=_parse_stations,
+        default=None,
+        help="Only use frames from these comma-separated station labels",
+    )
     return parser.parse_args(argv)
 
 
@@ -222,6 +235,27 @@ def solve_command(args):
     if args.refinement_iterations < 0:
         raise BoardCalibrationError("refinement_iterations_must_be_non_negative")
     observations = _read_json(args.observations)
+    if args.stations:
+        requested_stations = set(args.stations)
+        available_stations = {
+            str(frame.get("station", ""))
+            for frame in observations.get("frames", [])
+            if isinstance(frame, dict)
+        }
+        missing_stations = sorted(requested_stations - available_stations)
+        if missing_stations:
+            raise BoardCalibrationError(
+                "observation_stations_not_found:%s" % ",".join(missing_stations)
+            )
+        observations = {
+            **observations,
+            "frames": [
+                frame
+                for frame in observations.get("frames", [])
+                if isinstance(frame, dict)
+                and str(frame.get("station", "")) in requested_stations
+            ],
+        }
     raw_anchors = _read_json(args.anchors)
     anchors = (
         parse_center_anchor_layout(raw_anchors)

@@ -206,6 +206,82 @@ class BoardCalibrationTests(unittest.TestCase):
             )
         self.assertLess(report["bundle_reprojection_rmse_px"], 0.1)
 
+    def test_center_anchor_homography_seed_grows_through_three_center_views(self):
+        angles = {
+            0: 10.0, 1: -12.0, 2: 8.0, 3: -9.0,
+            4: 11.0, 5: -13.0, 6: 7.0, 7: -8.0,
+        }
+        rotated_world = {
+            tag_id: rotate_tag(points, angles[tag_id])
+            for tag_id, points in WORLD.items()
+        }
+        document = {
+            "schema_version": 1,
+            "dictionary": "DICT_APRILTAG_36H11",
+            "frames": [],
+        }
+        groups = (
+            ("stop-0", (0, 1, 4, 5)),
+            ("stop-1", (1, 2, 5, 6)),
+            ("stop-2", (2, 3, 6, 7)),
+            ("wide-0", (0, 1, 3, 4, 6, 7)),
+        )
+        for station_index, (station, visible) in enumerate(groups):
+            for sample in range(5):
+                matrix = np.asarray([
+                    [1.2 + 0.01 * sample, 0.04, 80.0 - station_index * 120.0],
+                    [0.02, 1.18 - 0.005 * sample, 60.0 + sample],
+                    [0.0, 0.0, 1.0],
+                ])
+                observations = [
+                    {
+                        "id": tag_id,
+                        "corners_px": project(rotated_world[tag_id], matrix).tolist(),
+                    }
+                    for tag_id in visible
+                ]
+                document["frames"].append({
+                    "station": station,
+                    "observations": observations,
+                })
+        for sample in range(5):
+            matrix = np.asarray([
+                [1.2 + 0.01 * sample, 0.04, 80.0],
+                [0.02, 1.18 - 0.005 * sample, 60.0 + sample],
+                [0.0, 0.0, 1.0],
+            ])
+            observations = [
+                {
+                    "id": tag_id,
+                    "corners_px": project(rotated_world[tag_id], matrix).tolist(),
+                }
+                for tag_id in (0, 1, 3, 4, 6, 7)
+            ]
+            document["frames"].append({
+                "station": "wide-1",
+                "observations": observations,
+            })
+
+        board, report = solve_board_layout(
+            CENTER_ANCHORS,
+            document,
+            target_ids=range(8),
+            layout_id="center-homography-seed-test",
+            min_samples_per_tag=3,
+            outlier_threshold_mm=1.0,
+            refinement_iterations=8,
+        )
+
+        parsed = parse_board_layout(board)
+        self.assertEqual(report["solve_method"], "center_homography_propagation")
+        self.assertLess(report["cross_validated_center_rmse_mm"], 0.1)
+        for tag_id in range(8):
+            np.testing.assert_allclose(
+                np.asarray(parsed.tag_corners[tag_id])[:, :2],
+                rotated_world[tag_id],
+                atol=0.2,
+            )
+
     def test_target_must_be_connected_to_an_anchor_by_a_co_visible_frame(self):
         document = {
             "schema_version": 1,

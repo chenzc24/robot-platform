@@ -230,7 +230,7 @@ class _SimulationChassis:
 
     def __init__(
         self, clock, initial_position_mm, motion_gain, stop_overshoot_mm,
-        rail_min_mm, rail_max_mm,
+        rail_min_mm, rail_max_mm, chassis_vx_sign,
     ):
         self.clock = clock
         self.true_position_mm = initial_position_mm
@@ -238,6 +238,7 @@ class _SimulationChassis:
         self.stop_overshoot_mm = stop_overshoot_mm
         self.rail_min_mm = rail_min_mm
         self.rail_max_mm = rail_max_mm
+        self.chassis_vx_sign = chassis_vx_sign
         self.calls = []
         self.moves = []
         self._expected_mm = None
@@ -275,7 +276,10 @@ class _SimulationChassis:
         if self._expected_mm is None:
             raise DrawingError("production velocity sent without relocation intent")
         self._integrate()
-        self._velocity_mm_s = _finite(vx_mm_s, "simulated rail velocity")
+        self._velocity_mm_s = (
+            _finite(vx_mm_s, "simulated chassis velocity")
+            * self.chassis_vx_sign
+        )
         self.calls.append(("velocity", vx_mm_s, hold_ms, ttl_ms))
 
     def stop(self):
@@ -579,6 +583,7 @@ def _result(
         },
         "control": {
             "speed_mm_s": control_config.baseline.speed_mm_s,
+            "chassis_vx_sign": control_config.baseline.chassis_vx_sign,
             "refresh_ms": control_config.baseline.refresh_ms,
             "hold_ms": control_config.baseline.hold_ms,
             "max_distance_mm": control_config.baseline.max_distance_mm,
@@ -591,6 +596,9 @@ def _result(
             ),
             "coarse_approach_reserve_mm": (
                 control_config.localized_baseline.coarse_approach_reserve_mm
+            ),
+            "micro_adjust_speed_mm_s": (
+                control_config.localized_baseline.micro_adjust_speed_mm_s
             ),
             "micro_adjust_max_step_mm": (
                 control_config.localized_baseline.micro_adjust_max_step_mm
@@ -719,7 +727,7 @@ def simulate_localized_baseline(
     clock = _SimulationClock()
     chassis = _SimulationChassis(
         clock, initial_true_mm, motion_gain, stop_overshoot_mm,
-        rail_min_mm, rail_max_mm,
+        rail_min_mm, rail_max_mm, control_config.baseline.chassis_vx_sign,
     )
     localization = _SimulationLocalization(
         chassis, true_reference_mm, scale, error_at

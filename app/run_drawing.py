@@ -29,6 +29,7 @@ from localized_baseline_run import (
     ArmWithChassisGuard,
     EventLog,
     GuardedChassisSession,
+    _connect_device,
     _wait_for_initial_lock,
 )
 from localization import create_localization_state_machine
@@ -184,7 +185,9 @@ def main(argv=None):
         )
         log = EventLog(log_path)
         log.emit({"event": "execution_requested", **summary})
-        raw_chassis = default_chassis_factory(runtime_config.chassis)
+        raw_chassis = _connect_device(
+            default_chassis_factory, runtime_config.chassis, "chassis"
+        )
         raw_chassis.enable()
         chassis_enabled = True
         status = parse_chassis_status(raw_chassis.status())
@@ -217,7 +220,7 @@ def main(argv=None):
             )
             site.require_standard_start(initial_context)
 
-        arm = default_arm_factory(runtime_config.arm)
+        arm = _connect_device(default_arm_factory, runtime_config.arm, "arm")
         result = execute_drawing(
             ArmWithChassisGuard(arm, chassis), chassis, localization,
             job, drawing_config, control_config, execution_admission,

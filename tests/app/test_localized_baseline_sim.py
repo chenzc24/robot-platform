@@ -74,7 +74,7 @@ class LocalizedBaselineSimCliTests(unittest.TestCase):
         self.assertIn('"actual_true_rail_move_mm"', report)
         self.assertIn('"measured_rail_position_mm"', report)
         self.assertIn('"drawing.control_modes.LocalizedBaselineRelocator"', report)
-        self.assertIn('"velocity_calls":8', report)
+        self.assertIn('"velocity_calls":13', report)
         self.assertNotIn("__LOCALIZED_BASELINE_SIMULATION_DATA__", report)
         self.assertNotIn("fetch(", report)
         self.assertIn("SIMULATION_ONLY no runtime config", output.getvalue())

@@ -47,6 +47,7 @@ def config_document(mode="baseline", ready=True, version=1):
         document["localized_baseline"].update({
             "normal_window_advance_mm": 160,
             "coarse_approach_reserve_mm": 20,
+            "micro_adjust_speed_mm_s": 20,
             "micro_adjust_max_step_mm": 20,
             "micro_adjust_tolerance_mm": 3,
             "micro_adjust_max_attempts": 3,
@@ -221,6 +222,19 @@ class DrawingControlConfigTests(unittest.TestCase):
 
 
 class BaselineRelocatorTests(unittest.TestCase):
+    def test_configured_chassis_sign_maps_positive_rail_to_negative_vx(self):
+        clock = FakeClock()
+        chassis = FakeChassis()
+        document = config_document()
+        document["baseline"]["chassis_vx_sign"] = -1
+        config = parse_drawing_control_config(document)
+        relocator = create_relocator(
+            config, chassis, clock=clock, sleep=clock.sleep
+        )
+        relocator.relocate(0, -10, admission())
+        velocity = next(call for call in chassis.calls if call[0] == "velocity")
+        self.assertEqual(velocity[1][0], -50)
+
     def test_direct_distance_refreshes_stops_and_reports_open_loop_offset(self):
         clock = FakeClock()
         chassis = FakeChassis()
@@ -377,6 +391,7 @@ class LocalizedBaselineRelocatorTests(unittest.TestCase):
         settings = config.localized_baseline
         self.assertEqual(settings.normal_window_advance_mm, 160)
         self.assertEqual(settings.coarse_approach_reserve_mm, 20)
+        self.assertEqual(settings.micro_adjust_speed_mm_s, 50)
         self.assertEqual(settings.micro_adjust_max_step_mm, 20)
         self.assertEqual(settings.micro_adjust_tolerance_mm, 3)
         self.assertEqual(settings.micro_adjust_max_attempts, 3)
@@ -385,9 +400,9 @@ class LocalizedBaselineRelocatorTests(unittest.TestCase):
         clock = FakeClock()
         chassis = FakeChassis()
         localization = ScriptedLocalization((-138.0, -158.5))
-        config = parse_drawing_control_config(
-            config_document("localized_baseline", version=3)
-        )
+        document = config_document("localized_baseline", version=3)
+        document["baseline"]["chassis_vx_sign"] = -1
+        config = parse_drawing_control_config(document)
         events = []
         relocator = create_relocator(
             config, chassis, localization, clock=clock, sleep=clock.sleep,
@@ -414,6 +429,9 @@ class LocalizedBaselineRelocatorTests(unittest.TestCase):
         self.assertEqual(
             [name for name, _ in chassis.calls].count("status"), 2
         )
+        velocities = [args[0] for name, args in chassis.calls if name == "velocity"]
+        self.assertIn(-50, velocities)
+        self.assertEqual(velocities[-1], -20)
         self.assertEqual(len(localization.calls), 2)
 
     def test_micro_adjustment_rejects_no_progress_before_resume(self):

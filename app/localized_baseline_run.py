@@ -31,6 +31,15 @@ from status_mapping import StatusMappingError, parse_chassis_status
 from vision.worker import create_vision_worker
 
 
+def _connect_device(factory, config, target):
+    try:
+        return factory(config)
+    except TimeoutError as error:
+        raise DrawingError("%s_connect_timeout" % target) from error
+    except OSError as error:
+        raise DrawingError("%s_connect_failed" % target) from error
+
+
 def parser():
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument("drawing_path", type=Path)
@@ -236,7 +245,9 @@ def main(argv=None):
         log = EventLog(log_path)
         log.emit({"event": "execution_requested", **summary})
         localization = create_localization_state_machine(runtime_config)
-        raw_chassis = default_chassis_factory(runtime_config.chassis)
+        raw_chassis = _connect_device(
+            default_chassis_factory, runtime_config.chassis, "chassis"
+        )
         raw_chassis.enable()
         chassis_enabled = True
         status = parse_chassis_status(raw_chassis.status())
@@ -261,7 +272,7 @@ def main(argv=None):
             settings.poll_ms, log.emit,
         )
         site.require_standard_start(initial_context)
-        arm = default_arm_factory(runtime_config.arm)
+        arm = _connect_device(default_arm_factory, runtime_config.arm, "arm")
         result = execute_localized_drawing(
             ArmWithChassisGuard(arm, chassis), chassis, localization,
             job, drawing_config, control_config, execution_admission,

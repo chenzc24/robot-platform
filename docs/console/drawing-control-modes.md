@@ -33,6 +33,11 @@ configured speed, refreshes before the ESP32 hold expires, and always attempts
 `STOP`. It then waits the configured settling interval and adds the requested
 delta to the previous JSON offset.
 
+`baseline.chassis_vx_sign` separates the measured rail-coordinate direction
+from the ESP32 chassis-X command direction. Use `-1` when increasing measured
+rail position requires negative chassis `vx`, as on the current inverted camera
+installation; the default remains `1` for older configurations.
+
 This value is explicitly reported as `commanded_open_loop`, with no measured
 rail position, localization generation, or confidence. Speed multiplied by PC
 elapsed time ignores wheel slip, acceleration, network delay and stop distance.
@@ -60,8 +65,13 @@ new window a measured approach:
   template), even when the planner could center a larger direct hop.
 - `coarse_approach_reserve_mm` is withheld from that target on the first move
   (20 mm in the template), so a 160 mm target begins with a 140 mm coarse move.
-- `micro_adjust_max_step_mm`, `micro_adjust_tolerance_mm` and
+- `micro_adjust_speed_mm_s`, `micro_adjust_max_step_mm`, `micro_adjust_tolerance_mm` and
   `micro_adjust_max_attempts` bound the final PC-directed correction.
+
+Coarse travel keeps `baseline.speed_mm_s`; only the short closed-loop
+corrections use `micro_adjust_speed_mm_s`. This avoids reusing a coarse speed
+for the final few millimetres while retaining the same AprilTag estimator and
+workspace planning boundary.
 
 After the coarse move, and after every micro-move, the PC requires `STOP`, an
 `enabled_stopped` status and a strictly newer AprilTag generation. It computes

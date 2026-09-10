@@ -18,6 +18,13 @@ SPEC.loader.exec_module(RUNNER)
 
 
 class LocalizedBaselineRunCliTests(unittest.TestCase):
+    def test_connection_timeout_has_device_specific_error(self):
+        def timed_out(_config):
+            raise TimeoutError("timed out")
+
+        with self.assertRaisesRegex(RUNNER.DrawingError, "chassis_connect_timeout"):
+            RUNNER._connect_device(timed_out, object(), "chassis")
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         folder = pathlib.Path(self.temp.name)

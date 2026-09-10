@@ -19,6 +19,7 @@ _BASELINE_FIELDS = {
     "initial_json_axis_offset_mm", "speed_mm_s", "refresh_ms", "hold_ms",
     "max_distance_mm", "settle_ms",
 }
+_BASELINE_FIELDS_WITH_SIGN = _BASELINE_FIELDS | {"chassis_vx_sign"}
 _LOCALIZED_BASELINE_FIELDS_V2 = {"poll_ms", "localization_timeout_ms"}
 _LOCALIZED_BASELINE_FIELDS_V3 = _LOCALIZED_BASELINE_FIELDS_V2 | {
     "normal_window_advance_mm",
@@ -27,6 +28,9 @@ _LOCALIZED_BASELINE_FIELDS_V3 = _LOCALIZED_BASELINE_FIELDS_V2 | {
     "micro_adjust_tolerance_mm",
     "micro_adjust_max_attempts",
 }
+_LOCALIZED_BASELINE_FIELDS_V3_WITH_SPEED = (
+    _LOCALIZED_BASELINE_FIELDS_V3 | {"micro_adjust_speed_mm_s"}
+)
 _ADVANCED_FIELDS = {"poll_ms", "station_timeout_ms", "localization_timeout_ms"}
 
 
@@ -60,6 +64,7 @@ def _exact(document, fields, label):
 class BaselineRelocationConfig:
     initial_json_axis_offset_mm: float
     speed_mm_s: int
+    chassis_vx_sign: int
     refresh_ms: int
     hold_ms: int
     max_distance_mm: float
@@ -79,6 +84,7 @@ class LocalizedBaselineRelocationConfig:
     localization_timeout_ms: int
     normal_window_advance_mm: float
     coarse_approach_reserve_mm: float
+    micro_adjust_speed_mm_s: int
     micro_adjust_max_step_mm: float
     micro_adjust_tolerance_mm: float
     micro_adjust_max_attempts: int
@@ -149,7 +155,7 @@ def parse_drawing_control_config(document):
 
     baseline = document["baseline"]
     if not isinstance(baseline, dict) or set(baseline) not in (
-        _BASELINE_FIELDS_V1, _BASELINE_FIELDS,
+        _BASELINE_FIELDS_V1, _BASELINE_FIELDS, _BASELINE_FIELDS_WITH_SIGN,
     ):
         raise DrawingError("baseline has unexpected or missing fields")
     baseline_config = BaselineRelocationConfig(
@@ -158,6 +164,9 @@ def parse_drawing_control_config(document):
             "baseline.initial_json_axis_offset_mm", -1_000_000.0, 1_000_000.0,
         ),
         speed_mm_s=_integer(baseline["speed_mm_s"], "baseline.speed_mm_s", 1, 600),
+        chassis_vx_sign=_integer(
+            baseline.get("chassis_vx_sign", 1), "baseline.chassis_vx_sign", -1, 1
+        ),
         refresh_ms=_integer(baseline["refresh_ms"], "baseline.refresh_ms", 20, 400),
         hold_ms=_integer(baseline["hold_ms"], "baseline.hold_ms", 100, 500),
         max_distance_mm=_number(baseline["max_distance_mm"], "baseline.max_distance_mm", 1.0, 2000.0),
@@ -165,15 +174,22 @@ def parse_drawing_control_config(document):
     )
     if baseline_config.refresh_ms >= baseline_config.hold_ms:
         raise DrawingError("baseline.refresh_ms must be less than hold_ms")
+    if baseline_config.chassis_vx_sign not in (-1, 1):
+        raise DrawingError("baseline.chassis_vx_sign must be -1 or 1")
 
     localized_config = None
     if version in (2, 3):
         localized = document["localized_baseline"]
-        _exact(
-            localized,
-            _LOCALIZED_BASELINE_FIELDS_V2 if version == 2 else _LOCALIZED_BASELINE_FIELDS_V3,
-            "localized_baseline",
+        expected_localized_fields = (
+            (_LOCALIZED_BASELINE_FIELDS_V2,)
+            if version == 2
+            else (
+                _LOCALIZED_BASELINE_FIELDS_V3,
+                _LOCALIZED_BASELINE_FIELDS_V3_WITH_SPEED,
+            )
         )
+        if not isinstance(localized, dict) or set(localized) not in expected_localized_fields:
+            raise DrawingError("localized_baseline has unexpected or missing fields")
         normal_target = _number(
             localized.get("normal_window_advance_mm", min(160.0, baseline_config.max_distance_mm)),
             "localized_baseline.normal_window_advance_mm", 1.0,
@@ -201,6 +217,10 @@ def parse_drawing_control_config(document):
             ),
             normal_target,
             reserve,
+            _integer(
+                localized.get("micro_adjust_speed_mm_s", baseline_config.speed_mm_s),
+                "localized_baseline.micro_adjust_speed_mm_s", 1, 600,
+            ),
             micro_step,
             tolerance,
             _integer(
@@ -282,13 +302,14 @@ class BaselineRelocator(_Relocator):
         if abs(rail_distance) > settings.max_distance_mm:
             raise DrawingError("baseline_distance_exceeds_limit")
         direction = 1 if rail_distance > 0 else -1
+        commanded_vx = direction * settings.speed_mm_s * settings.chassis_vx_sign
         deadline = self.clock() + abs(rail_distance) / settings.speed_mm_s
         refresh_count = 0
         motion_error = None
-        self._emit("baseline_start", commanded_rail_distance_mm=rail_distance, speed_mm_s=direction * settings.speed_mm_s)
+        self._emit("baseline_start", commanded_rail_distance_mm=rail_distance, speed_mm_s=commanded_vx)
         try:
             while self.clock() < deadline:
-                self.chassis.velocity(direction * settings.speed_mm_s, 0, 0, settings.hold_ms, max(500, settings.hold_ms))
+                self.chassis.velocity(commanded_vx, 0, 0, settings.hold_ms, max(500, settings.hold_ms))
                 refresh_count += 1
                 remaining = max(0.0, deadline - self.clock())
                 self.sleep(min(settings.refresh_ms / 1000.0, remaining))
@@ -373,7 +394,13 @@ class LocalizedBaselineRelocator(BaselineRelocator):
         if abs(rail_distance) > settings.max_distance_mm:
             raise DrawingError("localized_baseline_distance_exceeds_limit")
         direction = 1 if rail_distance > 0 else -1
-        deadline = self.clock() + abs(rail_distance) / settings.speed_mm_s
+        speed_mm_s = (
+            settings.speed_mm_s
+            if phase == "coarse"
+            else self.config.localized_baseline.micro_adjust_speed_mm_s
+        )
+        commanded_vx = direction * speed_mm_s * settings.chassis_vx_sign
+        deadline = self.clock() + abs(rail_distance) / speed_mm_s
         motion_error = None
         refresh_count = 0
         self.localization.on_motion_intent("localized_baseline_%s_motion" % phase)
@@ -381,13 +408,13 @@ class LocalizedBaselineRelocator(BaselineRelocator):
             "localized_baseline_start" if phase == "coarse" else "localized_baseline_micro_adjust_start",
             phase=phase,
             commanded_rail_distance_mm=rail_distance,
-            speed_mm_s=direction * settings.speed_mm_s,
+            speed_mm_s=commanded_vx,
             target_json_axis_offset_mm=target_offset_mm,
         )
         try:
             while self.clock() < deadline:
                 self.chassis.velocity(
-                    direction * settings.speed_mm_s, 0, 0,
+                    commanded_vx, 0, 0,
                     settings.hold_ms, max(500, settings.hold_ms),
                 )
                 refresh_count += 1

@@ -166,6 +166,12 @@ class AprilTagCenterDeltaLocalizer:
             cross_error = float(mapped_center[cross_index] - world_center[cross_index])
             deltas.append(delta)
             cross_errors.append(cross_error)
+            observation["board_center_mm"] = [
+                _rounded(axis, 3) for axis in world_center.tolist()
+            ]
+            observation["mapped_center_mm"] = [
+                _rounded(axis, 3) for axis in mapped_center.tolist()
+            ]
             observation["rail_delta_mm"] = _rounded(delta, 3)
             observation["cross_axis_error_mm"] = _rounded(cross_error, 3)
 

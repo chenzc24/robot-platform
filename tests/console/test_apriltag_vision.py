@@ -219,6 +219,22 @@ class LocalizerTests(unittest.TestCase):
         self.assertFalse(result["board_layout_ready"])
         self.assertTrue(result["rail_reference_ready"])
         self.assertAlmostEqual(result["rail_position_mm"], displacement, places=5)
+        observations = {item["id"]: item for item in result["observations"]}
+        for tag_id in visible_ids:
+            np.testing.assert_allclose(
+                observations[tag_id]["board_center_mm"], centers[tag_id], atol=1e-3
+            )
+            np.testing.assert_allclose(
+                observations[tag_id]["mapped_center_mm"],
+                centers[tag_id] - [displacement, 0.0],
+                atol=1e-3,
+            )
+            self.assertAlmostEqual(
+                observations[tag_id]["rail_delta_mm"], displacement, places=3
+            )
+            self.assertAlmostEqual(
+                observations[tag_id]["cross_axis_error_mm"], 0.0, places=3
+            )
 
         machine = RailLocalizationStateMachine(
             enabled=True,

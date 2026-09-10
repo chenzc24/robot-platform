@@ -176,6 +176,13 @@ separate receivers and are not frame-synchronized in v1; overlays may lag while
 the camera moves. Vision output is observation-only and never starts a device
 session or issues motion. See [AprilTag localization](apriltag-localization.md).
 
+For center-delta localization, the overlay labels each usable known tag with
+its fixed board center (`B`), its current center mapped through the reference
+homography (`M`) and that tag's rail displacement (`Δ`), all in millimetres.
+The vision summary also shows the aggregate rail position, inter-tag
+disagreement and cross-axis error. Once the localization state machine locks a
+generation, the same summary adds the JSON-axis offset and generation number.
+
 When schema 5 localization is enabled, the backend invalidates the old scalar
 rail position before any nonzero PC chassis-motion request, waits after the
 ESP32 again reports `enabled_stopped`, and locks a new position/JSON-offset

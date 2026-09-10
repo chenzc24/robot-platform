@@ -63,7 +63,40 @@ function mapVideoPoint(point, frame, viewport) {
   };
 }
 
-function renderVision(vision) {
+function metricPair(value) {
+  return Array.isArray(value) && value.length >= 2 && value.slice(0, 2).every(Number.isFinite)
+    ? `(${value.slice(0, 2).map(axis => Number(axis).toFixed(1)).join(",")})`
+    : null;
+}
+
+function visionPositionText(vision, localization = null) {
+  if (vision?.localization_method === "center_delta" && Number.isFinite(vision.rail_position_mm)) {
+    const parts = [`RAIL ${Number(vision.rail_position_mm).toFixed(1)} mm`];
+    if (Number.isFinite(vision.tag_disagreement_mm)) parts.push(`TAG Δ ${Number(vision.tag_disagreement_mm).toFixed(1)} mm`);
+    if (Number.isFinite(vision.max_cross_axis_error_mm)) parts.push(`CROSS ${Number(vision.max_cross_axis_error_mm).toFixed(1)} mm`);
+    const context = localization?.context;
+    if (Number.isFinite(context?.json_axis_offset_mm)) parts.push(`JSON OFFSET ${Number(context.json_axis_offset_mm).toFixed(1)} mm`);
+    if (Number.isInteger(localization?.generation)) parts.push(`GEN ${localization.generation}`);
+    return parts.join(" · ");
+  }
+  const translation = vision?.tvec_board_origin_in_camera_mm;
+  return Array.isArray(translation)
+    ? `BOARD ORIGIN [${translation.map(value => Number(value).toFixed(1)).join(", ")}] mm`
+    : null;
+}
+
+function observationPositionText(observation) {
+  const board = metricPair(observation?.board_center_mm);
+  const mapped = metricPair(observation?.mapped_center_mm);
+  if (!board && !mapped) return null;
+  const parts = [];
+  if (board) parts.push(`B${board}`);
+  if (mapped) parts.push(`M${mapped}`);
+  if (Number.isFinite(observation?.rail_delta_mm)) parts.push(`Δ${Number(observation.rail_delta_mm).toFixed(1)}`);
+  return parts.join(" ");
+}
+
+function renderVision(vision, localization = null) {
   const canvas = $("#vision-canvas");
   const summary = $("#vision-summary");
   const viewport = $("#viewport");
@@ -89,10 +122,10 @@ function renderVision(vision) {
   const state = String(vision.status || "starting").toUpperCase();
   summary.classList.add(vision.accepted ? "accepted" : (vision.status === "error" ? "error" : "rejected"));
   summary.firstElementChild.textContent = `APRILTAG ${state} · C ${confidence.toFixed(2)} · RMSE ${rmse}`;
-  const translation = vision.tvec_board_origin_in_camera_mm;
+  const position = visionPositionText(vision, localization);
   const readiness = vision.camera_calibration_ready && vision.board_layout_ready ? "" : " · UNVERIFIED DEFAULTS";
-  summary.lastElementChild.textContent = Array.isArray(translation)
-    ? `IDs ${ids} · board origin in camera [${translation.map(value => Number(value).toFixed(1)).join(", ")}] mm${readiness}`
+  summary.lastElementChild.textContent = position
+    ? `IDs ${ids} · ${position}${readiness}`
     : `IDs ${ids} · ${String(vision.error || "waiting")}`;
   $("#vision-foot").textContent = `WEBRTC / TAGS ${vision.known_count || 0} / ${state}`;
   if (!vision.image_width || !vision.image_height || !Array.isArray(vision.observations)) return;
@@ -115,6 +148,11 @@ function renderVision(vision) {
     context.fill();
     context.font = "bold 12px ui-monospace, Consolas, monospace";
     context.fillText(`ID ${observation.id}`, points[0].x + 6, points[0].y - 6);
+    const metric = observationPositionText(observation);
+    if (metric) {
+      context.font = "10px ui-monospace, Consolas, monospace";
+      context.fillText(metric, points[0].x + 6, points[0].y + 8);
+    }
   });
 }
 
@@ -186,7 +224,7 @@ function render(state) {
     : String(measurement.error || "no sample").toUpperCase();
   renderMeasurement($("#current-joints"), ["J1","J2","J3","J4","J5","J6"], measurement.joint_deg);
   renderMeasurement($("#current-pose"), ["X","Y","Z","RX","RY","RZ"], measurement.pose);
-  renderVision(state.vision);
+  renderVision(state.vision, state.localization);
   renderDrawing(state.drawing, state.control_owner);
   $("#requested-vector").textContent = c.motion
     ? `${c.velocity.vx_mm_s} / ${c.velocity.vy_mm_s} / ${c.velocity.omega_mrad_s} · ${c.motion.mode.toUpperCase()}`
@@ -422,14 +460,14 @@ function bind() {
     action:"cancel", task_id:currentState?.drawing.task_id,
   }, "drawing cancellation requested");
   $("#gripper-width").oninput=()=>$("#gripper-output").textContent=`${$("#gripper-width").value} mm`;
-  $("#rotate-video").onclick=()=>{const rotated=$("#viewport").classList.toggle("rotated");$("#video-rotation").textContent=rotated?"ROT 90°":"ROT 0°";if(currentState)renderVision(currentState.vision)};
+  $("#rotate-video").onclick=()=>{const rotated=$("#viewport").classList.toggle("rotated");$("#video-rotation").textContent=rotated?"ROT 90°":"ROT 0°";if(currentState)renderVision(currentState.vision,currentState.localization)};
   $("#open-video").onclick=()=>{if(currentState?.video.webrtc_url)window.open(currentState.video.webrtc_url,"_blank","noopener")};
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = {ChassisInput, bindChassisInput, mapVideoPoint};
+  module.exports = {ChassisInput, bindChassisInput, mapVideoPoint, observationPositionText, visionPositionText};
 } else {
   chassisInput = new ChassisInput(api, () => currentState, message => toast(message, true));
-  bind(); poll(); window.addEventListener("resize",()=>{if(currentState)renderVision(currentState.vision)}); setInterval(poll,500); setInterval(()=>chassisInput.pulse(),200);
+  bind(); poll(); window.addEventListener("resize",()=>{if(currentState)renderVision(currentState.vision,currentState.localization)}); setInterval(poll,500); setInterval(()=>chassisInput.pulse(),200);
   setInterval(()=>$("#clock").textContent=new Date().toLocaleTimeString("en-GB"),1000);
 }

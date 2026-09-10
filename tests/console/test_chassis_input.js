@@ -3,7 +3,9 @@
 // Real production input bindings; no browser, socket or moving device is used.
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {ChassisInput, bindChassisInput, mapVideoPoint} = require("../../src/console/web_console/static/app.js");
+const {
+  ChassisInput, bindChassisInput, mapVideoPoint, observationPositionText, visionPositionText,
+} = require("../../src/console/web_console/static/app.js");
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
 test("vision points preserve aspect ratio and letterbox offset", () => {
@@ -11,6 +13,17 @@ test("vision points preserve aspect ratio and letterbox offset", () => {
   assert.deepEqual(point, {x: 400, y: 400});
   const corner = mapVideoPoint([0, 0], {width: 1280, height: 720}, {width: 800, height: 800});
   assert.deepEqual(corner, {x: 0, y: 175});
+});
+
+test("center-delta vision exposes rail, JSON offset, generation, and per-tag millimetres", () => {
+  const summary = visionPositionText({
+    localization_method: "center_delta", rail_position_mm: 75,
+    tag_disagreement_mm: 1.25, max_cross_axis_error_mm: 2.5,
+  }, {generation: 4, context: {json_axis_offset_mm: -75}});
+  assert.equal(summary, "RAIL 75.0 mm · TAG Δ 1.3 mm · CROSS 2.5 mm · JSON OFFSET -75.0 mm · GEN 4");
+  assert.equal(observationPositionText({
+    board_center_mm: [250.096, 328.674], mapped_center_mm: [175.096, 328.674], rail_delta_mm: 75,
+  }), "B(250.1,328.7) M(175.1,328.7) Δ75.0");
 });
 
 function deferred() {

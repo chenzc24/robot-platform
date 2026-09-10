@@ -22,6 +22,12 @@ find_pid_by_exe() {
     return 1
 }
 
+process_state() {
+    candidate_pid=$1
+    test -r "/proc/$candidate_pid/stat" || return 1
+    awk '{print $3}' "/proc/$candidate_pid/stat"
+}
+
 restore_supervisor() {
     if [ "$owns_supervisor_stop" = 1 ] \
         && [ -n "$supervisor_pid" ] \
@@ -72,13 +78,35 @@ if [ -n "$launcher_pid" ]; then
     launcher_pid=$1
     kill -TERM "$launcher_pid"
     attempt=0
-    while kill -0 "$launcher_pid" 2>/dev/null && [ "$attempt" -lt 100 ]; do
+    while kill -0 "$launcher_pid" 2>/dev/null && [ "$attempt" -lt 10 ]; do
+        launcher_state="$(process_state "$launcher_pid" 2>/dev/null || true)"
+        [ "$launcher_state" = Z ] && break
         sleep 0.1
         attempt=$((attempt + 1))
     done
     if kill -0 "$launcher_pid" 2>/dev/null; then
-        echo "VIDEO_START_REFUSED launcher_release_failed" >&2
-        exit 3
+        launcher_state="$(process_state "$launcher_pid" 2>/dev/null || true)"
+        if [ "$launcher_state" = Z ]; then
+            echo "VIDEO_LAUNCHER_RELEASED zombie_pid=$launcher_pid"
+        elif [ "$(readlink "/proc/$launcher_pid/exe" 2>/dev/null || true)" != "$launcher_exe" ]; then
+            echo "VIDEO_START_REFUSED launcher_identity_changed" >&2
+            exit 3
+        else
+            kill -KILL "$launcher_pid"
+            attempt=0
+            while kill -0 "$launcher_pid" 2>/dev/null && [ "$attempt" -lt 20 ]; do
+                launcher_state="$(process_state "$launcher_pid" 2>/dev/null || true)"
+                [ "$launcher_state" = Z ] && break
+                sleep 0.1
+                attempt=$((attempt + 1))
+            done
+            launcher_state="$(process_state "$launcher_pid" 2>/dev/null || true)"
+            if kill -0 "$launcher_pid" 2>/dev/null && [ "$launcher_state" != Z ]; then
+                echo "VIDEO_START_REFUSED launcher_force_release_failed" >&2
+                exit 3
+            fi
+            echo "VIDEO_LAUNCHER_FORCE_RELEASED pid=$launcher_pid"
+        fi
     fi
 fi
 

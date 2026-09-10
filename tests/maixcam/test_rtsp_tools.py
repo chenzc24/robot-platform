@@ -128,14 +128,19 @@ class DeviceLifecycleScriptTests(unittest.TestCase):
         self.assertIn('nohup "$service_runner"', script)
         self.assertIn("run_video_service.sh", script)
 
-    def test_runner_stops_and_restores_only_its_launcher_supervisor(self):
+    def test_runner_stops_supervisor_and_force_releases_only_verified_launcher(self):
         runner = self._script("run_video_service.sh")
         self.assertIn('kill -STOP "$supervisor_pid"', runner)
         self.assertIn("owns_supervisor_stop=1", runner)
         self.assertIn('[ "$owns_supervisor_stop" = 1 ]', runner)
         self.assertIn('kill -CONT "$supervisor_pid"', runner)
+        identity_check = runner.index('readlink "/proc/$launcher_pid/exe"')
+        force_kill = runner.index('kill -KILL "$launcher_pid"')
+        self.assertLess(identity_check, force_kill)
+        self.assertIn("launcher_identity_changed", runner)
+        self.assertIn('[ "$launcher_state" = Z ]', runner)
+        self.assertIn("VIDEO_LAUNCHER_RELEASED zombie_pid=", runner)
         self.assertIn('python3 -u "$service"', runner)
-        self.assertNotIn("kill -KILL", runner)
 
     def test_start_waits_for_a_structured_ready_event(self):
         start = self._script("start.sh")

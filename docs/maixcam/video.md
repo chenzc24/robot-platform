@@ -37,11 +37,18 @@ video service does not read, write, or forward robot-arm commands.
 
 `video/start.sh` launches `run_video_service.sh`, which coordinates the real
 launcher processes before importing MaixPy. It pauses the verified launcher
-supervisor, gracefully releases a verified launcher process, and restores the
-supervisor when video exits. If the arm runtime already holds the supervisor in
-the stopped state, the video wrapper preserves that ownership and does not
-resume it. This process-level handoff is required because the Python
+supervisor, gives a verified launcher process one second to exit normally, then
+checks its executable path again before force-releasing it when necessary. The
+wrapper restores the supervisor when video exits. If the arm runtime already
+holds the supervisor in the stopped state, the video wrapper preserves that
+ownership and does not resume it. Unknown or identity-changing processes are
+never signalled. This process-level handoff is required because the Python
 `ResourceRegistry` only coordinates owners inside one process.
+
+Because the stopped supervisor is the launcher's parent, a normally terminated
+launcher can remain visible briefly as a zombie. The wrapper treats state `Z`
+as released rather than waiting for `kill -0` to become false; a zombie owns no
+camera or UART resource and is reaped after the supervisor is resumed.
 
 ## 3. Computer prerequisites
 
@@ -147,7 +154,7 @@ No chassis, CAN, robot-arm, UART, or TCP232 command was sent during this validat
 | Symptom | Check and response |
 |---|---|
 | Device port 8554 is closed | Check SSH and the device video log, then run the owned `start.sh`. Do not kill an unknown camera process. |
-| `VIDEO_START_REFUSED launcher_release_failed` | Exit the startup application and start again. The wrapper never escalates a launcher handoff to SIGKILL. |
+| `VIDEO_START_REFUSED launcher_identity_changed` | Inspect the process table. The wrapper refuses to signal a PID whose executable identity changed. |
 | Relay says `NOT_RUNNING` | Confirm the source RTSP first, then start the relay. |
 | Relay says `NOT_READY` | Inspect `logs/mediamtx/ffmpeg-stderr.log` and MediaMTX logs; stop the owned pair before retrying. |
 | Immediate RTSP 404 after startup | The current script waits for path readiness. Treat a recurrence as a relay-start defect and retain the logs. |

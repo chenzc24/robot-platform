@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "src" / "console"))
 
 from runtime_config import (
     ArmConfig,
+    CenterDeltaReferenceConfig,
     ChassisConfig,
     ManualChassisConfig,
     LocalizationConfig,
@@ -27,6 +28,7 @@ from runtime_config import (
 from localization import create_localization_state_machine
 from localization.state_machine import RailLocalizationStateMachine
 from vision.apriltag_localizer import AprilTagBoardLocalizer
+from vision.apriltag_center_delta import AprilTagCenterDeltaLocalizer
 from vision.calibration import (
     BoardLayout,
     CameraCalibration,
@@ -156,6 +158,81 @@ class CalibrationTests(unittest.TestCase):
 
 
 class LocalizerTests(unittest.TestCase):
+    def test_center_delta_uses_reference_centers_without_camera_pose(self):
+        camera = CameraCalibration(
+            CAMERA.calibration_id,
+            CAMERA.image_width,
+            CAMERA.image_height,
+            CAMERA.camera_matrix,
+            CAMERA.distortion_coefficients,
+            production_ready=False,
+        )
+        board = BoardLayout(
+            BOARD.layout_id,
+            BOARD.frame,
+            BOARD.units,
+            BOARD.dictionary,
+            BOARD.tag_corners,
+            production_ready=False,
+        )
+        centers = {
+            tag_id: np.asarray(corners, dtype=np.float64)[:, :2].mean(axis=0)
+            for tag_id, corners in board.tag_corners.items()
+        }
+        reference = CenterDeltaReferenceConfig(
+            True,
+            "synthetic-zero",
+            1280,
+            720,
+            {
+                tag_id: (2.0 * point[0] + 100.0, 2.0 * point[1] + 50.0)
+                for tag_id, point in centers.items()
+            },
+            5.0,
+            5.0,
+        )
+        localizer = AprilTagCenterDeltaLocalizer(
+            camera,
+            board,
+            reference,
+            min_tag_edge_px=10.0,
+            min_visible_tags=2,
+        )
+        displacement = 75.0
+        visible_ids = [1, 2]
+        detected = []
+        for tag_id in visible_ids:
+            center = centers[tag_id]
+            pixel_center = np.asarray([
+                2.0 * (center[0] - displacement) + 100.0,
+                2.0 * center[1] + 50.0,
+            ])
+            offsets = np.asarray([[-10, -10], [10, -10], [10, 10], [-10, 10]])
+            detected.append((pixel_center + offsets).reshape(1, 4, 2))
+        localizer._detector = FakeDetector(detected, visible_ids)
+        result = localizer.process(np.zeros((720, 1280), dtype=np.uint8), timestamp_ms=456)
+        self.assertTrue(result["position_solved"])
+        self.assertFalse(result["pose_solved"])
+        self.assertTrue(result["accepted"])
+        self.assertEqual(result["localization_method"], "center_delta")
+        self.assertFalse(result["camera_calibration_ready"])
+        self.assertFalse(result["board_layout_ready"])
+        self.assertTrue(result["rail_reference_ready"])
+        self.assertAlmostEqual(result["rail_position_mm"], displacement, places=5)
+
+        machine = RailLocalizationStateMachine(
+            enabled=True,
+            rail_axis="x",
+            settle_time_ms=0,
+            min_valid_samples=1,
+            min_visible_tags=2,
+        )
+        machine.on_chassis_status("enabled_stopped")
+        machine.observe_vision(result)
+        self.assertAlmostEqual(
+            machine.task_context()["rail_position_mm"], displacement, places=5
+        )
+
     def test_opencv_detects_generated_apriltag_and_reports_unknown_without_pose(self):
         dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
         marker = cv2.aruco.generateImageMarker(dictionary, 7, 180)

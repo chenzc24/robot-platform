@@ -6,7 +6,12 @@ import math
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from runtime_config import LocalizationConfig, VisionConfig
+from runtime_config import (
+    LocalizationConfig,
+    RuntimeConfigError,
+    VisionConfig,
+    parse_center_delta_reference,
+)
 from vision.calibration import parse_board_layout, parse_camera_calibration
 
 from .config import parse_drawing_config
@@ -28,6 +33,9 @@ _RELOCATION_FIELDS = {"selected_mode", "baseline", "localized_baseline", "advanc
 _LOCALIZATION_FIELDS = {
     "enabled", "rail_axis", "json_axis", "settle_time_ms", "sample_window_ms",
     "min_valid_samples", "min_visible_tags", "max_position_spread_mm",
+}
+_CENTER_DELTA_LOCALIZATION_FIELDS = _LOCALIZATION_FIELDS | {
+    "method", "center_reference",
 }
 _VISION_FIELDS = {
     "enabled", "dictionary", "detection_fps", "min_tag_edge_px",
@@ -163,15 +171,30 @@ def parse_drawing_site_config(document):
         **relocation,
     })
 
-    localization_raw = _exact(
-        document["localization"], _LOCALIZATION_FIELDS, "localization"
-    )
+    localization_raw = document["localization"]
+    if not isinstance(localization_raw, dict) or frozenset(localization_raw) not in {
+        frozenset(_LOCALIZATION_FIELDS),
+        frozenset(_CENTER_DELTA_LOCALIZATION_FIELDS),
+    }:
+        raise DrawingError("localization has unexpected or missing fields")
     if type(localization_raw["enabled"]) is not bool:
         raise DrawingError("localization.enabled must be boolean")
     if localization_raw["rail_axis"] not in {"x", "y", "z"}:
         raise DrawingError("localization.rail_axis is invalid")
     if localization_raw["json_axis"] not in {"x", "y"}:
         raise DrawingError("localization.json_axis is invalid")
+    try:
+        center_reference = (
+            None if "center_reference" not in localization_raw
+            else parse_center_delta_reference(localization_raw["center_reference"])
+        )
+    except RuntimeConfigError as error:
+        raise DrawingError(str(error)) from error
+    method = localization_raw.get("method", "pose_pnp")
+    if method not in {"pose_pnp", "center_delta"}:
+        raise DrawingError("localization.method is invalid")
+    if method == "center_delta" and center_reference is None:
+        raise DrawingError("center_delta localization requires center_reference")
     localization = LocalizationConfig(
         enabled=localization_raw["enabled"],
         rail_axis=localization_raw["rail_axis"],
@@ -183,6 +206,8 @@ def parse_drawing_site_config(document):
         min_valid_samples=_integer(localization_raw["min_valid_samples"], "localization.min_valid_samples", 1, 100),
         min_visible_tags=_integer(localization_raw["min_visible_tags"], "localization.min_visible_tags", 1, 100),
         max_position_spread_mm=_number(localization_raw["max_position_spread_mm"], "localization.max_position_spread_mm", 0.001, 100.0),
+        method=method,
+        center_reference=center_reference,
     )
 
     vision_raw = _exact(document["vision"], _VISION_FIELDS, "vision")

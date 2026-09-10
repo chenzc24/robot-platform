@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .apriltag_localizer import AprilTagBoardLocalizer
+from .apriltag_center_delta import AprilTagCenterDeltaLocalizer
 from .calibration import load_board_layout, load_camera_calibration
 
 
@@ -88,9 +89,12 @@ class RtspAprilTagWorker:
             "vision_started",
             dictionary="DICT_APRILTAG_36H11",
             layout_id=self.localizer.board.layout_id,
-            calibration_id=self.localizer.camera.calibration_id,
+            calibration_id=getattr(
+                self.localizer, "calibration_id", self.localizer.camera.calibration_id
+            ),
             camera_calibration_ready=self.localizer.camera.production_ready,
             board_layout_ready=self.localizer.board.production_ready,
+            localization_method=getattr(self.localizer, "localization_method", "pose_pnp"),
             detection_fps=self.detection_fps,
         )
         try:
@@ -130,7 +134,9 @@ class RtspAprilTagWorker:
 
     def _log_result(self, result, now):
         status = result.get("status", "unknown")
-        periodic_pose = result.get("pose_solved") and now - self._last_pose_log >= 2.0
+        periodic_pose = (
+            result.get("pose_solved") or result.get("position_solved")
+        ) and now - self._last_pose_log >= 2.0
         if status == self._last_logged_status and not periodic_pose:
             return
         self._last_logged_status = status
@@ -143,6 +149,8 @@ class RtspAprilTagWorker:
             accepted=bool(result.get("accepted")),
             camera_calibration_ready=result.get("camera_calibration_ready"),
             board_layout_ready=result.get("board_layout_ready"),
+            rail_reference_ready=result.get("rail_reference_ready"),
+            localization_method=result.get("localization_method"),
             confidence=result.get("confidence"),
             threshold=result.get("confidence_threshold"),
             detected_ids=[item.get("id") for item in result.get("observations", [])],
@@ -150,6 +158,9 @@ class RtspAprilTagWorker:
             reprojection_rmse_px=result.get("reprojection_rmse_px"),
             tvec_board_origin_in_camera_mm=result.get("tvec_board_origin_in_camera_mm"),
             T_camera_from_board=result.get("T_camera_from_board"),
+            rail_position_mm=result.get("rail_position_mm"),
+            tag_disagreement_mm=result.get("tag_disagreement_mm"),
+            max_cross_axis_error_mm=result.get("max_cross_axis_error_mm"),
             error=result.get("error", "none"),
         )
 
@@ -172,13 +183,24 @@ def create_vision_worker(config, callback, decoder_factory=None):
         camera = load_camera_calibration(config.vision.camera_calibration_path)
     if board.dictionary != config.vision.dictionary:
         raise ValueError("vision_dictionary_mismatch")
-    localizer = AprilTagBoardLocalizer(
-        camera,
-        board,
-        min_tag_edge_px=config.vision.min_tag_edge_px,
-        max_reprojection_error_px=config.vision.max_reprojection_error_px,
-        min_confidence=config.vision.min_confidence,
-    )
+    if config.localization.method == "center_delta":
+        localizer = AprilTagCenterDeltaLocalizer(
+            camera,
+            board,
+            config.localization.center_reference,
+            rail_axis=config.localization.rail_axis,
+            min_tag_edge_px=config.vision.min_tag_edge_px,
+            min_confidence=config.vision.min_confidence,
+            min_visible_tags=config.localization.min_visible_tags,
+        )
+    else:
+        localizer = AprilTagBoardLocalizer(
+            camera,
+            board,
+            min_tag_edge_px=config.vision.min_tag_edge_px,
+            max_reprojection_error_px=config.vision.max_reprojection_error_px,
+            min_confidence=config.vision.min_confidence,
+        )
     return RtspAprilTagWorker(
         config.video.rtsp_url,
         config.video.connect_timeout_seconds,

@@ -67,6 +67,30 @@ class DrawingSiteConfigTests(unittest.TestCase):
         self.assertEqual(site.rail.physical_start_mm, 0.0)
         self.assertEqual(site.rail.json_origin_rail_position_mm, 327.4)
 
+    def test_center_delta_reference_is_the_localization_readiness_gate(self):
+        raw = example_document()
+        raw["localization"].update({
+            "enabled": True,
+            "method": "center_delta",
+            "center_reference": {
+                "production_ready": True,
+                "reference_id": "zero-v1",
+                "image_width": 1280,
+                "image_height": 720,
+                "tag_centers_px": {
+                    "0": [100, 100], "1": [100, 600],
+                    "2": [1100, 600], "3": [1100, 100],
+                },
+                "max_tag_disagreement_mm": 15,
+                "max_cross_axis_error_mm": 15,
+            },
+        })
+        raw["vision"]["enabled"] = True
+        site = parse_drawing_site_config(raw)
+        self.assertEqual(site.localization.method, "center_delta")
+        self.assertTrue(site.localization.complete)
+        self.assertEqual(site.localization.center_reference.reference_id, "zero-v1")
+
     def test_margin_and_localization_fail_closed(self):
         cases = []
         margin = example_document()

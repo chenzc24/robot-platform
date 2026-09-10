@@ -1,5 +1,10 @@
 # PC AprilTag board localization v1
 
+> This page describes the full four-corner PnP diagnostic path. The current
+> one-dimensional drawing production path uses the center-delta zero reference
+> in `localization-state-machine.md`; it does not depend on camera intrinsics or
+> fitted tag-corner orientations.
+
 ## Boundary and result
 
 This first version is observation-only. The computer reads the existing local

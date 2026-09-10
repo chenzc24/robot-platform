@@ -77,6 +77,17 @@ class VisionConfig:
 
 
 @dataclass(frozen=True)
+class CenterDeltaReferenceConfig:
+    production_ready: bool
+    reference_id: str
+    image_width: int
+    image_height: int
+    tag_centers_px: dict
+    max_tag_disagreement_mm: float
+    max_cross_axis_error_mm: float
+
+
+@dataclass(frozen=True)
 class LocalizationConfig:
     enabled: bool = False
     rail_axis: str = "x"
@@ -88,10 +99,19 @@ class LocalizationConfig:
     min_valid_samples: int = 8
     min_visible_tags: int = 2
     max_position_spread_mm: float = 2.0
+    method: str = "pose_pnp"
+    center_reference: object = None
 
     @property
     def complete(self):
-        return self.enabled
+        if not self.enabled:
+            return False
+        if self.method == "center_delta":
+            return bool(
+                self.center_reference is not None
+                and self.center_reference.production_ready
+            )
+        return self.method == "pose_pnp"
 
 
 @dataclass(frozen=True)
@@ -160,6 +180,64 @@ def _choice(value, field, choices):
     return parsed
 
 
+def parse_center_delta_reference(raw):
+    reference = _mapping(raw, "localization.center_reference")
+    expected = {
+        "production_ready", "reference_id", "image_width", "image_height",
+        "tag_centers_px", "max_tag_disagreement_mm",
+        "max_cross_axis_error_mm",
+    }
+    if set(reference) != expected:
+        raise RuntimeConfigError("unexpected center-delta reference fields")
+    centers = _mapping(
+        reference["tag_centers_px"],
+        "localization.center_reference.tag_centers_px",
+    )
+    parsed_centers = {}
+    for raw_id, raw_center in centers.items():
+        try:
+            tag_id = int(raw_id)
+        except (TypeError, ValueError) as error:
+            raise RuntimeConfigError("center reference tag id is invalid") from error
+        if str(tag_id) != str(raw_id) or tag_id < 0 or tag_id in parsed_centers:
+            raise RuntimeConfigError("center reference tag id is invalid")
+        if not isinstance(raw_center, list) or len(raw_center) != 2:
+            raise RuntimeConfigError("center reference pixel must have two axes")
+        parsed_centers[tag_id] = tuple(
+            _bounded_number(value, "center reference pixel", -1_000_000.0, 1_000_000.0)
+            for value in raw_center
+        )
+    if len(parsed_centers) < 4:
+        raise RuntimeConfigError("center reference requires at least four tags")
+    return CenterDeltaReferenceConfig(
+        production_ready=_boolean(
+            reference["production_ready"],
+            "localization.center_reference.production_ready",
+        ),
+        reference_id=_string(
+            reference["reference_id"],
+            "localization.center_reference.reference_id",
+        ),
+        image_width=_positive_int(
+            reference["image_width"],
+            "localization.center_reference.image_width", 1, 100_000,
+        ),
+        image_height=_positive_int(
+            reference["image_height"],
+            "localization.center_reference.image_height", 1, 100_000,
+        ),
+        tag_centers_px=parsed_centers,
+        max_tag_disagreement_mm=_bounded_number(
+            reference["max_tag_disagreement_mm"],
+            "localization.center_reference.max_tag_disagreement_mm", 0.001, 1_000.0,
+        ),
+        max_cross_axis_error_mm=_bounded_number(
+            reference["max_cross_axis_error_mm"],
+            "localization.center_reference.max_cross_axis_error_mm", 0.001, 1_000.0,
+        ),
+    )
+
+
 def load_runtime_config(path):
     """Load an explicit local JSON configuration without logging its contents."""
     source = Path(path)
@@ -199,10 +277,16 @@ def load_runtime_config(path):
         "min_confidence", "stale_after_ms", "log_path",
     }:
         raise RuntimeConfigError("unexpected vision configuration fields")
-    if localization is not None and set(localization) != {
+    localization_base_fields = {
         "enabled", "rail_axis", "json_axis", "json_origin_rail_position_mm",
         "json_mm_per_rail_mm", "settle_time_ms", "sample_window_ms",
         "min_valid_samples", "min_visible_tags", "max_position_spread_mm",
+    }
+    localization_center_fields = localization_base_fields | {
+        "method", "center_reference",
+    }
+    if localization is not None and frozenset(localization) not in {
+        frozenset(localization_base_fields), frozenset(localization_center_fields),
     }:
         raise RuntimeConfigError("unexpected localization configuration fields")
     return RuntimeConfig(
@@ -265,6 +349,14 @@ def load_runtime_config(path):
             min_visible_tags=_positive_int(localization["min_visible_tags"], "localization.min_visible_tags", 1, 100),
             max_position_spread_mm=_bounded_number(
                 localization["max_position_spread_mm"], "localization.max_position_spread_mm", 0.001, 100.0
+            ),
+            method=_choice(
+                localization.get("method", "pose_pnp"),
+                "localization.method", {"pose_pnp", "center_delta"},
+            ),
+            center_reference=(
+                None if "center_reference" not in localization
+                else parse_center_delta_reference(localization["center_reference"])
             ),
         ),
     )

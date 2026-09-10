@@ -202,14 +202,25 @@ class RailLocalizationStateMachine:
             self._tick_locked(now)
             if self._state != "collecting":
                 return
-            if not isinstance(result, dict) or not result.get("accepted") or not result.get("pose_solved"):
+            method = result.get("localization_method", "pose_pnp") if isinstance(result, dict) else None
+            solved = (
+                result.get("position_solved")
+                if method == "center_delta" and isinstance(result, dict)
+                else result.get("pose_solved") if isinstance(result, dict) else False
+            )
+            if not isinstance(result, dict) or not result.get("accepted") or not solved:
                 self._last_observation_error = (
                     str(result.get("error", "vision_result_not_accepted"))
                     if isinstance(result, dict) else "vision_result_invalid"
                 )
                 self._touch()
                 return
-            if result.get("camera_calibration_ready") is not True or result.get("board_layout_ready") is not True:
+            if method == "center_delta":
+                if result.get("rail_reference_ready") is not True:
+                    self._last_observation_error = "rail_reference_unverified"
+                    self._touch()
+                    return
+            elif result.get("camera_calibration_ready") is not True or result.get("board_layout_ready") is not True:
                 self._last_observation_error = "vision_calibration_unverified"
                 self._touch()
                 return
@@ -224,12 +235,20 @@ class RailLocalizationStateMachine:
                 self._last_observation_error = "insufficient_visible_tags"
                 self._touch()
                 return
-            try:
-                transform = _pose_matrix(result.get("T_board_from_camera"))
-            except LocalizationStateError as error:
-                self._last_observation_error = error.code
-                self._touch()
-                return
+            if method == "center_delta":
+                position = self._numeric(result.get("rail_position_mm"), None)
+                if position is None:
+                    self._last_observation_error = "rail_position_invalid"
+                    self._touch()
+                    return
+            else:
+                try:
+                    transform = _pose_matrix(result.get("T_board_from_camera"))
+                except LocalizationStateError as error:
+                    self._last_observation_error = error.code
+                    self._touch()
+                    return
+                position = transform[self.RAIL_AXES[self.rail_axis]][3]
             source_values = tuple(result.get(key) for key in ("calibration_id", "layout_id", "board_frame"))
             if not all(isinstance(value, str) and value.strip() for value in source_values):
                 self._last_observation_error = "vision_source_id_missing"
@@ -256,7 +275,6 @@ class RailLocalizationStateMachine:
                 self._last_observation_error = "vision_quality_invalid"
                 self._touch()
                 return
-            position = transform[self.RAIL_AXES[self.rail_axis]][3]
             self._samples.append({
                 "received_at": now,
                 "position_mm": position,

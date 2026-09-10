@@ -27,23 +27,23 @@ initial drawing accuracy, but they are not inputs to this state machine.
 ## AprilTag rail position
 
 The AprilTag layout defines one metric `board_frame`. It may contain four,
-eight, or more uniquely identified tags distributed along the rail. Every tag's
-measured four corners belong to that same frame. The PC pose solver already
-publishes `T_board_from_camera`; localization reads only one translation value:
+eight, or more uniquely identified tags distributed along the rail. The current
+production solver compares decoded tag centers with the saved JSON-zero center
+reference and publishes one scalar directly:
 
 ```text
-rail_position_mm = T_board_from_camera[rail_axis][3]
+rail_position_mm = center_delta_mm
 ```
 
 All tags need not be visible together. Adjacent regions should overlap so two
 or more tags are normally visible during handoff. Changing visible IDs does not
-reset a sample window; changing the layout ID, camera-calibration ID or board
-frame does. A single tag can be allowed by setting `min_visible_tags` to 1, but
-two or more provide stronger cross-checking.
+reset a sample window; changing the layout ID, center-reference ID or board
+frame does. Two or more tags are required in the current field profile so their
+independent displacement and cross-axis residuals can be compared.
 
-Camera intrinsics, tag sizes and measured tag corners remain necessary for the
-AprilTag solver to produce a metric camera position. No depth camera or full
-camera-to-arm extrinsic is required for the one-dimensional relocation delta.
+Camera intrinsics, tag size and fitted corner orientation are not used by the
+center-delta solver. They remain inputs only to the optional full-pose PnP
+diagnostic. No depth camera or full camera-to-arm extrinsic is required.
 
 ## States and command chain
 
@@ -67,7 +67,7 @@ apply json_axis_offset_mm to the remaining JSON points
 
 Localization states are `disabled`, `blocked`, `invalid`, `moving`, `settling`,
 `collecting`, and `locked`. A lock requires a bounded window of unique frames,
-the configured visible-tag count, ready camera/layout data, and scalar position
+the configured visible-tag count, a ready center reference, and scalar position
 spread within `max_position_spread_mm`.
 
 Any possible chassis motion or lost chassis state invalidates the lock. Arm
@@ -109,7 +109,58 @@ mechanical rail datum rather than an AprilTag observation. Apply
 `json_axis_offset_mm` only after the selected JSON
 coordinate has been converted to millimetres.
 
-Localization also requires enabled, production-ready AprilTag vision. `GET
+## Center-delta production model
+
+For the current rail-only installation, `localization.method: center_delta`
+is the production model. It deliberately does not solve a three-dimensional
+camera pose. At the JSON-zero chassis position, four or more decoded tag
+centers define one reference homography from pixels to measured board-center
+coordinates. Later frames map each visible tag center through that same
+reference:
+
+```text
+q_i = H_zero(pixel_center_i)
+rail_delta_i = tag_world_axis_i - q_i.axis
+rail_position_mm = median(rail_delta_i)
+```
+
+The fixed camera-to-base displacement cancels. At runtime two visible tags are
+enough because the homography is not re-solved; each tag independently measures
+the one remaining translation degree of freedom. Tag disagreement and the
+mapped cross-axis residual reject camera yaw, lateral movement, a loose mount,
+or a bad landmark. The camera height and attitude must remain the same as the
+zero reference. A mounting change requires a new center reference.
+
+`center_delta` uses measured tag centers only. Camera intrinsics, distortion,
+the printed square size, and fitted tag-corner orientations are not part of the
+rail estimate. The former four-corner PnP path remains available as
+`localization.method: pose_pnp` for diagnostics and future full-pose work.
+
+Example additional localization fields:
+
+```json
+{
+  "method": "center_delta",
+  "center_reference": {
+    "production_ready": true,
+    "reference_id": "site-zero-v1",
+    "image_width": 1280,
+    "image_height": 720,
+    "tag_centers_px": {
+      "0": [793.091, 191.620],
+      "1": [779.624, 587.707],
+      "4": [390.070, 604.638],
+      "5": [410.524, 210.003]
+    },
+    "max_tag_disagreement_mm": 15.0,
+    "max_cross_axis_error_mm": 15.0
+  }
+}
+```
+
+Localization also requires enabled AprilTag detection. PnP requires
+production-ready camera and board-corner calibration; center-delta instead
+requires a production-ready zero reference. `GET
 /api/state` publishes state, reason, generation, sample count and the locked
 scalar context. `POST /api/localization/relocalize` restarts settling only when
 the chassis is confirmed stopped and no localized task is active. Automatic
